@@ -10,7 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-Public/
+# Public/ - Removido, usando public/ (minúsculo) que é padrão do Vite
 # *.local - Removido temporariamente para permitir commit do .env.local
 
 # Editor directories and files
