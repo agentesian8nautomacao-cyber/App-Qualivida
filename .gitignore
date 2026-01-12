@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+Public/
 # *.local - Removido temporariamente para permitir commit do .env.local
 
 # Editor directories and files
