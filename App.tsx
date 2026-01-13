@@ -601,6 +601,7 @@ const App: React.FC = () => {
         }
         return <NotesView allNotes={allNotes} setEditingNoteId={setEditingNoteId} setNewNoteContent={setNewNoteContent} setIsNewNoteModalOpen={setIsNewNoteModalOpen} setAllNotes={setAllNotes} />;
       case 'ai': 
+        // ASSISTENTE IA: Acesso exclusivo para PORTEIRO e SINDICO - Moradores NÃO têm acesso
         if (role === 'MORADOR') {
           return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">

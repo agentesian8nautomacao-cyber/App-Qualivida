@@ -127,7 +127,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'staff', label: 'Funcionários', icon: ClipboardList, roles: ['SINDICO'] },
     { id: 'reports', label: 'Relatórios IA', icon: FileText, roles: ['SINDICO'] },
     
-    // Porteiro e Síndico
+    // Porteiro e Síndico - ASSISTENTE IA EXCLUSIVO (Moradores NÃO têm acesso)
     { id: 'ai', label: 'Inteligência IA', icon: BrainCircuit, roles: ['PORTEIRO', 'SINDICO'] },
     { id: 'settings', label: 'Configurações', icon: Settings, roles: ['PORTEIRO', 'SINDICO'] },
   ];
