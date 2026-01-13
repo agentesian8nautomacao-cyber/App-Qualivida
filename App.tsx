@@ -684,7 +684,7 @@ const App: React.FC = () => {
   }
 
   if (isScreenSaverActive) return <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
-  if (!isAuthenticated) return <Login onLogin={handleLogin} />;
+  if (!isAuthenticated) return <Login onLogin={handleLogin} theme={theme} toggleTheme={toggleTheme} />;
 
   return (
     <>

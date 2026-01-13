@@ -37,6 +37,7 @@ export interface Resident {
   email: string;
   phone: string;
   whatsapp: string;
+  extraData?: Record<string, any>; // Campos adicionais do arquivo de importação
 }
 
 export interface Occurrence {

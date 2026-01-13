@@ -82,19 +82,26 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const resident: Partial<Resident> = { id: Date.now().toString() + i };
+      const extraData: Record<string, any> = {};
 
       headers.forEach((header, index) => {
         const value = values[index] || '';
-        if (header.includes('nome') || header.includes('name')) {
+        const headerLower = header.toLowerCase().trim();
+        
+        // Mapear campos conhecidos
+        if (headerLower.includes('nome') || headerLower.includes('name')) {
           resident.name = value;
-        } else if (header.includes('unidade') || header.includes('unit') || header.includes('apto')) {
+        } else if (headerLower.includes('unidade') || headerLower.includes('unit') || headerLower.includes('apto') || headerLower.includes('apartamento')) {
           resident.unit = value;
-        } else if (header.includes('email') || header.includes('e-mail')) {
+        } else if (headerLower.includes('email') || headerLower.includes('e-mail')) {
           resident.email = value;
-        } else if (header.includes('telefone') || header.includes('phone') || header.includes('tel')) {
+        } else if ((headerLower.includes('telefone') || headerLower.includes('phone') || headerLower.includes('tel')) && !headerLower.includes('whatsapp')) {
           resident.phone = value;
-        } else if (header.includes('whatsapp') || header.includes('whats')) {
+        } else if (headerLower.includes('whatsapp') || headerLower.includes('whats')) {
           resident.whatsapp = value;
+        } else {
+          // Armazenar campos extras
+          extraData[header] = value;
         }
       });
 
@@ -116,7 +123,8 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
         unit: resident.unit!,
         email: resident.email || '',
         phone: resident.phone || '',
-        whatsapp: resident.whatsapp || resident.phone || ''
+        whatsapp: resident.whatsapp || resident.phone || '',
+        extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       });
     }
 
@@ -217,17 +225,29 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
         jsonErrors.push(`Item ${index + 1}: Nome é obrigatório`);
         return;
       }
-      if (!item.unidade && !item.unit && !item.apto) {
+      if (!item.unidade && !item.unit && !item.apto && !item.apartamento) {
         jsonErrors.push(`Item ${index + 1}: Unidade é obrigatória`);
         return;
       }
 
-      const unit = item.unidade || item.unit || item.apto;
+      const unit = item.unidade || item.unit || item.apto || item.apartamento;
       const exists = existingResidents.some(r => r.unit === unit);
       if (exists) {
         jsonErrors.push(`Item ${index + 1}: Unidade ${unit} já existe`);
         return;
       }
+
+      // Campos conhecidos
+      const knownFields = ['nome', 'name', 'unidade', 'unit', 'apto', 'apartamento', 'email', 'e_mail', 'telefone', 'phone', 'tel', 'whatsapp', 'whats'];
+      const extraData: Record<string, any> = {};
+
+      // Capturar todos os campos extras
+      Object.keys(item).forEach(key => {
+        const keyLower = key.toLowerCase();
+        if (!knownFields.some(field => keyLower === field || keyLower.includes(field))) {
+          extraData[key] = item[key];
+        }
+      });
 
       residents.push({
         id: Date.now().toString() + index,
@@ -235,7 +255,8 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
         unit: unit,
         email: item.email || item.e_mail || '',
         phone: item.telefone || item.phone || item.tel || '',
-        whatsapp: item.whatsapp || item.whats || item.telefone || item.phone || ''
+        whatsapp: item.whatsapp || item.whats || item.telefone || item.phone || '',
+        extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       });
     });
 
@@ -259,19 +280,26 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       const resident: Partial<Resident> = { id: Date.now().toString() + i };
+      const extraData: Record<string, any> = {};
 
       headers.forEach((header, index) => {
         const value = values[index] || '';
-        if (header.includes('nome') || header.includes('name')) {
+        const headerLower = header.toLowerCase().trim();
+        
+        // Mapear campos conhecidos
+        if (headerLower.includes('nome') || headerLower.includes('name')) {
           resident.name = value;
-        } else if (header.includes('unidade') || header.includes('unit') || header.includes('apto')) {
+        } else if (headerLower.includes('unidade') || headerLower.includes('unit') || headerLower.includes('apto') || headerLower.includes('apartamento')) {
           resident.unit = value;
-        } else if (header.includes('email')) {
+        } else if (headerLower.includes('email') || headerLower.includes('e-mail')) {
           resident.email = value;
-        } else if (header.includes('telefone') || header.includes('phone')) {
+        } else if ((headerLower.includes('telefone') || headerLower.includes('phone') || headerLower.includes('tel')) && !headerLower.includes('whatsapp')) {
           resident.phone = value;
-        } else if (header.includes('whatsapp')) {
+        } else if (headerLower.includes('whatsapp') || headerLower.includes('whats')) {
           resident.whatsapp = value;
+        } else {
+          // Armazenar campos extras
+          extraData[header] = value;
         }
       });
 
@@ -292,7 +320,8 @@ const ImportResidentsModal: React.FC<ImportResidentsModalProps> = ({
         unit: resident.unit!,
         email: resident.email || '',
         phone: resident.phone || '',
-        whatsapp: resident.whatsapp || resident.phone || ''
+        whatsapp: resident.whatsapp || resident.phone || '',
+        extraData: Object.keys(extraData).length > 0 ? extraData : undefined
       });
     }
 
