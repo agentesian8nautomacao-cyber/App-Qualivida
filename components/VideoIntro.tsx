@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
 interface VideoIntroProps {
@@ -14,12 +14,12 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   const imageSrc = '/gestao-qualivida-residence.png';
 
   useEffect(() => {
-    // Mostrar botão de pular após 3 segundos
+    // Mostrar opção de pular após 3 segundos
     const skipTimer = setTimeout(() => {
       setShowSkip(true);
     }, 3000);
 
-    // Auto-completar após 4.5 segundos (tempo de exibição)
+    // Auto-completar após 4.5 segundos (duração visual)
     const autoCompleteTimer = setTimeout(() => {
       onComplete();
     }, 4500);
@@ -33,15 +33,12 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
       };
       img.onerror = () => {
         if (!isRetry && src.includes('gestao-qualivida-residence')) {
-          // Tentar fallback com espaços
           const fallbackSrc = '/gestão%20Qualivida%20Residence.png';
           tryLoadImage(fallbackSrc, true);
         } else if (!isRetry && src.includes('%20')) {
-          // Tentar fallback sem espaços
           const fallbackSrc = '/gestao-qualivida-residence.png';
           tryLoadImage(fallbackSrc, true);
         } else {
-          // Se não carregar, continuar sem imagem
           setIsLoading(false);
         }
       };
@@ -60,9 +57,17 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
     onComplete();
   };
 
+  // Permitir pular ao toque/clique na tela inteira
+  const handleScreenClick = () => {
+    if (showSkip) {
+      onComplete();
+    }
+  };
+
   return (
     <div 
-      className="fixed inset-0 z-[10000] overflow-hidden splash-container"
+      className="fixed inset-0 z-[10000] overflow-hidden splash-screen"
+      onClick={handleScreenClick}
       style={{ 
         width: '100vw', 
         height: '100vh',
@@ -71,7 +76,8 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         top: 0,
         left: 0,
         right: 0,
-        bottom: 0
+        bottom: 0,
+        cursor: showSkip ? 'pointer' : 'default'
       }}
     >
       {/* Background com imagem do condomínio */}
@@ -95,7 +101,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         />
       )}
 
-      {/* Overlay sutil para melhorar contraste do texto */}
+      {/* Overlay sutil para melhorar leitura do texto */}
       <div 
         className="splash-overlay"
         style={{
@@ -111,14 +117,13 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
 
       {/* Conteúdo central */}
       <div className="splash-content" style={{ position: 'relative', zIndex: 2 }}>
-        {/* Logo Qualivida */}
+        {/* Logo Qualivida Club Residence - discreto */}
         <div className="splash-logo">
           <img 
             src="/1024.png" 
             alt="Qualivida Club Residence"
             className="splash-logo-image"
             onError={(e) => {
-              // Se o logo não carregar, ocultar
               (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
@@ -136,17 +141,18 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         </p>
       </div>
 
-      {/* CSS para estilos e animações */}
+      {/* CSS para estilos e animações suaves */}
       <style>{`
-        .splash-container {
+        .splash-screen {
           display: flex;
           align-items: center;
           justify-content: center;
         }
 
+        /* Animação suave de entrada do background */
         .splash-background {
           opacity: 0;
-          animation: backgroundFadeIn 1s ease-out 0.3s forwards;
+          animation: backgroundFadeIn 1.2s ease-out 0.2s forwards;
         }
 
         @keyframes backgroundFadeIn {
@@ -158,6 +164,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
+        /* Container do conteúdo central */
         .splash-content {
           width: 100%;
           height: 100vh;
@@ -170,54 +177,25 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           max-width: 90vw;
         }
 
+        /* Logo - animação suave de entrada */
         .splash-logo {
           margin-bottom: 2.5rem;
           opacity: 0;
-          transform: translateY(-20px);
-          animation: logoFadeIn 0.8s ease-out 0.5s forwards;
+          transform: translateY(-15px);
+          animation: logoFadeIn 0.9s ease-out 0.5s forwards;
         }
 
         .splash-logo-image {
-          width: 80px;
-          height: 80px;
+          width: 72px;
+          height: 72px;
           object-fit: contain;
-          filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+          filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
         }
 
         @keyframes logoFadeIn {
           from {
             opacity: 0;
-            transform: translateY(-20px) scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        .splash-title {
-          font-size: clamp(1.75rem, 5vw, 3rem);
-          font-weight: 300;
-          line-height: 1.4;
-          letter-spacing: 0.02em;
-          margin: 0 0 1rem 0;
-          color: rgba(255, 255, 255, 0.98);
-          text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-          opacity: 0;
-          transform: translateY(20px);
-          animation: titleFadeIn 0.8s ease-out 0.8s forwards;
-        }
-
-        .splash-title-highlight {
-          font-weight: 600;
-          display: block;
-          margin-top: 0.5rem;
-        }
-
-        @keyframes titleFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(-15px);
           }
           to {
             opacity: 1;
@@ -225,17 +203,49 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
+        /* Texto principal - animação suave */
+        .splash-title {
+          font-size: clamp(1.75rem, 5vw, 2.75rem);
+          font-weight: 300;
+          line-height: 1.5;
+          letter-spacing: 0.01em;
+          margin: 0 0 1.25rem 0;
+          color: rgba(255, 255, 255, 0.98);
+          text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+          opacity: 0;
+          transform: translateY(15px);
+          animation: titleFadeIn 0.9s ease-out 0.9s forwards;
+        }
+
+        .splash-title-highlight {
+          font-weight: 500;
+          display: block;
+          margin-top: 0.5rem;
+        }
+
+        @keyframes titleFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(15px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* Texto secundário - animação suave */
         .splash-subtitle {
-          font-size: clamp(0.875rem, 2vw, 1.125rem);
+          font-size: clamp(0.875rem, 2vw, 1rem);
           font-weight: 400;
           line-height: 1.6;
-          letter-spacing: 0.05em;
-          color: rgba(255, 255, 255, 0.85);
-          text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+          letter-spacing: 0.03em;
+          color: rgba(255, 255, 255, 0.9);
+          text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
           margin: 0;
           opacity: 0;
-          animation: subtitleFadeIn 0.8s ease-out 1.2s forwards;
-          max-width: 600px;
+          animation: subtitleFadeIn 0.9s ease-out 1.3s forwards;
+          max-width: 560px;
         }
 
         @keyframes subtitleFadeIn {
@@ -247,15 +257,15 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
-        /* Desktop: permitir cover em telas grandes */
+        /* Desktop: background-size cover em telas grandes */
         @media (min-width: 1024px) {
           .splash-background {
             background-size: cover !important;
           }
 
           .splash-logo-image {
-            width: 100px;
-            height: 100px;
+            width: 88px;
+            height: 88px;
           }
         }
 
@@ -277,12 +287,16 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
 
           .splash-logo-image {
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
           }
 
           .splash-title {
-            line-height: 1.3;
+            line-height: 1.4;
+          }
+
+          .splash-subtitle {
+            max-width: 90%;
           }
         }
 
@@ -297,37 +311,37 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
 
           .splash-logo-image {
-            width: 50px;
-            height: 50px;
+            width: 56px;
+            height: 56px;
           }
         }
 
-        /* Modo claro - ajustar overlay e cores */
+        /* Modo claro - ajustar overlay e cores do texto */
         .light-mode .splash-overlay {
-          backgroundColor: rgba(255, 255, 255, 0.25) !important;
+          background-color: rgba(255, 255, 255, 0.3) !important;
         }
 
         .light-mode .splash-title {
           color: rgba(0, 0, 0, 0.95);
-          text-shadow: 0 2px 8px rgba(255, 255, 255, 0.6);
+          text-shadow: 0 2px 6px rgba(255, 255, 255, 0.6);
         }
 
         .light-mode .splash-subtitle {
-          color: rgba(0, 0, 0, 0.75);
-          text-shadow: 0 1px 4px rgba(255, 255, 255, 0.6);
+          color: rgba(0, 0, 0, 0.8);
+          text-shadow: 0 1px 3px rgba(255, 255, 255, 0.6);
         }
       `}</style>
 
-      {/* Botão de pular (discreto) */}
+      {/* Botão de pular (discreto e opcional) */}
       {showSkip && (
         <button
           onClick={handleSkip}
-          className="absolute bottom-6 right-6 px-4 py-2 backdrop-blur-md border rounded-full text-xs font-medium tracking-wide hover:opacity-80 transition-opacity duration-200 z-30"
+          className="absolute bottom-6 right-6 px-4 py-2 rounded-full text-xs font-normal tracking-wide hover:opacity-70 transition-opacity duration-200 z-30"
           style={{ 
-            backgroundColor: 'rgba(255, 255, 255, 0.15)', 
-            borderColor: 'rgba(255, 255, 255, 0.25)',
-            color: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(8px)'
+            backgroundColor: 'rgba(255, 255, 255, 0.12)', 
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: 'rgba(255, 255, 255, 0.85)',
+            backdropFilter: 'blur(6px)'
           }}
           aria-label="Pular apresentação"
         >
@@ -335,13 +349,13 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         </button>
       )}
 
-      {/* Indicador de carregamento inicial */}
+      {/* Indicador de carregamento inicial (mínimo) */}
       {isLoading && (
         <div 
           className="absolute inset-0 flex items-center justify-center z-20" 
           style={{ backgroundColor: 'var(--bg-color)' }}
         >
-          <div className="w-8 h-8 border-2 border-[var(--border-color)] border-t-[var(--text-primary)] rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-[var(--border-color)] border-t-[var(--text-primary)] rounded-full animate-spin" />
         </div>
       )}
     </div>
