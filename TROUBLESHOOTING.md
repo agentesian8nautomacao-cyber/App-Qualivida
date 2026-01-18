@@ -182,6 +182,118 @@ O arquivo `index.css` não existe ou não está sendo servido corretamente.
 
 ---
 
+## ❌ Erro: devDependencies não estão sendo instaladas (vite, typescript, etc.)
+
+### Problema
+O npm está em modo production, impedindo a instalação das devDependencies (como `vite`, `typescript`, `@vitejs/plugin-react`, etc.).
+
+### Sintomas
+- `vite` não encontrado ao executar `npm run dev`
+- `Cannot find module 'vite'`
+- `npm list vite` mostra que o pacote não está instalado
+- Apenas `dependencies` são instaladas, não `devDependencies`
+
+### Causa
+O npm pode estar configurado para modo production através de:
+- Variável de ambiente `NODE_ENV=production`
+- Configuração do npm: `npm config set production true`
+- Configuração `omit=dev` no npm
+
+### Solução Completa (Execute na ordem)
+
+```bash
+# 1. Verificar variável de ambiente NODE_ENV
+# Windows PowerShell:
+$env:NODE_ENV
+# Se retornar "production", limpe:
+$env:NODE_ENV = ""
+
+# Linux/Mac:
+echo $NODE_ENV
+# Se retornar "production", limpe:
+unset NODE_ENV
+
+# 2. Verificar configuração do npm para production
+npm config get production
+
+# 3. Se production estiver como true, desative
+npm config set production false
+
+# 4. Verificar se há configuração omit=dev
+npm config get omit
+
+# 5. Se omit contiver "dev", remova
+npm config delete omit
+
+# 6. Instalar explicitamente incluindo devDependencies (IMPORTANTE)
+npm install --include=dev
+
+# 7. Verificar se o vite foi instalado agora
+npm list vite
+
+# 8. Tentar executar
+npm run dev
+```
+
+### Solução Rápida (PowerShell)
+
+```powershell
+# Limpar NODE_ENV
+$env:NODE_ENV = ""
+
+# Desabilitar modo production
+npm config set production false
+
+# Remover omit=dev se existir
+npm config delete omit
+
+# Instalar com devDependencies
+npm install --include=dev
+
+# Verificar instalação
+npm list vite
+```
+
+### Verificação
+
+Após seguir os passos acima, verifique se as devDependencies foram instaladas:
+
+```bash
+# Verificar vite
+npm list vite
+
+# Verificar todas as devDependencies
+npm list --depth=0 | findstr "devDependencies"
+```
+
+### Prevenção
+
+Para evitar esse problema no futuro:
+
+1. **Não defina `NODE_ENV=production` durante desenvolvimento:**
+   ```bash
+   # Evite isso durante dev:
+   $env:NODE_ENV="production"  # ❌
+   npm install
+   ```
+
+2. **Use scripts do package.json para builds:**
+   ```json
+   {
+     "scripts": {
+       "dev": "vite",
+       "build": "vite build"  // NODE_ENV será production automaticamente
+     }
+   }
+   ```
+
+3. **Verifique a configuração do npm periodicamente:**
+   ```bash
+   npm config list
+   ```
+
+---
+
 ## ❌ Erro: Porta já em uso
 
 ### Solução

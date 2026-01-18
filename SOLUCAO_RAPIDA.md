@@ -27,13 +27,21 @@ rm -rf node_modules
 rm -rf .vite
 rm package-lock.json
 
-# Reinstalar dependências
-npm install
+# Windows PowerShell: Limpar NODE_ENV se estiver em production
+$env:NODE_ENV = ""
+
+# Desabilitar modo production do npm
+npm config set production false
+
+# Reinstalar dependências (incluindo devDependencies)
+npm install --include=dev
 
 # OU se usar yarn:
 # rm yarn.lock
 # yarn install
 ```
+
+**⚠️ IMPORTANTE:** Se o `vite` não estiver instalado, use `npm install --include=dev` para garantir que devDependencies sejam instaladas.
 
 ### 3. Iniciar o Servidor Novamente
 
