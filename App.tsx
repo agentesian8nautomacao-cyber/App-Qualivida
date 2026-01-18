@@ -791,15 +791,17 @@ const App: React.FC = () => {
     }
   };
 
-  // Vídeo de apresentação (mostra apenas na primeira vez)
+  // Tela de apresentação (mostra apenas na primeira vez) - deve ser a única coisa renderizada
   if (showVideoIntro) {
     return (
-      <VideoIntro 
-        onComplete={() => {
-          sessionStorage.setItem('hasSeenVideoIntro', 'true');
-          setShowVideoIntro(false);
-        }} 
-      />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999 }}>
+        <VideoIntro 
+          onComplete={() => {
+            sessionStorage.setItem('hasSeenVideoIntro', 'true');
+            setShowVideoIntro(false);
+          }} 
+        />
+      </div>
     );
   }
 
