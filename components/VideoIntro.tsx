@@ -12,10 +12,9 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Cache busting para garantir que a imagem atualizada seja sempre carregada
-  // O timestamp é gerado apenas uma vez na montagem do componente
   // Usar nome sem espaços para compatibilidade com Vercel/produção
-  const imageSrc = `/gestao-qualivida-residence.png?t=${Date.now()}`;
+  // Sem timestamp para evitar problemas de cache no Vercel
+  const [imageSrc] = useState(() => '/gestao-qualivida-residence.png');
 
   useEffect(() => {
     // Mostrar botão de pular após 2 segundos
@@ -38,19 +37,21 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
       img.onerror = () => {
         if (!isRetry && src.includes('gestao-qualivida-residence')) {
           // Tentar fallback com espaços
-          const fallbackSrc = `/gestão%20Qualivida%20Residence.png?t=${Date.now()}`;
+          const fallbackSrc = '/gestão%20Qualivida%20Residence.png';
           console.warn('Imagem sem espaços não encontrada, tentando com espaços');
           tryLoadImage(fallbackSrc, true);
         } else if (!isRetry && src.includes('%20')) {
           // Tentar fallback sem espaços
-          const fallbackSrc = `/gestao-qualivida-residence.png?t=${Date.now()}`;
+          const fallbackSrc = '/gestao-qualivida-residence.png';
           console.warn('Imagem com espaços não encontrada, tentando sem espaços');
           tryLoadImage(fallbackSrc, true);
         } else {
-          // Ambas tentativas falharam, usar tela de erro
-          console.error('Não foi possível carregar a imagem de apresentação');
-          setHasError(true);
+          // Ambas tentativas falharam, pular apresentação automaticamente
+          console.warn('Imagem de apresentação não encontrada, pulando...');
+          setHasError(false);
           setIsLoading(false);
+          // Auto-completar após pequeno delay
+          setTimeout(() => onComplete(), 1000);
         }
       };
       img.src = src;
