@@ -14,7 +14,13 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   
   // Cache busting para garantir que a imagem atualizada seja sempre carregada
   // O timestamp é gerado apenas uma vez na montagem do componente
-  const imageSrc = useMemo(() => `/gestão Qualivida Residence.png?t=${Date.now()}`, []);
+  // Codificar espaços no nome do arquivo para evitar problemas na URL
+  const imageSrc = useMemo(() => {
+    const fileName = 'gestão Qualivida Residence.png';
+    // Codificar apenas os espaços e caracteres especiais, mantendo a barra
+    const encodedFileName = fileName.replace(/\s/g, '%20');
+    return `/${encodedFileName}?t=${Date.now()}`;
+  }, []);
 
   useEffect(() => {
     // Mostrar botão de pular após 2 segundos
