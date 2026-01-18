@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, X, QrCode, Image as ImageIcon, CheckCircle2, AlertCircle, RotateCcw, RotateCw } from 'lucide-react';
+import { Camera, X, QrCode, Image as ImageIcon, CheckCircle2, AlertCircle, RotateCcw, RotateCw, Upload, RefreshCw } from 'lucide-react';
 import { Resident } from '../../types';
 
 interface CameraScanModalProps {
@@ -51,13 +51,15 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [isRetrying, setIsRetrying] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanIntervalRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isOpen && mode === 'qr') {
+    if (isOpen && (mode === 'qr' || mode === 'photo')) {
       startCamera();
     } else {
       stopCamera();
@@ -66,31 +68,83 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     return () => {
       stopCamera();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, mode, facingMode]);
 
   const startCamera = async () => {
     try {
       setError(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+      
+      // Verificar se a API está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setError('Câmera não disponível neste navegador. Use um navegador moderno com suporte a câmera.');
+        return;
+      }
+
+      // Tentar com constraints flexíveis primeiro
+      let mediaStream: MediaStream | null = null;
+      const constraints = [
+        // Tentativa 1: Constraint específica com facingMode
+        {
+          video: {
+            facingMode: facingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // Tentativa 2: Constraint mais simples com facingMode
+        {
+          video: {
+            facingMode: facingMode
+          }
+        },
+        // Tentativa 3: Qualquer câmera disponível
+        {
+          video: true
         }
-      });
+      ];
+
+      for (const constraint of constraints) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraint);
+          break;
+        } catch (err) {
+          console.warn('Tentativa falhou, tentando próximo constraint:', err);
+          continue;
+        }
+      }
+
+      if (!mediaStream) {
+        throw new Error('Não foi possível acessar nenhuma câmera disponível.');
+      }
 
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
 
       if (mode === 'qr') {
         startQRScanning();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao acessar câmera:', err);
-      setError('Não foi possível acessar a câmera. Verifique as permissões.');
+      
+      let errorMessage = 'Não foi possível acessar a câmera.';
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errorMessage = 'Nenhuma câmera encontrada. Verifique se há uma câmera conectada.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errorMessage = 'A câmera está sendo usada por outro aplicativo ou há um problema de hardware.';
+      } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+        errorMessage = 'As configurações da câmera não são suportadas. Tentando configurações alternativas...';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -216,6 +270,58 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   };
 
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setError(null);
+    stopCamera();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await startCamera();
+    setIsRetrying(false);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Por favor, selecione um arquivo de imagem.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const imageDataUrl = e.target?.result as string;
+      setCapturedImage(imageDataUrl);
+      
+      // Tentar detectar QR code na imagem
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const context = canvas.getContext('2d');
+        if (context) {
+          context.drawImage(img, 0, 0);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const qrData = await detectQRCode(imageData);
+          if (qrData) {
+            setScannedData(qrData);
+            const resident = findResidentByQR(qrData);
+            if (resident) {
+              handleSuccess({ resident, qrData, image: imageDataUrl });
+            } else {
+              handleSuccess({ qrData, image: imageDataUrl });
+            }
+          }
+        }
+      };
+      img.src = imageDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -283,9 +389,36 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
           {/* Erro */}
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <p className="text-xs font-bold text-red-400">{error}</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-xs font-bold text-red-400">{error}</p>
+                </div>
+                <button
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-2 disabled:opacity-50"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                  Retry
+                </button>
+              </div>
+              {/* Opção alternativa: upload de arquivo */}
+              <div className="mt-4 pt-4 border-t border-red-500/20">
+                <label className="flex items-center justify-center gap-2 px-4 py-2 bg-[var(--glass-bg)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:bg-[var(--border-color)] transition-all">
+                  <Upload className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+                  <span className="text-xs font-bold uppercase" style={{ color: 'var(--text-primary)' }}>
+                    Ou fazer upload de uma imagem
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
               </div>
             </div>
           )}
