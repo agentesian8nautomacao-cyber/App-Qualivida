@@ -556,6 +556,9 @@ const App: React.FC = () => {
     // Limpar dados do morador da sessão
     sessionStorage.removeItem('currentResident');
     sessionStorage.removeItem('residentRole');
+    // Limpar dados do usuário da sessão
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('userRole');
   };
 
   const handleSaveNote = () => {

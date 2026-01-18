@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, ArrowRight, User, Lock, Eye, EyeOff, Sun, Moon } from 'lucide-react';
 import { UserRole } from '../types';
+import { loginUser, saveUserSession } from '../services/userAuth';
 
 interface LoginProps {
   onLogin: (role: UserRole) => void;
@@ -17,6 +18,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const [showForm, setShowForm] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Intro removida - o vídeo já foi exibido antes
   // useEffect(() => {
@@ -65,14 +67,56 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
     }
   };
 
-  const handleLogin = (e?: React.FormEvent | React.KeyboardEvent) => {
+  const handleLogin = async (e?: React.FormEvent | React.KeyboardEvent) => {
     if (e) e.preventDefault();
     if (loading) return;
     
-    setLoading(true);
-    setTimeout(() => {
+    // Resetar erro anterior
+    setError(null);
+    
+    // Validar campos
+    if (!username.trim() || !password.trim()) {
+      setError('Por favor, preencha usuário e senha');
+      return;
+    }
+
+    // Não validar para MORADOR (redireciona para cadastro)
+    if (selectedRole === 'MORADOR') {
       onLogin(selectedRole);
-    }, 1500);
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Validar credenciais no Supabase
+      const user = await loginUser(username.trim(), password);
+      
+      if (!user) {
+        setError('Usuário ou senha inválidos');
+        setLoading(false);
+        return;
+      }
+
+      // Verificar se o role do usuário corresponde ao selecionado
+      if (user.role !== selectedRole) {
+        setError(`Este usuário é ${user.role === 'PORTEIRO' ? 'Porteiro' : 'Síndico'}. Selecione o papel correto.`);
+        setLoading(false);
+        return;
+      }
+
+      // Salvar sessão
+      saveUserSession(user);
+      
+      // Delay para feedback visual
+      setTimeout(() => {
+        onLogin(selectedRole);
+      }, 500);
+    } catch (err) {
+      console.error('Erro ao fazer login:', err);
+      setError('Erro ao conectar com o servidor. Tente novamente.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -205,6 +249,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
+              {/* Mensagem de erro */}
+              {error && (
+                <div className={`p-4 rounded-xl border backdrop-blur-sm ${
+                  theme === 'light'
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                }`}>
+                  <p className="text-sm font-medium">{error}</p>
+                </div>
+              )}
+              
               <div className="space-y-4">
                 <div className="relative">
                   <User className={`absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 ${
@@ -214,7 +269,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                     type="text" 
                     placeholder="Usuário" 
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setError(null); // Limpar erro ao digitar
+                    }}
                     autoComplete="username"
                     className={`w-full pl-8 pr-4 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
                       theme === 'light'
@@ -232,7 +290,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Senha" 
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError(null); // Limpar erro ao digitar
+                    }}
                     autoComplete="current-password"
                     className={`w-full pl-8 pr-12 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
                       theme === 'light'
