@@ -126,7 +126,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           width: '100vw',
           height: '100vh',
           backgroundImage: backgroundImage || 'none',
-          backgroundSize: 'contain',
+          backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           position: 'absolute',
@@ -178,24 +178,29 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
-        /* Mobile: sempre contain para não cortar conteúdo */
-        @media (max-width: 1023px) {
+        /* Todas as telas: usar cover para preencher completamente sem faixas pretas */
+        .splash-screen-container {
+          background-size: cover !important;
+        }
+
+        /* Garantir que sempre preencha toda a área em desktop */
+        @media (min-width: 1024px) {
           .splash-screen-container {
-            background-size: contain !important;
+            background-size: cover !important;
           }
         }
 
-        /* Desktop: permitir cover opcionalmente para melhor aproveitamento */
-        @media (min-width: 1024px) {
+        /* Garantir que sempre preencha toda a área em mobile */
+        @media (max-width: 1023px) {
           .splash-screen-container {
-            background-size: cover;
+            background-size: cover !important;
           }
         }
 
         /* Ajustes específicos para telas muito pequenas */
         @media (max-width: 480px) {
           .splash-screen-container {
-            background-size: contain;
+            background-size: cover !important;
             background-position: center center;
           }
         }
@@ -203,7 +208,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         /* Ajustes para orientação paisagem em mobile */
         @media (orientation: landscape) and (max-height: 500px) {
           .splash-screen-container {
-            background-size: contain;
+            background-size: cover !important;
             background-position: center center;
           }
         }
@@ -211,7 +216,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         /* Ajustes para orientação retrato em mobile */
         @media (orientation: portrait) and (max-width: 768px) {
           .splash-screen-container {
-            background-size: contain;
+            background-size: cover !important;
             background-position: center center;
           }
         }
