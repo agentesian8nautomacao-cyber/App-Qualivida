@@ -13,8 +13,8 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) => {
   const [selectedRole, setSelectedRole] = useState<UserRole>('PORTEIRO');
-  const [username, setUsername] = useState('portaria');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
@@ -57,16 +57,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
   const handleRoleChange = (role: UserRole) => {
     // Garantir que apenas um role seja selecionado por vez
     setSelectedRole(role);
-    if (role === 'PORTEIRO') {
-      setUsername('portaria');
-      setPassword('123456');
-    } else if (role === 'SINDICO') {
-      setUsername('admin');
-      setPassword('admin123');
-    } else if (role === 'MORADOR') {
-      setUsername('morador');
-      setPassword('morador123');
-    }
+    // Limpar campos ao trocar de role
+    setUsername('');
+    setPassword('');
+    setError(null);
   };
 
   const handleLogin = async (e?: React.FormEvent | React.KeyboardEvent) => {
