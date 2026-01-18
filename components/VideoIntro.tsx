@@ -11,9 +11,9 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState<string>('');
   
   // Usar nome sem espaços para compatibilidade com Vercel/produção
-  // Sem timestamp para evitar problemas de cache no Vercel
   const [imageSrc] = useState(() => '/gestao-qualivida-residence.png');
 
   useEffect(() => {
@@ -33,6 +33,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
       img.onload = () => {
         setIsLoading(false);
         setImageLoaded(true);
+        setBackgroundImage(`url(${src})`);
       };
       img.onerror = () => {
         if (!isRetry && src.includes('gestao-qualivida-residence')) {
@@ -72,7 +73,14 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   // Se houver erro, mostrar mensagem e permitir pular
   if (hasError) {
     return (
-      <div className="fixed inset-0 z-[10000] bg-[var(--bg-color)] flex items-center justify-center overflow-hidden">
+      <div 
+        className="fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden"
+        style={{ 
+          width: '100vw', 
+          height: '100vh',
+          backgroundColor: 'var(--bg-color)'
+        }}
+      >
         <div className="text-center space-y-6 px-8">
           <div className="w-20 h-20 border-4 border-[var(--border-color)] border-t-[var(--text-primary)] rounded-full animate-spin mx-auto" />
           <h2 className="text-2xl font-black uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
@@ -99,12 +107,10 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-[10000] overflow-hidden flex items-center justify-center"
+      className="fixed inset-0 z-[10000] overflow-hidden"
       style={{ 
         width: '100vw', 
         height: '100vh',
-        maxWidth: '100vw',
-        maxHeight: '100vh',
         backgroundColor: 'var(--bg-color)',
         position: 'fixed',
         top: 0,
@@ -113,39 +119,47 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         bottom: 0
       }}
     >
-      {/* Imagem de apresentação - Fullscreen com animação de texto */}
-      <img
-        src={imageSrc}
-        alt="Qualivida Residence - Sistema de Gestão Condominial"
-        className={`intro-image-responsive intro-image-animated ${
-          imageLoaded ? 'intro-image-loaded' : 'intro-image-loading'
-        }`}
-        onLoad={() => {
-          setIsLoading(false);
-          setImageLoaded(true);
-        }}
-        onError={() => {
-          setHasError(true);
-          setIsLoading(false);
+      {/* Container com background-image para ocupar 100% da tela */}
+      <div
+        className={`splash-screen-container ${imageLoaded ? 'splash-screen-loaded' : 'splash-screen-loading'}`}
+        style={{
+          width: '100vw',
+          height: '100vh',
+          backgroundImage: backgroundImage || 'none',
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0
         }}
       />
 
-      {/* CSS Animation para animar o texto presente na imagem */}
+      {/* CSS para responsividade e animações */}
       <style>{`
-        .intro-image-animated {
+        .splash-screen-container {
+          transition: opacity 0.3s ease;
           animation: imageTextReveal 2s ease-out forwards, imageTextPulse 4s ease-in-out 2s infinite;
+        }
+
+        .splash-screen-loading {
+          opacity: 0;
+        }
+
+        .splash-screen-loaded {
+          opacity: 1;
         }
 
         @keyframes imageTextReveal {
           0% {
             opacity: 0;
             filter: blur(15px) brightness(0.7) contrast(0.8);
-            transform: translate(-50%, -50%) scale(1.05);
           }
           100% {
             opacity: 1;
             filter: blur(0px) brightness(1) contrast(1);
-            transform: translate(-50%, -50%) scale(1);
           }
         }
 
@@ -164,68 +178,41 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
-        @keyframes imageTextGlow {
-          0%, 100% {
-            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.2));
-          }
-          50% {
-            filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.7)) drop-shadow(0 0 32px rgba(255, 255, 255, 0.4));
+        /* Mobile: sempre contain para não cortar conteúdo */
+        @media (max-width: 1023px) {
+          .splash-screen-container {
+            background-size: contain !important;
           }
         }
 
-        /* Estilo responsivo da imagem */
-        .intro-image-responsive {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 100vw;
-          height: 100vh;
-          object-fit: contain;
-          object-position: center center;
-          max-width: 100%;
-          max-height: 100%;
-          transition: opacity 0.3s ease;
-        }
-
-        .intro-image-loading {
-          opacity: 0;
-        }
-
-        .intro-image-loaded {
-          opacity: 1;
-        }
-
-        /* Ajustes para mobile em modo retrato */
-        @media (max-width: 768px) {
-          .intro-image-responsive {
-            width: 100%;
-            height: auto;
-            max-height: 100vh;
-            object-fit: contain;
-            transform: translate(-50%, -50%);
+        /* Desktop: permitir cover opcionalmente para melhor aproveitamento */
+        @media (min-width: 1024px) {
+          .splash-screen-container {
+            background-size: cover;
           }
         }
 
-        @media (orientation: portrait) and (max-width: 768px) {
-          .intro-image-responsive {
-            width: 100%;
-            height: auto;
-            max-width: 100vw;
-            max-height: 100vh;
-            object-fit: contain;
-            transform: translate(-50%, -50%);
+        /* Ajustes específicos para telas muito pequenas */
+        @media (max-width: 480px) {
+          .splash-screen-container {
+            background-size: contain;
+            background-position: center center;
           }
         }
 
+        /* Ajustes para orientação paisagem em mobile */
         @media (orientation: landscape) and (max-height: 500px) {
-          .intro-image-responsive {
-            width: auto;
-            height: 100%;
-            max-width: 100vw;
-            max-height: 100vh;
-            object-fit: contain;
-            transform: translate(-50%, -50%);
+          .splash-screen-container {
+            background-size: contain;
+            background-position: center center;
+          }
+        }
+
+        /* Ajustes para orientação retrato em mobile */
+        @media (orientation: portrait) and (max-width: 768px) {
+          .splash-screen-container {
+            background-size: contain;
+            background-position: center center;
           }
         }
       `}</style>
@@ -247,7 +234,10 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
 
       {/* Indicador de carregamento */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}>
+        <div 
+          className="absolute inset-0 flex items-center justify-center backdrop-blur-sm z-20" 
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+        >
           <div className="text-center space-y-4">
             <div className="w-16 h-16 border-4 border-[var(--border-color)] border-t-[var(--text-primary)] rounded-full animate-spin mx-auto" />
             <p className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--text-primary)' }}>
@@ -261,4 +251,3 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
 };
 
 export default VideoIntro;
-
