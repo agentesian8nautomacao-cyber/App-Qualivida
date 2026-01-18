@@ -9,6 +9,11 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   const { config } = useAppConfig();
   const [showSkip, setShowSkip] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState<string>('');
+  
+  // Usar nome sem espaços para compatibilidade com Vercel/produção
+  const [imageSrc] = useState(() => '/gestao-qualivida-residence.png');
 
   useEffect(() => {
     // Mostrar botão de pular após 2 segundos
@@ -21,17 +26,42 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
       onComplete();
     }, 5000);
 
-    // Simular carregamento inicial
-    const loadTimer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
+    // Verificar se a imagem foi carregada com fallback
+    const tryLoadImage = (src: string, isRetry = false) => {
+      const img = new Image();
+      img.onload = () => {
+        setIsLoading(false);
+        setImageLoaded(true);
+        setBackgroundImage(`url(${src})`);
+      };
+      img.onerror = () => {
+        if (!isRetry && src.includes('gestao-qualivida-residence')) {
+          // Tentar fallback com espaços
+          const fallbackSrc = '/gestão%20Qualivida%20Residence.png';
+          console.warn('Imagem sem espaços não encontrada, tentando com espaços');
+          tryLoadImage(fallbackSrc, true);
+        } else if (!isRetry && src.includes('%20')) {
+          // Tentar fallback sem espaços
+          const fallbackSrc = '/gestao-qualivida-residence.png';
+          console.warn('Imagem com espaços não encontrada, tentando sem espaços');
+          tryLoadImage(fallbackSrc, true);
+        } else {
+          // Ambas tentativas falharam, usar apenas texto
+          console.warn('Imagem de apresentação não encontrada, usando apenas texto');
+          setIsLoading(false);
+          setImageLoaded(false);
+        }
+      };
+      img.src = src;
+    };
+    
+    tryLoadImage(imageSrc);
 
     return () => {
       clearTimeout(skipTimer);
       clearTimeout(autoCompleteTimer);
-      clearTimeout(loadTimer);
     };
-  }, [onComplete]);
+  }, [imageSrc, onComplete]);
 
   const handleSkip = () => {
     onComplete();
@@ -51,8 +81,41 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         bottom: 0
       }}
     >
+      {/* Background com imagem */}
+      <div
+        className={`splash-background ${imageLoaded ? 'splash-background-loaded' : 'splash-background-loading'}`}
+        style={{
+          width: '100vw',
+          height: '100vh',
+          backgroundImage: backgroundImage || 'none',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0
+        }}
+      />
+
+      {/* Overlay escuro para melhor contraste do texto */}
+      <div 
+        className="splash-overlay"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: imageLoaded 
+            ? 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.4) 100%)'
+            : 'var(--bg-color)',
+          zIndex: 1
+        }}
+      />
+
       {/* Container principal da apresentação */}
-      <div className="splash-screen-content">
+      <div className="splash-screen-content" style={{ position: 'relative', zIndex: 2 }}>
         <div className="splash-screen-text">
           <h1 className="splash-title-main">
             <span className="splash-word splash-word-1">Gestão</span>
@@ -68,6 +131,30 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
 
       {/* CSS para animações e estilos */}
       <style>{`
+        .splash-background {
+          transition: opacity 0.8s ease;
+          animation: backgroundFadeIn 1.5s ease-out forwards;
+        }
+
+        .splash-background-loading {
+          opacity: 0;
+        }
+
+        .splash-background-loaded {
+          opacity: 1;
+        }
+
+        @keyframes backgroundFadeIn {
+          from {
+            opacity: 0;
+            filter: blur(10px) brightness(0.8);
+          }
+          to {
+            opacity: 1;
+            filter: blur(0px) brightness(1);
+          }
+        }
+
         .splash-screen-content {
           width: 100vw;
           height: 100vh;
@@ -75,11 +162,6 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           align-items: center;
           justify-content: center;
           position: relative;
-          background: linear-gradient(135deg, 
-            var(--bg-color) 0%, 
-            rgba(var(--bg-color-rgb, 5, 5, 5), 0.95) 50%,
-            var(--bg-color) 100%
-          );
         }
 
         .splash-screen-text {
@@ -104,14 +186,9 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           opacity: 0;
           transform: translateY(30px);
           animation: fadeInUp 0.8s ease-out forwards;
-          background: linear-gradient(135deg, 
-            rgba(255, 255, 255, 0.95) 0%, 
-            rgba(255, 255, 255, 0.85) 100%
-          );
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          text-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
+          text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5),
+                       0 2px 10px rgba(0, 0, 0, 0.3);
+          color: rgba(255, 255, 255, 0.98);
         }
 
         .splash-word-1 {
@@ -121,12 +198,15 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         .splash-word-2 {
           animation-delay: 0.4s;
           background: linear-gradient(135deg, 
-            rgba(11, 122, 75, 1) 0%, 
-            rgba(16, 185, 129, 1) 100%
+            rgba(255, 255, 255, 1) 0%, 
+            rgba(16, 185, 129, 1) 50%,
+            rgba(11, 122, 75, 1) 100%
           );
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+          text-shadow: none;
+          filter: drop-shadow(0 4px 20px rgba(16, 185, 129, 0.4));
         }
 
         .splash-word-3 {
@@ -152,8 +232,8 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           font-weight: 500;
           letter-spacing: 0.2em;
           text-transform: uppercase;
-          color: var(--text-secondary);
-          opacity: 0.8;
+          color: rgba(255, 255, 255, 0.9);
+          text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
         }
 
         @keyframes fadeInUp {
@@ -184,16 +264,34 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         @keyframes titlePulse {
           0%, 100% {
             transform: scale(1);
-            filter: brightness(1);
           }
           50% {
             transform: scale(1.02);
-            filter: brightness(1.05);
           }
         }
 
-        /* Responsividade para mobile */
-        @media (max-width: 768px) {
+        /* Desktop: usar cover para preencher completamente */
+        @media (min-width: 1024px) {
+          .splash-background {
+            background-size: cover !important;
+          }
+        }
+
+        /* Mobile: usar contain para não cortar conteúdo importante */
+        @media (max-width: 1023px) {
+          .splash-background {
+            background-size: contain !important;
+            background-position: center center;
+          }
+        }
+
+        /* Ajustes específicos para telas muito pequenas */
+        @media (max-width: 480px) {
+          .splash-background {
+            background-size: contain !important;
+            background-position: center center;
+          }
+
           .splash-title-main {
             font-size: clamp(1.5rem, 10vw, 3.5rem);
             gap: 0.3rem;
@@ -208,15 +306,27 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           }
         }
 
-        /* Modo claro */
+        /* Ajustes para orientação paisagem em mobile */
+        @media (orientation: landscape) and (max-height: 500px) {
+          .splash-background {
+            background-size: contain !important;
+            background-position: center center;
+          }
+        }
+
+        /* Ajustes para orientação retrato em mobile */
+        @media (orientation: portrait) and (max-width: 768px) {
+          .splash-background {
+            background-size: contain !important;
+            background-position: center center;
+          }
+        }
+
+        /* Modo claro - ajustar cores do texto */
         .light-mode .splash-word {
-          background: linear-gradient(135deg, 
-            rgba(0, 0, 0, 0.95) 0%, 
-            rgba(0, 0, 0, 0.85) 100%
-          );
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          color: rgba(0, 0, 0, 0.95);
+          text-shadow: 0 4px 20px rgba(255, 255, 255, 0.8),
+                       0 2px 10px rgba(255, 255, 255, 0.6);
         }
 
         .light-mode .splash-word-2 {
@@ -227,18 +337,16 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+          filter: drop-shadow(0 4px 20px rgba(16, 185, 129, 0.3));
         }
 
         .light-mode .splash-subtitle-text {
-          color: rgba(0, 0, 0, 0.6);
+          color: rgba(0, 0, 0, 0.8);
+          text-shadow: 0 2px 10px rgba(255, 255, 255, 0.8);
         }
 
-        .light-mode .splash-screen-content {
-          background: linear-gradient(135deg, 
-            #f9fafb 0%, 
-            rgba(249, 250, 251, 0.95) 50%,
-            #f9fafb 100%
-          );
+        .light-mode .splash-overlay {
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.3) 100%) !important;
         }
       `}</style>
 
@@ -246,11 +354,12 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
       {showSkip && (
         <button
           onClick={handleSkip}
-          className="absolute bottom-4 right-4 md:bottom-8 md:right-8 px-4 py-2 md:px-6 md:py-3 backdrop-blur-md border rounded-full text-xs md:text-sm font-black uppercase tracking-widest hover:scale-105 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500 z-10"
+          className="absolute bottom-4 right-4 md:bottom-8 md:right-8 px-4 py-2 md:px-6 md:py-3 backdrop-blur-md border rounded-full text-xs md:text-sm font-black uppercase tracking-widest hover:scale-105 transition-all animate-in fade-in slide-in-from-bottom-4 duration-500 z-30"
           style={{ 
-            backgroundColor: 'var(--glass-bg)', 
-            borderColor: 'var(--border-color)',
-            color: 'var(--text-primary)'
+            backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            color: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)'
           }}
         >
           Pular
