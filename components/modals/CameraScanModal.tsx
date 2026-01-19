@@ -75,10 +75,42 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     try {
       setError(null);
       
+      // Verificar HTTPS (exceto localhost)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        setError('Acesso à câmera requer HTTPS. Por favor, use uma conexão segura.');
+        return;
+      }
+      
       // Verificar se a API está disponível
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setError('Câmera não disponível neste navegador. Use um navegador moderno com suporte a câmera.');
         return;
+      }
+
+      // Verificar se há dispositivos de vídeo disponíveis
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        if (videoDevices.length === 0) {
+          setError('Nenhuma câmera detectada neste dispositivo.');
+          return;
+        }
+      } catch (enumError) {
+        // Se falhar ao enumerar, continuar mesmo assim - alguns navegadores precisam de permissão primeiro
+        console.warn('Não foi possível enumerar dispositivos:', enumError);
+      }
+
+      // Verificar permissões antes de solicitar
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        if (permissionStatus.state === 'denied') {
+          setError('Permissão de câmera negada. Por favor, permita o acesso nas configurações do navegador.');
+          return;
+        }
+      } catch (permError) {
+        // Alguns navegadores não suportam navigator.permissions.query, continuar normalmente
+        console.warn('Não foi possível verificar permissões de câmera:', permError);
       }
 
       // Tentar com constraints flexíveis primeiro
@@ -115,7 +147,19 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
       }
 
       if (!mediaStream) {
-        throw new Error('Não foi possível acessar nenhuma câmera disponível.');
+        // Tentar verificar novamente se há dispositivos
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          
+          if (videoDevices.length === 0) {
+            throw new Error('Nenhuma câmera detectada neste dispositivo. Verifique se há uma câmera conectada.');
+          } else {
+            throw new Error('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+          }
+        } catch (enumError: any) {
+          throw new Error(enumError.message || 'Não foi possível acessar nenhuma câmera disponível.');
+        }
       }
 
       setStream(mediaStream);
@@ -133,18 +177,21 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
       let errorMessage = 'Não foi possível acessar a câmera.';
       
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador.';
+        errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador e recarregue a página.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errorMessage = 'Nenhuma câmera encontrada. Verifique se há uma câmera conectada.';
+        errorMessage = 'Nenhuma câmera encontrada neste dispositivo. Verifique se há uma câmera conectada e funcionando.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        errorMessage = 'A câmera está sendo usada por outro aplicativo ou há um problema de hardware.';
+        errorMessage = 'A câmera está sendo usada por outro aplicativo ou há um problema de hardware. Feche outros aplicativos que estejam usando a câmera.';
       } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
-        errorMessage = 'As configurações da câmera não são suportadas. Tentando configurações alternativas...';
+        errorMessage = 'As configurações solicitadas da câmera não são suportadas. Tente novamente ou use o botão de retry.';
+      } else if (err.name === 'SecurityError' || err.message?.includes('HTTPS')) {
+        errorMessage = 'Acesso à câmera requer HTTPS. Por favor, use uma conexão segura (https://) ou localhost.';
       } else if (err.message) {
         errorMessage = err.message;
       }
       
       setError(errorMessage);
+      setIsScanning(false);
     }
   };
 
@@ -330,7 +377,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
         className="absolute inset-0 bg-black/95 backdrop-blur-2xl" 
         onClick={handleClose}
       />
-      <div className="relative w-full max-w-4xl bg-[var(--sidebar-bg)] border border-[var(--border-color)] rounded-[48px] shadow-2xl overflow-hidden animate-in zoom-in duration-500">
+      <div className="relative w-full max-w-full sm:max-w-2xl md:max-w-4xl max-h-[95vh] bg-[var(--sidebar-bg)] border border-[var(--border-color)] rounded-[32px] sm:rounded-[40px] md:rounded-[48px] shadow-2xl overflow-hidden animate-in zoom-in duration-500 my-auto flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
@@ -351,7 +398,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
         </div>
 
         {/* Conteúdo */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
           {/* Modos */}
           <div className="flex gap-3 mb-6">
             <button
@@ -424,14 +471,15 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
           )}
 
           {/* Área da câmera/foto */}
-          <div className="relative bg-black rounded-2xl overflow-hidden" style={{ minHeight: '400px' }}>
+          <div className="relative bg-black rounded-xl sm:rounded-2xl overflow-hidden" style={{ minHeight: '250px', maxHeight: 'calc(95vh - 300px)' }}>
             {capturedImage ? (
               // Foto capturada
               <div className="relative">
                 <img 
                   src={capturedImage} 
                   alt="Foto capturada" 
-                  className="w-full h-auto max-h-[500px] object-contain"
+                  className="w-full h-auto object-contain"
+                  style={{ maxHeight: 'calc(95vh - 300px)' }}
                 />
                 {scannedData && (
                   <div className="absolute top-4 left-4 right-4 p-4 bg-green-500/90 backdrop-blur-md rounded-xl">
@@ -470,7 +518,8 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-auto max-h-[500px] object-contain"
+                  className="w-full h-auto object-contain"
+                  style={{ maxHeight: 'calc(95vh - 300px)' }}
                 />
                 {isScanning && mode === 'qr' && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

@@ -394,21 +394,21 @@ export const NewPackageModal = ({
 }: any) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-4 overflow-auto">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-white text-black rounded-[48px] shadow-2xl p-1 md:p-1 overflow-hidden animate-in zoom-in duration-500">
+      <div className="relative w-full max-w-full sm:max-w-2xl max-h-[95vh] bg-white text-black rounded-[32px] sm:rounded-[48px] shadow-2xl overflow-hidden animate-in zoom-in duration-500 my-auto">
          <div className={`transition-all duration-700 ease-in-out flex ${step === 2 ? '-translate-x-1/3' : step === 3 ? '-translate-x-2/3' : 'translate-x-0'}`} style={{ width: '300%' }}>
             
             {/* STEP 1: RESIDENT */}
-            <div className="w-1/3 p-8 md:p-14 max-h-[90vh] overflow-y-auto custom-scrollbar">
-               <header className="flex justify-between items-start mb-12">
-                  <div><h4 className="text-3xl font-black uppercase tracking-tighter">Quem recebe?</h4><p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.3em] mt-1">Passo 01: Identificação</p></div>
-                  <button onClick={onClose} className="p-4 bg-zinc-50 rounded-3xl hover:bg-zinc-100 transition-all"><X className="w-6 h-6"/></button>
+            <div className="w-1/3 flex-shrink-0 p-4 sm:p-6 md:p-8 lg:p-14 max-h-[95vh] overflow-y-auto custom-scrollbar">
+               <header className="flex justify-between items-start mb-6 sm:mb-8 md:mb-12 gap-2">
+                  <div className="min-w-0 flex-1"><h4 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tighter">Quem recebe?</h4><p className="text-[9px] sm:text-[10px] font-bold opacity-30 uppercase tracking-[0.3em] mt-1">Passo 01: Identificação</p></div>
+                  <button onClick={onClose} className="p-2 sm:p-3 md:p-4 bg-zinc-50 rounded-2xl sm:rounded-3xl hover:bg-zinc-100 transition-all flex-shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"/></button>
                </header>
-               <div className="space-y-12">
+               <div className="space-y-6 sm:space-y-8 md:space-y-12">
                   <div className="relative group">
-                     <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 opacity-20 group-focus-within:opacity-100 transition-opacity" />
-                     <input type="text" placeholder="Buscar por nome ou unidade..." value={searchResident} onChange={e => { setSearchResident(e.target.value); setSelectedResident(null); }} className="w-full pl-16 pr-6 py-6 bg-zinc-50 rounded-[32px] font-black text-xl outline-none border-2 border-transparent focus:border-black/5 placeholder:opacity-20 shadow-inner" />
+                     <Search className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 opacity-20 group-focus-within:opacity-100 transition-opacity" />
+                     <input type="text" placeholder="Buscar por nome ou unidade..." value={searchResident} onChange={e => { setSearchResident(e.target.value); setSelectedResident(null); }} className="w-full pl-10 sm:pl-12 md:pl-16 pr-4 sm:pr-6 py-3 sm:py-4 md:py-6 bg-zinc-50 rounded-[24px] sm:rounded-[32px] font-black text-sm sm:text-lg md:text-xl outline-none border-2 border-transparent focus:border-black/5 placeholder:opacity-20 shadow-inner" />
                   </div>
                   {!selectedResident && filteredResidents.length > 0 && (
                      <div className="bg-zinc-50 rounded-[32px] border border-black/5 p-4 space-y-2 animate-in slide-in-from-top-4">
@@ -421,28 +421,28 @@ export const NewPackageModal = ({
                      </div>
                   )}
                   {selectedResident && (
-                     <div className="p-10 bg-black text-white rounded-[48px] flex flex-col items-center text-center animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">
-                        <div className="w-24 h-24 rounded-[32px] bg-white/10 flex items-center justify-center mb-6 shadow-inner text-3xl font-black">{selectedResident.name.charAt(0)}</div>
-                        <h5 className="text-2xl font-black uppercase leading-tight">{selectedResident.name}</h5>
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mt-2">Unidade {selectedResident.unit}</p>
+                     <div className="p-6 sm:p-8 md:p-10 bg-black text-white rounded-[32px] sm:rounded-[40px] md:rounded-[48px] flex flex-col items-center text-center animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-[24px] sm:rounded-[32px] bg-white/10 flex items-center justify-center mb-4 sm:mb-6 shadow-inner text-2xl sm:text-3xl font-black">{selectedResident.name.charAt(0)}</div>
+                        <h5 className="text-lg sm:text-xl md:text-2xl font-black uppercase leading-tight break-words">{selectedResident.name}</h5>
+                        <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mt-2">Unidade {selectedResident.unit}</p>
                      </div>
                   )}
-                  <button disabled={!selectedResident} onClick={() => setStep(2)} className={`w-full py-7 rounded-[32px] font-black uppercase text-[12px] tracking-widest transition-all flex items-center justify-center gap-3 shadow-2xl ${selectedResident ? 'bg-black text-white hover:scale-[1.02] active:scale-95' : 'bg-zinc-100 text-zinc-300 cursor-not-allowed'}`}>Próximo: Inventário <ArrowRight className="w-5 h-5" /></button>
+                  <button disabled={!selectedResident} onClick={() => setStep(2)} className={`w-full py-4 sm:py-5 md:py-7 rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] md:text-[12px] tracking-widest transition-all flex items-center justify-center gap-2 sm:gap-3 shadow-2xl ${selectedResident ? 'bg-black text-white hover:scale-[1.02] active:scale-95' : 'bg-zinc-100 text-zinc-300 cursor-not-allowed'}`}>Próximo: Inventário <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
                </div>
             </div>
 
             {/* STEP 2: DETAILS */}
-            <div className="w-1/3 p-8 md:p-14 max-h-[90vh] overflow-y-auto custom-scrollbar">
-               <header className="flex justify-between items-start mb-12">
-                  <button onClick={() => setStep(1)} className="p-4 bg-zinc-50 rounded-3xl hover:bg-zinc-100 transition-all"><ChevronLeft className="w-6 h-6"/></button>
-                  <div className="text-right"><h4 className="text-3xl font-black uppercase tracking-tighter">O que chegou?</h4><p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.3em] mt-1">Passo 02: Detalhamento</p></div>
+            <div className="w-1/3 flex-shrink-0 p-4 sm:p-6 md:p-8 lg:p-14 max-h-[95vh] overflow-y-auto custom-scrollbar">
+               <header className="flex justify-between items-start mb-6 sm:mb-8 md:mb-12 gap-2">
+                  <button onClick={() => setStep(1)} className="p-2 sm:p-3 md:p-4 bg-zinc-50 rounded-2xl sm:rounded-3xl hover:bg-zinc-100 transition-all flex-shrink-0"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"/></button>
+                  <div className="text-right min-w-0 flex-1"><h4 className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-tighter">O que chegou?</h4><p className="text-[9px] sm:text-[10px] font-bold opacity-30 uppercase tracking-[0.3em] mt-1">Passo 02: Detalhamento</p></div>
                </header>
-               <div className="space-y-12">
+               <div className="space-y-6 sm:space-y-8 md:space-y-12">
                   <div className="flex flex-wrap gap-2">
                      {packageCategories.map((cat: string) => (
-                       <button key={cat} onClick={() => setPackageType(cat)} className={`px-8 py-4 rounded-[24px] text-[10px] font-black uppercase tracking-widest transition-all ${packageType === cat ? 'bg-black text-white shadow-xl scale-105' : 'bg-zinc-50 text-zinc-400 hover:bg-zinc-100'}`}>{cat}</button>
+                       <button key={cat} onClick={() => setPackageType(cat)} className={`px-4 sm:px-6 md:px-8 py-2 sm:py-3 md:py-4 rounded-[20px] sm:rounded-[24px] text-[9px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-widest transition-all ${packageType === cat ? 'bg-black text-white shadow-xl scale-105' : 'bg-zinc-50 text-zinc-400 hover:bg-zinc-100'}`}>{cat}</button>
                      ))}
-                     <button onClick={() => setIsAddingPkgCategory(!isAddingPkgCategory)} className="px-6 py-4 rounded-[24px] border border-dashed border-zinc-200 text-zinc-300 hover:bg-zinc-50 transition-all"><Plus className="w-4 h-4" /></button>
+                     <button onClick={() => setIsAddingPkgCategory(!isAddingPkgCategory)} className="px-4 sm:px-6 py-2 sm:py-3 md:py-4 rounded-[20px] sm:rounded-[24px] border border-dashed border-zinc-200 text-zinc-300 hover:bg-zinc-50 transition-all"><Plus className="w-3 h-3 sm:w-4 sm:h-4" /></button>
                   </div>
                   {isAddingPkgCategory && (
                      <div className="flex items-center bg-zinc-50 rounded-[24px] p-2 border border-black/10 animate-in slide-in-from-top-2">
@@ -468,31 +468,31 @@ export const NewPackageModal = ({
                         ))}
                      </div>
                   </div>
-                  <button onClick={() => setStep(3)} className="w-full py-7 bg-black text-white rounded-[32px] font-black uppercase text-[12px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3">Próximo: Notificação <ArrowRight className="w-5 h-5" /></button>
+                  <button onClick={() => setStep(3)} className="w-full py-4 sm:py-5 md:py-7 bg-black text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] md:text-[12px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 sm:gap-3">Próximo: Notificação <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
                </div>
             </div>
 
             {/* STEP 3: NOTIFY */}
-            <div className="w-1/3 p-8 md:p-14 flex flex-col justify-between max-h-[90vh]">
-               <div>
-                  <header className="flex justify-between items-start mb-12">
-                     <button onClick={() => setStep(2)} className="p-4 bg-zinc-50 rounded-3xl hover:bg-zinc-100 transition-all"><ChevronLeft className="w-6 h-6"/></button>
-                     <div className="text-right flex items-center gap-6">
-                        <button onClick={() => onConfirm(false)} className="text-lg font-black uppercase tracking-tight hover:text-blue-500 transition-colors active:scale-95">Salvar</button>
+            <div className="w-1/3 flex-shrink-0 p-4 sm:p-6 md:p-8 lg:p-14 flex flex-col justify-between max-h-[95vh] min-h-0">
+               <div className="overflow-y-auto custom-scrollbar flex-1">
+                  <header className="flex justify-between items-start mb-6 sm:mb-8 md:mb-12 gap-2">
+                     <button onClick={() => setStep(2)} className="p-2 sm:p-3 md:p-4 bg-zinc-50 rounded-2xl sm:rounded-3xl hover:bg-zinc-100 transition-all flex-shrink-0"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"/></button>
+                     <div className="text-right flex items-center gap-4 sm:gap-6">
+                        <button onClick={() => onConfirm(false)} className="text-sm sm:text-base md:text-lg font-black uppercase tracking-tight hover:text-blue-500 transition-colors active:scale-95">Salvar</button>
                      </div>
                   </header>
-                  <div className="space-y-10">
-                     <div className="relative p-10 bg-zinc-50 rounded-[48px] border border-black/5 shadow-inner overflow-hidden">
-                        <div className="absolute top-6 left-10 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><span className="text-[9px] font-black text-green-600 uppercase tracking-widest">WhatsApp Business</span></div>
-                        <textarea value={packageMessage} onChange={e => setPackageMessage(e.target.value)} className="w-full h-64 mt-8 bg-transparent font-bold text-xl leading-relaxed outline-none resize-none placeholder:opacity-10 border-none" />
-                        <div className="mt-6 flex justify-end"><div className="p-3 bg-white rounded-2xl border border-black/5 flex items-center gap-2 opacity-40"><Edit2 className="w-3 h-3" /><span className="text-[8px] font-black uppercase">Editor Ativo</span></div></div>
+                  <div className="space-y-6 sm:space-y-8 md:space-y-10">
+                     <div className="relative p-4 sm:p-6 md:p-10 bg-zinc-50 rounded-[32px] sm:rounded-[40px] md:rounded-[48px] border border-black/5 shadow-inner overflow-hidden">
+                        <div className="absolute top-3 sm:top-4 md:top-6 left-4 sm:left-6 md:left-10 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><span className="text-[8px] sm:text-[9px] font-black text-green-600 uppercase tracking-wider sm:tracking-widest">WhatsApp Business</span></div>
+                        <textarea value={packageMessage} onChange={e => setPackageMessage(e.target.value)} className="w-full h-48 sm:h-56 md:h-64 mt-6 sm:mt-8 bg-transparent font-bold text-sm sm:text-lg md:text-xl leading-relaxed outline-none resize-none placeholder:opacity-10 border-none" />
+                        <div className="mt-4 sm:mt-6 flex justify-end"><div className="p-2 sm:p-3 bg-white rounded-xl sm:rounded-2xl border border-black/5 flex items-center gap-2 opacity-40"><Edit2 className="w-3 h-3" /><span className="text-[7px] sm:text-[8px] font-black uppercase">Editor Ativo</span></div></div>
                      </div>
-                     <div className="p-8 bg-zinc-900 text-white/40 rounded-[40px] flex items-center gap-6"><Bell className="w-8 h-8 opacity-20" /><p className="text-[11px] font-bold leading-relaxed">O registro será salvo permanentemente. O morador será alertado.</p></div>
+                     <div className="p-4 sm:p-6 md:p-8 bg-zinc-900 text-white/40 rounded-[32px] sm:rounded-[40px] flex items-start sm:items-center gap-4 sm:gap-6"><Bell className="w-6 h-6 sm:w-8 sm:h-8 opacity-20 flex-shrink-0 mt-1 sm:mt-0" /><p className="text-[10px] sm:text-[11px] font-bold leading-relaxed">O registro será salvo permanentemente. O morador será alertado.</p></div>
                   </div>
                </div>
-               <div className="grid grid-cols-2 gap-4 mt-12">
-                  <button onClick={() => onConfirm(false)} className="py-7 bg-zinc-100 text-black rounded-[32px] font-black uppercase text-[11px] tracking-widest hover:bg-zinc-200 transition-all active:scale-95">Salvar</button>
-                  <button onClick={() => onConfirm(true)} className="py-7 bg-green-600 text-white rounded-[32px] font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"><MessageCircle className="w-5 h-5" /> Notificar</button>
+               <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-6 sm:mt-8 md:mt-12 flex-shrink-0">
+                  <button onClick={() => onConfirm(false)} className="py-4 sm:py-5 md:py-7 bg-zinc-100 text-black rounded-[24px] sm:rounded-[32px] font-black uppercase text-[9px] sm:text-[10px] md:text-[11px] tracking-widest hover:bg-zinc-200 transition-all active:scale-95">Salvar</button>
+                  <button onClick={() => onConfirm(true)} className="py-4 sm:py-5 md:py-7 bg-green-600 text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[9px] sm:text-[10px] md:text-[11px] tracking-widest flex items-center justify-center gap-2 sm:gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"><MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden sm:inline">Notificar</span><span className="sm:hidden">Notif.</span></button>
                </div>
             </div>
          </div>

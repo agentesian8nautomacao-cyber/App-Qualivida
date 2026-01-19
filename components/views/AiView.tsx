@@ -147,32 +147,51 @@ ${voiceSettings.style === 'serious'
     };
 
     setMessages(prev => [...prev, userMsg]);
+    const currentInput = input;
     setInput('');
     setIsProcessing(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error('Chave da API não configurada. Verifique as variáveis de ambiente.');
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const context = getSystemContext();
       const persona = getSystemPersona();
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: [
-          { role: 'user', parts: [{ text: `${persona}\n\nCONTEXTO EM TEMPO REAL:\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${userMsg.text}` }] }
+          { role: 'user', parts: [{ text: `${persona}\n\nCONTEXTO EM TEMPO REAL:\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${currentInput}` }] }
         ],
         config: { temperature: 0.7 }
       });
 
+      const responseText = response.text || response.response?.text() || '';
+      
       const modelMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: response.text || "Sem resposta.",
+        text: responseText || "Desculpe, não consegui gerar uma resposta. Tente novamente.",
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, modelMsg]);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Erro ao enviar mensagem:', error);
+      
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'model',
+        text: error.message?.includes('API') 
+          ? 'Erro de configuração: Verifique se a chave da API está configurada corretamente.'
+          : 'Erro ao processar sua solicitação. Por favor, tente novamente.',
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsProcessing(false);
     }
@@ -182,7 +201,29 @@ ${voiceSettings.style === 'serious'
   const startLiveMode = async () => {
     setIsLiveConnecting(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Verificar HTTPS
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        throw new Error('Acesso ao microfone requer HTTPS. Por favor, use uma conexão segura.');
+      }
+
+      // Verificar API Key
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        throw new Error('Chave da API não configurada. Verifique as variáveis de ambiente.');
+      }
+
+      // Verificar permissões de microfone antes de iniciar
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        if (permissionStatus.state === 'denied') {
+          throw new Error('Permissão de microfone negada. Por favor, permita o acesso nas configurações do navegador.');
+        }
+      } catch (permError) {
+        // Alguns navegadores não suportam navigator.permissions.query, continuar normalmente
+        console.warn('Não foi possível verificar permissões:', permError);
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const context = getSystemContext();
       const voiceName = getVoiceConfig();
       const persona = getSystemPersona();
@@ -240,9 +281,32 @@ ${voiceSettings.style === 'serious'
         }
       });
       liveSessionRef.current = await sessionPromise;
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Erro ao iniciar modo Live:', error);
+      
+      let errorMessage = 'Erro ao conectar com o serviço de voz.';
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = 'Permissão de microfone negada. Por favor, permita o acesso nas configurações do navegador.';
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        errorMessage = 'Nenhum microfone encontrado. Verifique se há um microfone conectado.';
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        errorMessage = 'O microfone está sendo usado por outro aplicativo.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Mostrar erro ao usuário
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'model',
+        text: `❌ ${errorMessage}`,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMsg]);
       setIsLiveConnecting(false);
+      setIsLiveActive(false);
     }
   };
 
@@ -254,11 +318,11 @@ ${voiceSettings.style === 'serious'
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500 overflow-hidden relative">
+    <div className="h-[calc(100vh-140px)] min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 animate-in fade-in duration-500 overflow-hidden relative">
       
       {/* SELETOR DE VOZ (MODAL INTERNO) */}
       {isVoiceSettingsOpen && (
-        <div className="absolute top-20 right-8 z-50 bg-black/90 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 w-72 shadow-2xl animate-in fade-in slide-in-from-top-4">
+        <div className="fixed md:absolute top-4 right-4 md:top-20 md:right-8 z-50 bg-black/90 backdrop-blur-xl p-4 md:p-6 rounded-[32px] border border-white/10 w-[calc(100vw-2rem)] md:w-72 max-w-sm shadow-2xl animate-in fade-in slide-in-from-top-4">
            <div className="flex justify-between items-center mb-6">
               <h5 className="text-white font-black uppercase text-sm">Configuração Neural</h5>
               <button onClick={() => setIsVoiceSettingsOpen(false)}><X className="w-5 h-5 text-zinc-500 hover:text-white" /></button>
@@ -290,42 +354,42 @@ ${voiceSettings.style === 'serious'
 
       {/* MODAL LIVE (OVERLAY IMERSIVO) */}
       {(isLiveActive || isLiveConnecting) && (
-        <div className="fixed inset-0 z-[999] bg-black/98 backdrop-blur-3xl flex flex-col items-center justify-center animate-in fade-in duration-700 p-8">
+        <div className="fixed inset-0 z-[999] bg-black/98 backdrop-blur-3xl flex flex-col items-center justify-center animate-in fade-in duration-700 p-4 md:p-8 overflow-auto">
            <button 
              onClick={stopLiveMode}
-             className="absolute top-10 right-10 p-5 rounded-full bg-white/5 hover:bg-red-500 transition-all text-white border border-white/10"
+             className="absolute top-4 right-4 md:top-10 md:right-10 p-3 md:p-5 rounded-full bg-white/5 hover:bg-red-500 transition-all text-white border border-white/10 z-10"
            >
-             <X className="w-8 h-8" />
+             <X className="w-6 h-6 md:w-8 md:h-8" />
            </button>
 
-           <div className="relative w-80 h-80 flex items-center justify-center">
+           <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center flex-shrink-0">
               <div className={`absolute inset-0 rounded-full blur-[80px] animate-pulse ${voiceSettings.gender === 'male' ? 'bg-cyan-500/20' : 'bg-purple-500/20'}`} />
               
-              <div className={`w-56 h-56 rounded-full border-2 flex items-center justify-center relative transition-transform duration-300 ${isLiveConnecting ? 'scale-75 opacity-50' : 'scale-100'} ${voiceSettings.gender === 'male' ? 'border-cyan-500/40' : 'border-purple-500/40'}`}>
+              <div className={`w-44 h-44 md:w-56 md:h-56 rounded-full border-2 flex items-center justify-center relative transition-transform duration-300 ${isLiveConnecting ? 'scale-75 opacity-50' : 'scale-100'} ${voiceSettings.gender === 'male' ? 'border-cyan-500/40' : 'border-purple-500/40'}`}>
                  <div className={`absolute inset-0 bg-gradient-to-t rounded-full ${voiceSettings.gender === 'male' ? 'from-cyan-900/60' : 'from-purple-900/60'} to-transparent`} />
-                 <Activity className={`w-24 h-24 ${voiceSettings.gender === 'male' ? 'text-cyan-400' : 'text-purple-400'} ${isLiveActive ? 'animate-[bounce_0.6s_infinite]' : 'animate-pulse'}`} />
+                 <Activity className={`w-16 h-16 md:w-24 md:h-24 ${voiceSettings.gender === 'male' ? 'text-cyan-400' : 'text-purple-400'} ${isLiveActive ? 'animate-[bounce_0.6s_infinite]' : 'animate-pulse'}`} />
                  <div className={`absolute inset-[-20px] border rounded-full animate-[spin_8s_linear_infinite] ${voiceSettings.gender === 'male' ? 'border-cyan-500/10' : 'border-purple-500/10'}`} />
               </div>
            </div>
 
-           <div className="mt-16 text-center space-y-6">
-              <div className="flex items-center justify-center gap-3">
+           <div className="mt-8 md:mt-16 text-center space-y-4 md:space-y-6 px-4">
+              <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap">
                  <div className={`w-3 h-3 rounded-full ${isLiveConnecting ? 'bg-amber-500' : 'bg-green-500'} animate-pulse`} />
-                 <span className={`text-[11px] font-black uppercase tracking-[0.5em] ${voiceSettings.gender === 'male' ? 'text-cyan-500' : 'text-purple-500'}`}>
+                 <span className={`text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.5em] ${voiceSettings.gender === 'male' ? 'text-cyan-500' : 'text-purple-500'}`}>
                     {isLiveConnecting ? 'Sincronizando Voz...' : `Voz: ${getVoiceConfig()} (${voiceSettings.style})`}
                  </span>
               </div>
-              <h2 className="text-4xl font-black text-white uppercase tracking-tighter max-w-xl">
+              <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter max-w-xl">
                  {isLiveConnecting ? 'Conectando...' : 'Canal Aberto'}
               </h2>
            </div>
 
-           <button onClick={stopLiveMode} className="mt-12 px-10 py-5 bg-white/5 border border-white/10 rounded-full text-zinc-400 font-black uppercase text-[10px] tracking-widest hover:text-white transition-all">Encerrar</button>
+           <button onClick={stopLiveMode} className="mt-6 md:mt-12 px-6 md:px-10 py-3 md:py-5 bg-white/5 border border-white/10 rounded-full text-zinc-400 font-black uppercase text-[9px] md:text-[10px] tracking-widest hover:text-white transition-all">Encerrar</button>
         </div>
       )}
 
       {/* PAINEL LATERAL: STATUS & INSIGHTS */}
-      <div className="hidden lg:flex w-80 flex-col gap-6 p-6 bg-white/5 border border-white/5 rounded-[40px]">
+      <div className="hidden lg:flex w-72 lg:w-80 flex-col gap-4 lg:gap-6 p-4 lg:p-6 bg-white/5 border border-white/5 rounded-[32px] lg:rounded-[40px] flex-shrink-0">
          <div className="flex items-center gap-4 mb-2">
             <div className="p-4 bg-cyan-500/10 text-cyan-400 rounded-3xl border border-cyan-500/20">
                <Cpu className="w-6 h-6" />
@@ -359,57 +423,57 @@ ${voiceSettings.style === 'serious'
       </div>
 
       {/* ÁREA DE CHAT CENTRAL */}
-      <div className="flex-1 flex flex-col bg-zinc-950/60 border border-white/5 rounded-[40px] relative overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-zinc-950/60 border border-white/5 rounded-[32px] lg:rounded-[40px] relative overflow-hidden">
          
          {/* Chat Header */}
-         <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/30 backdrop-blur-xl z-10">
-            <div className="flex items-center gap-5">
-               <div className="relative">
-                  <div className={`w-14 h-14 rounded-3xl bg-gradient-to-br flex items-center justify-center shadow-2xl ${voiceSettings.gender === 'male' ? 'from-cyan-600 to-blue-800 shadow-cyan-900/40' : 'from-purple-600 to-pink-800 shadow-purple-900/40'}`}>
-                     <BrainCircuit className="w-7 h-7 text-white" />
+         <div className="p-4 md:p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 bg-black/30 backdrop-blur-xl z-10 flex-shrink-0">
+            <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
+               <div className="relative flex-shrink-0">
+                  <div className={`w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-2xl md:rounded-3xl bg-gradient-to-br flex items-center justify-center shadow-2xl ${voiceSettings.gender === 'male' ? 'from-cyan-600 to-blue-800 shadow-cyan-900/40' : 'from-purple-600 to-pink-800 shadow-purple-900/40'}`}>
+                     <BrainCircuit className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-4 border-black animate-pulse" />
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 md:w-4 md:h-4 bg-green-500 rounded-full border-2 md:border-4 border-black animate-pulse" />
                </div>
-               <div>
-                  <h2 className="text-xl font-black uppercase text-white tracking-tight leading-none mb-1">Interface Neural</h2>
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                     <Radio className="w-3 h-3" /> Conectado: Notas & Chat
+               <div className="min-w-0 flex-1">
+                  <h2 className="text-base md:text-lg lg:text-xl font-black uppercase text-white tracking-tight leading-none mb-1 truncate">Interface Neural</h2>
+                  <p className="text-[9px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-wider md:tracking-widest flex items-center gap-2">
+                     <Radio className="w-3 h-3 flex-shrink-0" /> <span className="truncate">Conectado: Notas & Chat</span>
                   </p>
                </div>
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex gap-2 md:gap-3 flex-shrink-0">
                <button 
                   onClick={() => setIsVoiceSettingsOpen(!isVoiceSettingsOpen)}
-                  className={`p-4 rounded-2xl hover:bg-white/10 transition-all ${isVoiceSettingsOpen ? 'bg-white text-black' : 'bg-white/5 text-zinc-500'}`}
+                  className={`p-3 md:p-4 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all ${isVoiceSettingsOpen ? 'bg-white text-black' : 'bg-white/5 text-zinc-500'}`}
                   title="Configurar Voz"
                >
-                  <Settings className="w-5 h-5" />
+                  <Settings className="w-4 h-4 md:w-5 md:h-5" />
                </button>
                <button 
                   onClick={() => setMessages([{ id: '0', role: 'model', text: 'Memória limpa. Reindexando dados do condomínio...', timestamp: new Date() }])}
-                  className="p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all text-zinc-500"
+                  className="p-3 md:p-4 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all text-zinc-500"
                   title="Limpar Histórico"
                >
-                  <History className="w-5 h-5" />
+                  <History className="w-4 h-4 md:w-5 md:h-5" />
                </button>
                <button 
                   onClick={startLiveMode}
-                  className={`group flex items-center gap-4 px-8 py-4 text-white rounded-3xl transition-all shadow-2xl active:scale-95 ${voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
+                  className={`group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 ${voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
                >
-                  <Mic className="w-5 h-5 group-hover:animate-bounce" />
-                  <span className="text-[11px] font-black uppercase tracking-widest">Live Voice</span>
+                  <Mic className="w-4 h-4 md:w-5 md:h-5 group-hover:animate-bounce" />
+                  <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">Live Voice</span>
                </button>
             </div>
          </div>
 
          {/* Messages Area */}
-         <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-10 relative">
+         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 lg:space-y-10 relative min-h-0">
             {messages.map((msg) => {
                const isModel = msg.role === 'model';
                return (
                   <div key={msg.id} className={`flex ${isModel ? 'justify-start' : 'justify-end'} animate-in slide-in-from-bottom-4 duration-500`}>
-                     <div className={`max-w-[85%] md:max-w-[75%] p-7 rounded-[32px] relative group ${
+                     <div className={`max-w-[90%] sm:max-w-[85%] md:max-w-[75%] p-4 md:p-6 lg:p-7 rounded-[24px] md:rounded-[32px] relative group ${
                         isModel 
                            ? 'bg-zinc-900/80 border border-white/5 text-zinc-300 rounded-tl-sm shadow-xl' 
                            : 'bg-white text-black rounded-tr-sm shadow-2xl'
@@ -420,7 +484,7 @@ ${voiceSettings.style === 'serious'
                               <span className="text-[9px] font-black uppercase tracking-widest">Sentinela ({voiceSettings.gender === 'male' ? 'M' : 'F'})</span>
                            </div>
                         )}
-                        <p className="text-sm font-bold leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                        <p className="text-xs md:text-sm font-bold leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>
                         <div className={`flex items-center gap-2 mt-4 ${isModel ? 'justify-end' : 'justify-start'} opacity-20`}>
                            <span className="text-[8px] font-black uppercase">
                               {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -444,27 +508,27 @@ ${voiceSettings.style === 'serious'
          </div>
 
          {/* Input Area */}
-         <div className="p-8 bg-black/40 border-t border-white/5 backdrop-blur-md">
+         <div className="p-4 md:p-6 lg:p-8 bg-black/40 border-t border-white/5 backdrop-blur-md flex-shrink-0">
             <div className="relative group">
-               <div className={`absolute inset-0 bg-gradient-to-r rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity ${voiceSettings.gender === 'male' ? 'from-cyan-600/10 via-blue-600/10 to-transparent' : 'from-purple-600/10 via-pink-600/10 to-transparent'}`} />
+               <div className={`absolute inset-0 bg-gradient-to-r rounded-[24px] md:rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity ${voiceSettings.gender === 'male' ? 'from-cyan-600/10 via-blue-600/10 to-transparent' : 'from-purple-600/10 via-pink-600/10 to-transparent'}`} />
                <input 
                   type="text" 
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Pergunte sobre notas, chat ou operações..."
-                  className="w-full relative bg-zinc-900/50 border border-white/10 rounded-[32px] pl-8 pr-20 py-7 text-sm font-bold text-white outline-none focus:border-white/20 transition-all placeholder:text-zinc-600 shadow-inner"
+                  className="w-full relative bg-zinc-900/50 border border-white/10 rounded-[24px] md:rounded-[32px] pl-4 md:pl-8 pr-16 md:pr-20 py-4 md:py-6 lg:py-7 text-xs md:text-sm font-bold text-white outline-none focus:border-white/20 transition-all placeholder:text-zinc-600 shadow-inner"
                />
                <button 
                   onClick={handleSendMessage}
                   disabled={!input.trim() || isProcessing}
-                  className={`absolute right-3 top-1/2 -translate-y-1/2 p-5 rounded-2xl transition-all ${
+                  className={`absolute right-2 md:right-3 top-1/2 -translate-y-1/2 p-3 md:p-4 lg:p-5 rounded-xl md:rounded-2xl transition-all ${
                      input.trim() && !isProcessing
                         ? 'bg-white text-black shadow-2xl hover:scale-105 active:scale-95' 
                         : 'bg-zinc-800 text-zinc-600 cursor-not-allowed opacity-50'
                   }`}
                >
-                  <SendHorizontal className="w-6 h-6" />
+                  <SendHorizontal className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6" />
                </button>
             </div>
          </div>

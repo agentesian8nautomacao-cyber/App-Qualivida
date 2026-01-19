@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Login from './components/Login';
 import ResidentRegister from './components/ResidentRegister';
 import ScreenSaver from './components/ScreenSaver';
+import VideoIntro from './components/VideoIntro';
 import { UserRole, Package, Resident, Note, VisitorLog, PackageItem, Occurrence, Notice, ChatMessage, QuickViewCategory, Staff, Boleto } from './types';
 
 // Components
@@ -71,6 +72,10 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
+  const [showVideoIntro, setShowVideoIntro] = useState(() => {
+    const hasSeenIntro = sessionStorage.getItem('hasSeenVideoIntro');
+    return hasSeenIntro !== 'true';
+  });
   
   // Verificar se deve mostrar cadastro de morador baseado na URL ou query param
   useEffect(() => {
@@ -786,6 +791,18 @@ const App: React.FC = () => {
   };
 
   if (isScreenSaverActive) return <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
+  
+  // Mostrar tela de apresentação apenas no primeiro acesso
+  if (showVideoIntro) {
+    return (
+      <VideoIntro 
+        onComplete={() => {
+          sessionStorage.setItem('hasSeenVideoIntro', 'true');
+          setShowVideoIntro(false);
+        }} 
+      />
+    );
+  }
   
   // Se for link de morador ou modo registro, mostrar cadastro/login de morador
   if (!isAuthenticated && showResidentRegister) {
