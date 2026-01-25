@@ -1,8 +1,9 @@
 
 import React from 'react';
-import { Search, Plus, Camera } from 'lucide-react';
+import { Search, Plus, Camera, Image as ImageIcon } from 'lucide-react';
 import { Package } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
+import { isMobile } from '../../utils/deviceDetection';
 
 interface PackagesViewProps {
   allPackages: Package[];
@@ -19,9 +20,12 @@ const PackagesView: React.FC<PackagesViewProps> = ({
   setPackageSearch,
   setIsNewPackageModalOpen,
   setSelectedPackageForDetail,
-  onCameraScan
+  onCameraScan,
 }) => {
-  const displayPackages = allPackages.filter(p => 
+  const mobile = isMobile();
+  const canUseCamera = mobile && !!onCameraScan;
+
+  const displayPackages = allPackages.filter((p) => 
     p.recipient.toLowerCase().includes(packageSearch.toLowerCase()) ||
     p.type.toLowerCase().includes(packageSearch.toLowerCase()) ||
     p.unit.toLowerCase().includes(packageSearch.toLowerCase()) ||
@@ -33,32 +37,47 @@ const PackagesView: React.FC<PackagesViewProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h3 className="text-3xl font-black uppercase tracking-tighter">Encomendas</h3>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
-             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
-             <input 
-                type="text" 
-                placeholder="Pesquisar Encomenda..." 
-                value={packageSearch}
-                onChange={e => setPackageSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-xs font-bold outline-none focus:border-[var(--text-primary)]/50 transition-all placeholder:opacity-40"
-                style={{ color: 'var(--text-primary)' }}
-             />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
+            <input
+              type="text"
+              placeholder="Pesquisar Encomenda..."
+              value={packageSearch}
+              onChange={(e) => setPackageSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-xs font-bold outline-none focus:border-[var(--text-primary)]/50 transition-all placeholder:opacity-40"
+              style={{ color: 'var(--text-primary)' }}
+            />
           </div>
-          {onCameraScan && (
-            <button 
-              onClick={onCameraScan} 
-              className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 hover:bg-[var(--border-color)]"
+          <div className="flex items-center gap-3 flex-wrap">
+            {canUseCamera && (
+              <>
+                <button
+                  onClick={onCameraScan}
+                  className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 hover:bg-[var(--border-color)]"
+                >
+                  <Camera className="w-4 h-4" /> Escanear
+                </button>
+                <button
+                  onClick={onCameraScan}
+                  className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 hover:bg-[var(--border-color)]"
+                >
+                  <ImageIcon className="w-4 h-4" /> Registrar por foto
+                </button>
+              </>
+            )}
+            {!mobile && onCameraScan && (
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 py-2" style={{ color: 'var(--text-secondary)' }}>
+                Registro por câmera disponível apenas no celular
+              </p>
+            )}
+            <button
+              onClick={() => setIsNewPackageModalOpen()}
+              className="px-6 py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
             >
-              <Camera className="w-4 h-4" /> Escanear
+              <Plus className="w-4 h-4" /> Novo Registro
             </button>
-          )}
-          <button 
-            onClick={() => setIsNewPackageModalOpen()} 
-            className="px-6 py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Novo Registro
-          </button>
+          </div>
         </div>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
