@@ -112,6 +112,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         muted
         playsInline
         preload="auto"
+        className="video-intro-responsive"
         style={{
           width: '100vw',
           height: '100vh',
