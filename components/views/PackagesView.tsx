@@ -2,6 +2,7 @@
 import React from 'react';
 import { Search, Plus, Camera } from 'lucide-react';
 import { Package } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface PackagesViewProps {
   allPackages: Package[];
@@ -70,7 +71,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({
             <div>
               <p className="text-[10px] font-black opacity-40 uppercase">{pkg.type}</p>
               <h4 className="font-black text-lg group-hover:text-blue-500 transition-colors">{pkg.recipient}</h4>
-              <p className="text-xs opacity-60">Unidade {pkg.unit} • {pkg.displayTime}</p>
+              <p className="text-xs opacity-60">{formatUnit(pkg.unit)} • {pkg.displayTime}</p>
               {pkg.items && pkg.items.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {pkg.items.slice(0, 2).map((it, idx) => (

@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Search, Plus, MapPin, Clock, Car, LogOut } from 'lucide-react';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface VisitorsViewProps {
   visitorLogs: any[];
@@ -104,7 +105,7 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
               <div className="space-y-3 mb-6">
                  <div className="flex items-center gap-3 opacity-60">
                     <MapPin className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase">Indo para: Unidade {visitor.unit} ({visitor.residentName})</span>
+                    <span className="text-xs font-bold uppercase">Indo para: {formatUnit(visitor.unit)} ({visitor.residentName})</span>
                  </div>
                  <div className="flex items-center gap-3 opacity-60">
                     <Clock className="w-4 h-4" />

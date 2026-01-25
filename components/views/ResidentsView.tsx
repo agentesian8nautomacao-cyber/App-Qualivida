@@ -2,6 +2,7 @@
 import React from 'react';
 import { Search, UserPlus, Edit2, Trash2, MessageCircle, Mail, UserCircle, Upload } from 'lucide-react';
 import { Resident, Package, VisitorLog } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface ResidentsViewProps {
   allResidents: Resident[];
@@ -110,7 +111,7 @@ const ResidentsView: React.FC<ResidentsViewProps> = ({
               </div>
 
               <div>
-                 <span className="px-3 py-1 rounded-lg bg-[var(--glass-bg)] text-[9px] font-black uppercase tracking-widest border border-[var(--border-color)]" style={{ color: 'var(--text-primary)' }}>Unidade {resident.unit}</span>
+                 <span className="px-3 py-1 rounded-lg bg-[var(--glass-bg)] text-[9px] font-black uppercase tracking-widest border border-[var(--border-color)]" style={{ color: 'var(--text-primary)' }}>{formatUnit(resident.unit)}</span>
                  <h4 className="text-xl font-black uppercase mt-3 leading-tight truncate group-hover:text-blue-400 transition-colors">{resident.name}</h4>
               </div>
 

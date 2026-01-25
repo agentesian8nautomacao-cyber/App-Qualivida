@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Plus, Search, Calendar as CalendarIcon, Users, Clock, Check, Timer, AlertOctagon, Home, UtensilsCrossed, Flame, Dumbbell } from 'lucide-react';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface ReservationsViewProps {
   dayReservations: any[];
@@ -166,7 +167,7 @@ const ReservationsView: React.FC<ReservationsViewProps> = ({
                         </div>
                         <div className="flex items-center gap-2 text-zinc-400 mb-1">
                            <Users className="w-4 h-4" />
-                           <p className="text-xs font-bold uppercase tracking-wide text-white">{res.resident} <span className="text-zinc-600">• UN {res.unit}</span></p>
+                           <p className="text-xs font-bold uppercase tracking-wide text-white">{res.resident} <span className="text-zinc-600">• {formatUnit(res.unit)}</span></p>
                         </div>
                         <div className="flex items-center gap-2 text-zinc-500">
                            <Clock className="w-3 h-3" />

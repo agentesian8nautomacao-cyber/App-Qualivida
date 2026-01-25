@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Download, Eye, CheckCircle2, Clock, AlertCircle, FileText, Calendar, DollarSign, Upload, Trash2 } from 'lucide-react';
 import { Boleto, Resident } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface BoletosViewProps {
   allBoletos: Boleto[];
@@ -218,7 +219,7 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                           {boleto.residentName}
                         </h4>
                         <p className="text-xs opacity-40 font-bold uppercase tracking-wider">
-                          Unidade {boleto.unit}
+                          {formatUnit(boleto.unit)}
                         </p>
                       </div>
                     </div>

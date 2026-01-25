@@ -2,6 +2,7 @@
 import React from 'react';
 import { X, Edit2, MessageCircle, Mail, Package as PackageIcon, CheckCircle2, Check, ShieldCheck, UserCircle, Plus, Clock, ArrowUpRight, LogOut, AlertTriangle, Save, Trash2, Bell } from 'lucide-react';
 import { Resident, Package, VisitorLog, Occurrence, Notice } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 // --- PROFILE RESIDENTE 360 ---
 export const ResidentProfileModal = ({
@@ -22,7 +23,7 @@ export const ResidentProfileModal = ({
                   <h2 className="text-3xl font-black uppercase tracking-tight">{resident.name}</h2>
                   <button onClick={onEdit} className="p-2 bg-white/5 rounded-xl hover:bg-white text-white hover:text-black transition-all" title="Editar"><Edit2 className="w-4 h-4" /></button>
                 </div>
-                <span className="px-3 py-1 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest">Unidade {resident.unit}</span>
+                <span className="px-3 py-1 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest">{formatUnit(resident.unit)}</span>
                 <div className="flex gap-3 mt-4">
                    {resident.whatsapp && <button onClick={() => window.open(`https://wa.me/${resident.whatsapp}`, '_blank')} className="p-2 bg-green-500/20 text-green-400 rounded-xl hover:bg-green-500 hover:text-white transition-all"><MessageCircle className="w-5 h-5" /></button>}
                    <button className="p-2 bg-white/5 rounded-xl hover:bg-white hover:text-black transition-all"><Mail className="w-5 h-5" /></button>
@@ -194,6 +195,13 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, setOccurren
 // --- MODAL FORMULARIO RESIDENTE ---
 export const ResidentFormModal = ({ isOpen, onClose, data, setData, onSave }: any) => {
   if (!isOpen) return null;
+  
+  const handleUnitChange = (value: string) => {
+    // Normalizar unidade ao digitar
+    const normalized = normalizeUnit(value);
+    setData({...data, unit: normalized});
+  };
+  
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
        <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onClose} />
@@ -205,7 +213,7 @@ export const ResidentFormModal = ({ isOpen, onClose, data, setData, onSave }: an
           <div className="space-y-5">
              <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Nome Completo</label><input type="text" value={data.name} onChange={e => setData({...data, name: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: Carlos Silva" /></div>
-                <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Unidade</label><input type="text" value={data.unit} onChange={e => setData({...data, unit: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: 101A" /></div>
+                <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Unidade</label><input type="text" value={data.unit} onChange={e => handleUnitChange(e.target.value)} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: 03/005" /></div>
                 <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Telefone</label><input type="text" value={data.phone} onChange={e => setData({...data, phone: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Apenas números" /></div>
                 <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">WhatsApp (Opcional)</label><input type="text" value={data.whatsapp} onChange={e => setData({...data, whatsapp: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="5511999999999" /></div>
                 <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Email (Opcional)</label><input type="email" value={data.email} onChange={e => setData({...data, email: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="email@exemplo.com" /></div>

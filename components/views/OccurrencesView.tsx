@@ -2,6 +2,7 @@
 import React from 'react';
 import { Search, Plus, Check } from 'lucide-react';
 import { Occurrence } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface OccurrencesViewProps {
   allOccurrences: Occurrence[];
@@ -48,7 +49,7 @@ const OccurrencesView: React.FC<OccurrencesViewProps> = ({
         {displayOccurrences.map(occ => (
           <div key={occ.id} className="premium-glass p-6 rounded-[32px]">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="font-black text-lg uppercase">{occ.residentName} - {occ.unit}</h4>
+              <h4 className="font-black text-lg uppercase">{occ.residentName} - {formatUnit(occ.unit)}</h4>
               <span className="text-[10px] font-black uppercase opacity-40">{occ.date}</span>
             </div>
             <p className="text-sm opacity-70 mb-4">{occ.description}</p>

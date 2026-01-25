@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Lock, Building, Mail, Phone, ArrowRight, Eye, EyeOff, CheckCircle2, AlertCircle, Sun, Moon } from 'lucide-react';
 import { Resident } from '../types';
 import { registerResident, loginResident } from '../services/residentAuth';
+import { validateUnit, normalizeUnit, formatUnit, compareUnits } from '../utils/unitFormatter';
 
 interface ResidentRegisterProps {
   onRegister: (resident: Resident, password: string) => void;
@@ -33,11 +34,7 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const validateUnit = (unit: string): boolean => {
-    // Formato esperado: número + letra opcional (ex: 201A, 102, 305B)
-    const unitRegex = /^[0-9]{1,4}[A-Za-z]?$/;
-    return unitRegex.test(unit);
-  };
+  // Usa a função de validação do utilitário
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,19 +52,22 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
       return;
     }
 
-    if (!validateUnit(formData.unit.toUpperCase())) {
-      setError('Unidade inválida. Use formato: número + letra opcional (ex: 201A, 102)');
+    if (!validateUnit(formData.unit)) {
+      setError('Unidade inválida. Use formato: bloco/apartamento (ex: 03/005, 3/5)');
       return;
     }
 
+    // Normalizar unidade para comparação
+    const normalizedUnit = normalizeUnit(formData.unit);
+
     // Verificar se já existe morador com essa unidade (verificação local)
     const existingResident = existingResidents.find(
-      r => r.unit.toUpperCase() === formData.unit.toUpperCase()
+      r => compareUnits(r.unit, normalizedUnit)
     );
 
     // A verificação definitiva será feita no Supabase, mas avisar aqui também
     if (existingResident) {
-      setError(`Já existe um cadastro para a unidade ${formData.unit.toUpperCase()}. Use o modo de login.`);
+      setError(`Já existe um cadastro para a unidade ${formatUnit(normalizedUnit)}. Use o modo de login.`);
       setMode('login');
       return;
     }
@@ -89,9 +89,10 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
 
     try {
       // Criar objeto resident (sem id, será gerado no Supabase)
+      // Normalizar unidade antes de salvar
       const newResident = {
         name: formData.name.trim(),
-        unit: formData.unit.toUpperCase(),
+        unit: normalizedUnit,
         email: formData.email.trim() || '',
         phone: formData.phone.trim() || '',
         whatsapp: formData.phone.trim() || ''
@@ -138,8 +139,10 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
     setLoading(true);
 
     try {
+      // Normalizar unidade antes de fazer login
+      const normalizedUnit = normalizeUnit(formData.unit);
       // Fazer login no Supabase
-      const result = await loginResident(formData.unit.toUpperCase(), formData.password);
+      const result = await loginResident(normalizedUnit, formData.password);
       
       if (!result.success || !result.resident) {
         setError(result.error || 'Unidade ou senha incorretos');
@@ -147,7 +150,7 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
       }
 
       // Chamar callback com sucesso
-      await onLogin(formData.unit.toUpperCase(), formData.password);
+      await onLogin(normalizedUnit, formData.password);
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {
@@ -312,7 +315,7 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
                     }`} />
                     <input 
                       type="text" 
-                      placeholder="Unidade (ex: 201A, 102)" 
+                      placeholder="Unidade (ex: 03/005, 3/5)" 
                       value={formData.unit}
                       onChange={(e) => handleUnitChange(e.target.value)}
                       className={`w-full pl-8 pr-4 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium uppercase ${
@@ -368,7 +371,7 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
                     }`} />
                     <input 
                       type="text" 
-                      placeholder="Unidade (ex: 201A, 102)" 
+                      placeholder="Unidade (ex: 03/005, 3/5)" 
                       value={formData.unit}
                       onChange={(e) => handleUnitChange(e.target.value)}
                       className={`w-full pl-8 pr-4 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium uppercase ${

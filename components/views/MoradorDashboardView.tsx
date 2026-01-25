@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Bell, Receipt, Calendar, Package, AlertCircle, FileText, Eye, Download } from 'lucide-react';
 import { Boleto, Notice, Package as PackageType, Resident } from '../../types';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface MoradorDashboardViewProps {
   currentResident: Resident;
@@ -74,7 +75,7 @@ const MoradorDashboardView: React.FC<MoradorDashboardViewProps> = ({
           Olá, {currentResident.name}
         </h3>
         <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1">
-          Unidade {currentResident.unit}
+          {formatUnit(currentResident.unit)}
         </p>
       </header>
 

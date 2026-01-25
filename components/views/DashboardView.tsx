@@ -4,6 +4,7 @@ import { SearchCode, Search, Package as PackageIcon, ArrowRight, Users, ShieldAl
 import RecentEventsBar from '../RecentEventsBar';
 import { QuickViewCategory } from '../../types';
 import { useAppConfig } from '../../contexts/AppConfigContext';
+import { formatUnit } from '../../utils/unitFormatter';
 
 interface DashboardViewProps {
   globalSearchQuery: string;
@@ -67,7 +68,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                         >
                           <div>
                             <h6 className="text-sm font-black uppercase tracking-tight">{r.name}</h6>
-                            <p className="text-[10px] opacity-40 uppercase font-black">Unidade {r.unit}</p>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{formatUnit(r.unit)}</p>
                           </div>
                           <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </button>

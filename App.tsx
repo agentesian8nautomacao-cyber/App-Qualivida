@@ -34,6 +34,9 @@ import MoradorDashboardView from './components/views/MoradorDashboardView';
 import { useAppConfig } from './contexts/AppConfigContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
+// Utils
+import { normalizeUnit } from './utils/unitFormatter';
+
 // Modals
 import { NewReservationModal, NewVisitorModal, NewPackageModal, NewNoteModal, StaffFormModal } from './components/modals/ActionModals';
 import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, OccurrenceDetailModal, ResidentFormModal, NewOccurrenceModal, NoticeEditModal } from './components/modals/DetailModals';
@@ -419,7 +422,18 @@ const App: React.FC = () => {
   const handleAddPkgCategory = () => { if (!newPkgCatName.trim()) return; setPackageCategories([...packageCategories, newPkgCatName.trim()]); setPackageType(newPkgCatName.trim()); setNewPkgCatName(''); setIsAddingPkgCategory(false); };
   const handleAcknowledgeNotice = (id: string) => { setAllNotices(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); };
   const handleOpenResidentModal = (resident?: Resident) => { if (resident) { setResidentFormData(resident); } else { setResidentFormData({ id: '', name: '', unit: '', email: '', phone: '', whatsapp: '' }); } setIsResidentModalOpen(true); };
-  const handleSaveResident = () => { if (!residentFormData.name || !residentFormData.unit) return; if (residentFormData.id) { setAllResidents(prev => prev.map(r => r.id === residentFormData.id ? residentFormData : r)); } else { const newResident = { ...residentFormData, id: Date.now().toString() }; setAllResidents(prev => [newResident, ...prev]); } setIsResidentModalOpen(false); };
+  const handleSaveResident = () => { 
+    if (!residentFormData.name || !residentFormData.unit) return; 
+    // Normalizar unidade antes de salvar
+    const normalizedData = { ...residentFormData, unit: normalizeUnit(residentFormData.unit) };
+    if (normalizedData.id) { 
+      setAllResidents(prev => prev.map(r => r.id === normalizedData.id ? normalizedData : r)); 
+    } else { 
+      const newResident = { ...normalizedData, id: Date.now().toString() }; 
+      setAllResidents(prev => [newResident, ...prev]); 
+    } 
+    setIsResidentModalOpen(false); 
+  };
   const handleDeleteResident = (id: string) => { if (window.confirm("Tem certeza que deseja remover este morador?")) { setAllResidents(prev => prev.filter(r => r.id !== id)); if (selectedResidentProfile?.id === id) setSelectedResidentProfile(null); } };
   const handleImportResidents = (residents: Resident[]) => { setAllResidents(prev => [...residents, ...prev]); };
   const handleImportBoletos = (boletos: Boleto[]) => { setAllBoletos(prev => [...boletos, ...prev]); };

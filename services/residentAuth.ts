@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Resident } from '../types';
+import { normalizeUnit, compareUnits } from '../utils/unitFormatter';
 
 // Função simples para hash de senha (usando bcrypt via Supabase Edge Function seria ideal)
 // Por enquanto, vamos usar uma função simples baseada em crypto
@@ -24,30 +25,34 @@ export const registerResident = async (
   password: string
 ): Promise<{ resident: Resident; success: boolean; error?: string }> => {
   try {
-    // Verificar se já existe morador com essa unidade
-    const { data: existing, error: checkError } = await supabase
+    // Normalizar unidade antes de verificar e salvar
+    const normalizedUnit = normalizeUnit(resident.unit);
+    
+    // Buscar todas as unidades para comparar (já que pode haver variações de formato)
+    const { data: allResidents, error: checkError } = await supabase
       .from('residents')
-      .select('id, unit')
-      .eq('unit', resident.unit.toUpperCase())
-      .single();
-
+      .select('id, unit');
+    
+    // Verificar se a unidade normalizada já existe
+    const existing = allResidents?.find(r => compareUnits(r.unit, normalizedUnit));
+    
     if (existing) {
       return {
         resident: existing as Resident,
         success: false,
-        error: `Já existe um cadastro para a unidade ${resident.unit.toUpperCase()}`
+        error: `Já existe um cadastro para a unidade ${normalizedUnit}`
       };
     }
 
     // Hash da senha
     const passwordHash = await hashPassword(password);
 
-    // Inserir morador
+    // Inserir morador com unidade normalizada
     const { data, error } = await supabase
       .from('residents')
       .insert({
         name: resident.name.trim(),
-        unit: resident.unit.toUpperCase(),
+        unit: normalizedUnit,
         email: resident.email || null,
         phone: resident.phone || null,
         whatsapp: resident.whatsapp || null,
@@ -94,14 +99,26 @@ export const loginResident = async (
   password: string
 ): Promise<{ resident: Resident | null; success: boolean; error?: string }> => {
   try {
-    // Buscar morador pela unidade
-    const { data, error } = await supabase
+    // Normalizar unidade antes de buscar
+    const normalizedUnit = normalizeUnit(unit);
+    
+    // Buscar todas as unidades e comparar
+    const { data: allResidents, error: fetchError } = await supabase
       .from('residents')
-      .select('*')
-      .eq('unit', unit.toUpperCase())
-      .single();
+      .select('*');
+    
+    if (fetchError || !allResidents) {
+      return {
+        resident: null,
+        success: false,
+        error: 'Erro ao buscar morador'
+      };
+    }
+    
+    // Encontrar morador pela unidade normalizada
+    const data = allResidents.find(r => compareUnits(r.unit, normalizedUnit));
 
-    if (error || !data) {
+    if (!data) {
       return {
         resident: null,
         success: false,
@@ -153,13 +170,22 @@ export const loginResident = async (
 // Buscar morador por unidade (sem autenticação)
 export const getResidentByUnit = async (unit: string): Promise<Resident | null> => {
   try {
-    const { data, error } = await supabase
+    // Normalizar unidade antes de buscar
+    const normalizedUnit = normalizeUnit(unit);
+    
+    // Buscar todas as unidades e comparar
+    const { data: allResidents, error: fetchError } = await supabase
       .from('residents')
-      .select('*')
-      .eq('unit', unit.toUpperCase())
-      .single();
+      .select('*');
+    
+    if (fetchError || !allResidents) {
+      return null;
+    }
+    
+    // Encontrar morador pela unidade normalizada
+    const data = allResidents.find(r => compareUnits(r.unit, normalizedUnit));
 
-    if (error || !data) {
+    if (!data) {
       return null;
     }
 
