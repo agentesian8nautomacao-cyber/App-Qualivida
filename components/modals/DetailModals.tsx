@@ -6,8 +6,8 @@ import { formatUnit } from '../../utils/unitFormatter';
 
 // --- PROFILE RESIDENTE 360 ---
 export const ResidentProfileModal = ({
-  resident, onClose, onEdit, allPackages, visitorLogs, onPackageSelect, onCheckOutVisitor
-}: { resident: Resident | null, onClose: () => void, onEdit: () => void, allPackages: Package[], visitorLogs: VisitorLog[], onPackageSelect: (p: Package) => void, onCheckOutVisitor: (id: string) => void }) => {
+  resident, onClose, onEdit, onDelete, allPackages, visitorLogs, onPackageSelect, onCheckOutVisitor
+}: { resident: Resident | null, onClose: () => void, onEdit: () => void, onDelete?: () => void, allPackages: Package[], visitorLogs: VisitorLog[], onPackageSelect: (p: Package) => void, onCheckOutVisitor: (id: string) => void }) => {
   if (!resident) return null;
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
@@ -22,6 +22,9 @@ export const ResidentProfileModal = ({
                 <div className="flex items-center gap-3 mb-1">
                   <h2 className="text-3xl font-black uppercase tracking-tight">{resident.name}</h2>
                   <button onClick={onEdit} className="p-2 bg-white/5 rounded-xl hover:bg-white text-white hover:text-black transition-all" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                  {onDelete && (
+                    <button onClick={onDelete} className="p-2 bg-red-500/20 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all" title="Excluir morador"><Trash2 className="w-4 h-4" /></button>
+                  )}
                 </div>
                 <span className="px-3 py-1 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest">{formatUnit(resident.unit)}</span>
                 <div className="flex gap-3 mt-4">
