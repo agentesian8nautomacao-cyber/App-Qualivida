@@ -1,20 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Obter variáveis de ambiente
-let supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const rawSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-// Garantir que a URL tenha https://
-if (supabaseUrl && !supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
+// Garantir que a URL tenha https:// (correção automática)
+let supabaseUrl = rawSupabaseUrl;
+if (supabaseUrl) {
+  // Remove http:// ou https:// se já existir para normalizar
+  supabaseUrl = supabaseUrl.replace(/^https?:\/\//, '');
+  // Adiciona https://
   supabaseUrl = `https://${supabaseUrl}`;
+  // Remove barra no final se houver
+  supabaseUrl = supabaseUrl.replace(/\/$/, '');
 }
 
-// Debug: Log das variáveis (apenas em desenvolvimento)
-if (import.meta.env.DEV) {
-  console.log('🔍 Debug - Variáveis de ambiente:');
-  console.log('VITE_SUPABASE_URL:', supabaseUrl ? `✅ ${supabaseUrl}` : '❌ Não configurada');
-  console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Configurada' : '❌ Não configurada');
-}
+// Logs de debug (sempre, para ajudar a diagnosticar)
+const envMode = import.meta.env.MODE || 'unknown';
+console.log(`[Supabase Config] Mode: ${envMode}`);
+console.log(`[Supabase Config] URL original:`, rawSupabaseUrl || 'NÃO DEFINIDA');
+console.log(`[Supabase Config] URL processada:`, supabaseUrl || 'NÃO DEFINIDA');
+console.log(`[Supabase Config] Key:`, supabaseAnonKey ? '✅ Configurada' : '❌ Não configurada');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   const errorMsg = '❌ Variáveis de ambiente do Supabase não configuradas!\n' +
@@ -22,13 +28,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
     'No Vercel: Settings > Environment Variables > Redeploy após adicionar\n' +
     'Localmente: arquivo .env.local';
   console.error(errorMsg);
-  
-  // Em produção, mostrar erro mais visível
-  if (import.meta.env.PROD) {
-    console.error('URL:', supabaseUrl || 'VAZIO');
-    console.error('KEY:', supabaseAnonKey ? 'Configurada (oculta)' : 'VAZIO');
-    console.error('URL original:', import.meta.env.VITE_SUPABASE_URL || 'NÃO DEFINIDA');
-  }
 }
 
 // Criar cliente Supabase (mesmo que as variáveis estejam vazias, para evitar erros)
