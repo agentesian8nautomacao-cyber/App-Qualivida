@@ -108,8 +108,7 @@ export const saveResident = async (resident: Resident): Promise<{ success: boole
           unit: resident.unit,
           email: resident.email || null,
           phone: resident.phone || null,
-          whatsapp: resident.whatsapp || null,
-          extra_data: resident.extraData || null
+          whatsapp: resident.whatsapp || null
         })
         .select()
         .single();
@@ -129,8 +128,7 @@ export const saveResident = async (resident: Resident): Promise<{ success: boole
           unit: resident.unit,
           email: resident.email || null,
           phone: resident.phone || null,
-          whatsapp: resident.whatsapp || null,
-          extra_data: resident.extraData || null
+          whatsapp: resident.whatsapp || null
         })
         .eq('id', resident.id);
 

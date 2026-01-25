@@ -56,8 +56,7 @@ export const registerResident = async (
         email: resident.email || null,
         phone: resident.phone || null,
         whatsapp: resident.whatsapp || null,
-        password_hash: passwordHash,
-        extra_data: resident.extraData || null
+        password_hash: passwordHash
       })
       .select()
       .single();
