@@ -196,24 +196,18 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, setOccurren
 export const ResidentFormModal = ({ isOpen, onClose, data, setData, onSave }: any) => {
   if (!isOpen) return null;
   
-  const handleUnitChange = (value: string) => {
-    // Normalizar unidade ao digitar
-    const normalized = normalizeUnit(value);
-    setData({...data, unit: normalized});
-  };
-  
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
        <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onClose} />
-       <div className="relative w-full max-w-lg bg-white text-black rounded-[48px] shadow-2xl p-8 md:p-10 animate-in zoom-in duration-300">
+       <div className="relative w-full max-w-lg bg-white text-black rounded-[48px] shadow-2xl p-8 md:p-10 animate-in duration-300">
           <header className="flex justify-between items-center mb-8">
              <div><h4 className="text-2xl font-black uppercase tracking-tight">{data.id ? 'Editar Morador' : 'Novo Morador'}</h4><p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">Cadastro de Unidade</p></div>
              <button onClick={onClose} className="p-3 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-all"><X className="w-5 h-5"/></button>
           </header>
           <div className="space-y-5">
              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Nome Completo</label><input type="text" value={data.name} onChange={e => setData({...data, name: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: Carlos Silva" /></div>
-                <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Unidade</label><input type="text" value={data.unit} onChange={e => handleUnitChange(e.target.value)} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: 03/005" /></div>
+                <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Nome Completo</label><input type="text" value={data.name || ''} onChange={e => setData({...data, name: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: Carlos Silva" /></div>
+                <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Unidade</label><input type="text" value={data.unit || ''} onChange={e => setData({...data, unit: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Ex: 03/005" /></div>
                 <div><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Telefone</label><input type="text" value={data.phone} onChange={e => setData({...data, phone: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="Apenas números" /></div>
                 <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">WhatsApp (Opcional)</label><input type="text" value={data.whatsapp} onChange={e => setData({...data, whatsapp: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="5511999999999" /></div>
                 <div className="col-span-2"><label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Email (Opcional)</label><input type="email" value={data.email} onChange={e => setData({...data, email: e.target.value})} className="w-full p-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" placeholder="email@exemplo.com" /></div>
