@@ -101,16 +101,21 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
         console.warn('Não foi possível enumerar dispositivos:', enumError);
       }
 
-      // Verificar permissões antes de solicitar
+      // Verificar permissões antes de solicitar (apenas se suportado)
+      // Nota: navigator.permissions.query pode não estar disponível em todos os navegadores mobile
       try {
-        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-        if (permissionStatus.state === 'denied') {
-          setError('Permissão de câmera negada. Por favor, permita o acesso nas configurações do navegador.');
-          return;
+        if (navigator.permissions && navigator.permissions.query) {
+          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          // Não bloquear se for 'prompt' - deixar o navegador solicitar
+          if (permissionStatus.state === 'denied') {
+            setError('Permissão de câmera negada. Por favor, permita o acesso nas configurações do navegador e recarregue a página.');
+            return;
+          }
         }
       } catch (permError) {
-        // Alguns navegadores não suportam navigator.permissions.query, continuar normalmente
-        console.warn('Não foi possível verificar permissões de câmera:', permError);
+        // Alguns navegadores (especialmente mobile) não suportam navigator.permissions.query
+        // Continuar normalmente e tentar solicitar permissão diretamente
+        console.warn('Não foi possível verificar permissões de câmera (normal em alguns navegadores mobile):', permError);
       }
 
       // Tentar com constraints flexíveis primeiro
@@ -155,7 +160,8 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
           if (videoDevices.length === 0) {
             throw new Error('Nenhuma câmera detectada neste dispositivo. Verifique se há uma câmera conectada.');
           } else {
-            throw new Error('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+            // Em mobile, pode ser necessário solicitar permissão diretamente
+            throw new Error('Não foi possível acessar a câmera. Verifique as permissões do navegador ou tente novamente.');
           }
         } catch (enumError: any) {
           throw new Error(enumError.message || 'Não foi possível acessar nenhuma câmera disponível.');
@@ -177,7 +183,13 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
       let errorMessage = 'Não foi possível acessar a câmera.';
       
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador e recarregue a página.';
+        // Detectar se é mobile para mensagem mais específica
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+          errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador (Configurações > Privacidade > Câmera) e recarregue a página.';
+        } else {
+          errorMessage = 'Permissão de câmera negada. Por favor, permita o acesso à câmera nas configurações do navegador e recarregue a página.';
+        }
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         errorMessage = 'Nenhuma câmera encontrada neste dispositivo. Verifique se há uma câmera conectada e funcionando.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {

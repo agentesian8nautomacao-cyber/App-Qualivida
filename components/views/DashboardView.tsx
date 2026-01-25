@@ -14,7 +14,7 @@ interface DashboardViewProps {
   setResidentSearch: (val: string) => void;
   eventStates: any;
   setQuickViewCategory: (cat: QuickViewCategory) => void;
-  setIsNewPackageModalOpen: (val: boolean) => void;
+  setIsNewPackageModalOpen: () => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({

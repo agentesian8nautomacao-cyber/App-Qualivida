@@ -392,6 +392,7 @@ const App: React.FC = () => {
   const handleRemoveItemRow = (id: string) => { if (packageItems.length <= 1) return; setPackageItems(packageItems.filter(it => it.id !== id)); setNumItems(prev => prev + 1); };
   const updateItem = (id: string, field: 'name' | 'description', value: string) => { setPackageItems(packageItems.map(it => it.id === id ? { ...it, [field]: value } : it)); };
   const resetPackageModal = () => { setIsNewPackageModalOpen(false); setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); };
+  const handleOpenNewPackageModal = () => { setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); setIsNewPackageModalOpen(true); };
   const handleRegisterPackageFinal = (sendNotify: boolean) => {
     if (!selectedResident) return;
     const newPkg: Package = { id: Date.now().toString(), recipient: selectedResident.name, unit: selectedResident.unit, type: packageType, receivedAt: new Date().toISOString(), displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), status: 'Pendente', deadlineMinutes: 45, residentPhone: selectedResident.phone, items: packageItems.filter(it => it.name.trim() !== '') };
@@ -444,8 +445,13 @@ const App: React.FC = () => {
     } else if (data.qrData || data.image) {
       // Se não encontrou automaticamente, abrir modal de novo pacote pré-preenchido
       setIsCameraScanModalOpen(false);
-      setIsNewPackageModalOpen(true);
+      // Resetar modal primeiro
       setPackageStep(1);
+      setSelectedResident(null);
+      setSearchResident('');
+      setPackageType('Amazon');
+      setNumItems(1);
+      setPackageItems([{ id: '1', name: '', description: '' }]);
       // Tentar encontrar morador pelos dados do QR
       if (data.qrData) {
         const foundResident = allResidents.find(r => 
@@ -458,6 +464,7 @@ const App: React.FC = () => {
           setSearchResident(foundResident.name);
         }
       }
+      setIsNewPackageModalOpen(true);
     }
   };
   const handleSaveNoticeChanges = () => { if (!selectedNoticeForEdit) return; setAllNotices(prev => prev.map(n => n.id === selectedNoticeForEdit.id ? selectedNoticeForEdit : n)); setSelectedNoticeForEdit(null); };
@@ -622,7 +629,7 @@ const App: React.FC = () => {
           setResidentSearch={setResidentSearch} 
           eventStates={eventStates} 
           setQuickViewCategory={setQuickViewCategory} 
-          setIsNewPackageModalOpen={setIsNewPackageModalOpen} 
+          setIsNewPackageModalOpen={handleOpenNewPackageModal} 
         />
       );
     }
@@ -665,7 +672,7 @@ const App: React.FC = () => {
       case 'packages': 
         if (role === 'MORADOR' && currentResident) {
           const myPackages = allPackages.filter(p => p.unit === currentResident.unit);
-          return <PackagesView allPackages={myPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={setIsNewPackageModalOpen} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={undefined} />;
+          return <PackagesView allPackages={myPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={undefined} />;
         }
         if (role === 'SINDICO') {
           return (
@@ -678,7 +685,7 @@ const App: React.FC = () => {
             </div>
           );
         }
-        return <PackagesView allPackages={allPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={setIsNewPackageModalOpen} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={() => setIsCameraScanModalOpen(true)} />;
+        return <PackagesView allPackages={allPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={() => setIsCameraScanModalOpen(true)} />;
       case 'settings': 
         if (role === 'MORADOR') {
           return (

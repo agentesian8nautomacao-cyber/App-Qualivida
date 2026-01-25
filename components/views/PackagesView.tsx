@@ -53,7 +53,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({
             </button>
           )}
           <button 
-            onClick={() => setIsNewPackageModalOpen(true)} 
+            onClick={() => setIsNewPackageModalOpen()} 
             className="px-6 py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
           >
             <Plus className="w-4 h-4" /> Novo Registro
