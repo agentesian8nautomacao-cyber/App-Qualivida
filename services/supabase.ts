@@ -1,22 +1,42 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Obter variáveis de ambiente
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Variáveis de ambiente do Supabase não configuradas!');
-  console.warn('Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env.local');
+// Debug: Log das variáveis (apenas em desenvolvimento)
+if (import.meta.env.DEV) {
+  console.log('🔍 Debug - Variáveis de ambiente:');
+  console.log('VITE_SUPABASE_URL:', supabaseUrl ? '✅ Configurada' : '❌ Não configurada');
+  console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✅ Configurada' : '❌ Não configurada');
 }
 
-// Criar cliente Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false
+if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMsg = '❌ Variáveis de ambiente do Supabase não configuradas!\n' +
+    'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY\n' +
+    'No Vercel: Settings > Environment Variables > Redeploy após adicionar\n' +
+    'Localmente: arquivo .env.local';
+  console.error(errorMsg);
+  
+  // Em produção, mostrar erro mais visível
+  if (import.meta.env.PROD) {
+    console.error('URL:', supabaseUrl || 'VAZIO');
+    console.error('KEY:', supabaseAnonKey ? 'Configurada (oculta)' : 'VAZIO');
   }
-});
+}
+
+// Criar cliente Supabase (mesmo que as variáveis estejam vazias, para evitar erros)
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false
+    }
+  }
+);
 
 // Tipos para as tabelas do Supabase
 export type Database = {
