@@ -37,6 +37,9 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 // Utils
 import { normalizeUnit } from './utils/unitFormatter';
 
+// Services
+import { savePackage, updatePackage, saveResident, deleteResident, saveVisitor, updateVisitor, saveOccurrence, updateOccurrence, saveBoleto, updateBoleto, deleteBoleto } from './services/dataService';
+
 // Modals
 import { NewReservationModal, NewVisitorModal, NewPackageModal, NewNoteModal, StaffFormModal } from './components/modals/ActionModals';
 import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, OccurrenceDetailModal, ResidentFormModal, NewOccurrenceModal, NoticeEditModal } from './components/modals/DetailModals';
@@ -383,11 +386,34 @@ const App: React.FC = () => {
     }
   }, [packageStep, selectedResident, packageType, packageItems]);
 
-  const handleVisitorCheckOut = (id: string) => setVisitorLogs(prev => prev.map(v => v.id === id ? { ...v, status: 'completed', exitTime: new Date().toISOString() } : v));
+  const handleVisitorCheckOut = async (id: string) => {
+    const visitor = visitorLogs.find(v => v.id === id);
+    if (!visitor) return;
+    
+    const updatedVisitor = { ...visitor, status: 'completed' as const, exitTime: new Date().toISOString() };
+    const result = await updateVisitor(updatedVisitor);
+    
+    if (result.success) {
+      setVisitorLogs(prev => prev.map(v => v.id === id ? updatedVisitor : v));
+    } else {
+      console.error('Erro ao atualizar visitante:', result.error);
+      alert('Erro ao fazer checkout: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
   const resetVisitorModal = () => { setIsVisitorModalOpen(false); setNewVisitorStep(1); setNewVisitorData({ unit: '', name: '', doc: '', type: 'Visita', vehicle: '', plate: '', residentName: '' }); setSearchResident(''); };
-  const handleRegisterVisitor = () => {
-    const newVisitor = { id: Date.now().toString(), residentName: newVisitorData.residentName || 'Desconhecido', unit: newVisitorData.unit, visitorCount: 1, visitorNames: newVisitorData.name, entryTime: new Date().toISOString(), status: 'active', type: newVisitorData.type, doc: newVisitorData.doc, vehicle: newVisitorData.vehicle, plate: newVisitorData.plate };
-    setVisitorLogs([newVisitor, ...visitorLogs]); resetVisitorModal();
+  const handleRegisterVisitor = async () => {
+    const newVisitor: VisitorLog = { id: `temp-${Date.now()}`, residentName: newVisitorData.residentName || 'Desconhecido', unit: newVisitorData.unit, visitorCount: 1, visitorNames: newVisitorData.name, entryTime: new Date().toISOString(), status: 'active' };
+    
+    // Salvar no Supabase
+    const result = await saveVisitor(newVisitor);
+    if (result.success && result.id) {
+      newVisitor.id = result.id;
+      setVisitorLogs([newVisitor, ...visitorLogs]);
+      resetVisitorModal();
+    } else {
+      console.error('Erro ao salvar visitante:', result.error);
+      alert('Erro ao registrar visitante: ' + (result.error || 'Erro desconhecido'));
+    }
   };
   const handleAddAccessType = () => { if (newAccessTypeInput.trim()) { setVisitorAccessTypes([...visitorAccessTypes, newAccessTypeInput.trim()]); setNewAccessTypeInput(''); setIsAddingAccessType(false); } };
   const handleRemoveAccessType = (typeToRemove: string) => { if (visitorAccessTypes.length > 1) { setVisitorAccessTypes(visitorAccessTypes.filter(t => t !== typeToRemove)); if (newVisitorData.type === typeToRemove) { setNewVisitorData({...newVisitorData, type: visitorAccessTypes[0]}); } } };
@@ -396,16 +422,66 @@ const App: React.FC = () => {
   const updateItem = (id: string, field: 'name' | 'description', value: string) => { setPackageItems(packageItems.map(it => it.id === id ? { ...it, [field]: value } : it)); };
   const resetPackageModal = () => { setIsNewPackageModalOpen(false); setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); };
   const handleOpenNewPackageModal = () => { setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); setIsNewPackageModalOpen(true); };
-  const handleRegisterPackageFinal = (sendNotify: boolean) => {
+  const handleRegisterPackageFinal = async (sendNotify: boolean) => {
     if (!selectedResident) return;
-    const newPkg: Package = { id: Date.now().toString(), recipient: selectedResident.name, unit: selectedResident.unit, type: packageType, receivedAt: new Date().toISOString(), displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), status: 'Pendente', deadlineMinutes: 45, residentPhone: selectedResident.phone, items: packageItems.filter(it => it.name.trim() !== '') };
-    setAllPackages([newPkg, ...allPackages]);
+    const newPkg: Package = { id: `temp-${Date.now()}`, recipient: selectedResident.name, unit: selectedResident.unit, type: packageType, receivedAt: new Date().toISOString(), displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), status: 'Pendente', deadlineMinutes: 45, residentPhone: selectedResident.phone, items: packageItems.filter(it => it.name.trim() !== '') };
+    
+    // Salvar no Supabase
+    const result = await savePackage(newPkg);
+    if (result.success && result.id) {
+      // Atualizar com o ID real do Supabase
+      newPkg.id = result.id;
+      setAllPackages([newPkg, ...allPackages]);
+    } else {
+      console.error('Erro ao salvar pacote:', result.error);
+      alert('Erro ao salvar encomenda: ' + (result.error || 'Erro desconhecido'));
+      return;
+    }
+    
     if (sendNotify && selectedResident.whatsapp) { const url = `https://wa.me/${selectedResident.whatsapp}?text=${encodeURIComponent(packageMessage)}`; window.open(url, '_blank'); }
     resetPackageModal(); setActiveTab('dashboard');
   };
-  const handleDeliverPackage = (id: string) => { setAllPackages(prev => prev.map(p => p.id === id ? { ...p, status: 'Entregue' } : p)); setSelectedPackageForDetail(null); };
-  const handleResolveOccurrence = (id: string) => { setAllOccurrences(prev => prev.map(occ => occ.id === id ? { ...occ, status: 'Resolvido' } : occ)); };
-  const handleSaveOccurrenceDetails = () => { if (!selectedOccurrenceForDetail) return; setAllOccurrences(prev => prev.map(o => o.id === selectedOccurrenceForDetail.id ? selectedOccurrenceForDetail : o)); setSelectedOccurrenceForDetail(null); };
+  const handleDeliverPackage = async (id: string) => {
+    const pkg = allPackages.find(p => p.id === id);
+    if (!pkg) return;
+    
+    const updatedPkg = { ...pkg, status: 'Entregue' as const };
+    const result = await updatePackage(updatedPkg);
+    
+    if (result.success) {
+      setAllPackages(prev => prev.map(p => p.id === id ? updatedPkg : p));
+      setSelectedPackageForDetail(null);
+    } else {
+      console.error('Erro ao atualizar pacote:', result.error);
+      alert('Erro ao marcar como entregue: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
+  const handleResolveOccurrence = async (id: string) => {
+    const occurrence = allOccurrences.find(occ => occ.id === id);
+    if (!occurrence) return;
+    
+    const updatedOccurrence = { ...occurrence, status: 'Resolvido' as const };
+    const result = await updateOccurrence(updatedOccurrence);
+    
+    if (result.success) {
+      setAllOccurrences(prev => prev.map(occ => occ.id === id ? updatedOccurrence : occ));
+    } else {
+      console.error('Erro ao resolver ocorrência:', result.error);
+      alert('Erro ao resolver ocorrência: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
+  const handleSaveOccurrenceDetails = async () => {
+    if (!selectedOccurrenceForDetail) return;
+    
+    const result = await updateOccurrence(selectedOccurrenceForDetail);
+    if (result.success) {
+      setAllOccurrences(prev => prev.map(o => o.id === selectedOccurrenceForDetail.id ? selectedOccurrenceForDetail : o));
+      setSelectedOccurrenceForDetail(null);
+    } else {
+      console.error('Erro ao salvar ocorrência:', result.error);
+      alert('Erro ao salvar ocorrência: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
   const handleSendReminder = (pkg: Package) => {
     const resident = allResidents.find(r => r.name === pkg.recipient);
     if (resident && resident.whatsapp) { 
@@ -422,27 +498,68 @@ const App: React.FC = () => {
   const handleAddPkgCategory = () => { if (!newPkgCatName.trim()) return; setPackageCategories([...packageCategories, newPkgCatName.trim()]); setPackageType(newPkgCatName.trim()); setNewPkgCatName(''); setIsAddingPkgCategory(false); };
   const handleAcknowledgeNotice = (id: string) => { setAllNotices(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); };
   const handleOpenResidentModal = (resident?: Resident) => { if (resident) { setResidentFormData(resident); } else { setResidentFormData({ id: '', name: '', unit: '', email: '', phone: '', whatsapp: '' }); } setIsResidentModalOpen(true); };
-  const handleSaveResident = () => { 
+  const handleSaveResident = async () => { 
     if (!residentFormData.name || !residentFormData.unit) return; 
     // Normalizar unidade antes de salvar
     const normalizedData = { ...residentFormData, unit: normalizeUnit(residentFormData.unit) };
-    if (normalizedData.id) { 
-      setAllResidents(prev => prev.map(r => r.id === normalizedData.id ? normalizedData : r)); 
-    } else { 
-      const newResident = { ...normalizedData, id: Date.now().toString() }; 
-      setAllResidents(prev => [newResident, ...prev]); 
-    } 
-    setIsResidentModalOpen(false); 
+    
+    // Criar objeto Resident completo
+    const resident: Resident = {
+      id: normalizedData.id || `temp-${Date.now()}`,
+      name: normalizedData.name,
+      unit: normalizedData.unit,
+      email: normalizedData.email || '',
+      phone: normalizedData.phone || '',
+      whatsapp: normalizedData.whatsapp || ''
+    };
+    
+    // Salvar no Supabase
+    const result = await saveResident(resident);
+    if (result.success) {
+      if (result.id) {
+        resident.id = result.id;
+      }
+      if (resident.id && !resident.id.startsWith('temp-')) {
+        // Atualizar existente
+        setAllResidents(prev => prev.map(r => r.id === resident.id ? resident : r));
+      } else {
+        // Novo morador
+        setAllResidents(prev => [resident, ...prev]);
+      }
+      setIsResidentModalOpen(false);
+    } else {
+      console.error('Erro ao salvar morador:', result.error);
+      alert('Erro ao salvar morador: ' + (result.error || 'Erro desconhecido'));
+    }
   };
-  const handleDeleteResident = (id: string) => { if (window.confirm("Tem certeza que deseja remover este morador?")) { setAllResidents(prev => prev.filter(r => r.id !== id)); if (selectedResidentProfile?.id === id) setSelectedResidentProfile(null); } };
+  const handleDeleteResident = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja remover este morador?")) return;
+    
+    const result = await deleteResident(id);
+    if (result.success) {
+      setAllResidents(prev => prev.filter(r => r.id !== id));
+      if (selectedResidentProfile?.id === id) setSelectedResidentProfile(null);
+    } else {
+      console.error('Erro ao deletar morador:', result.error);
+      alert('Erro ao remover morador: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
   const handleImportResidents = (residents: Resident[]) => { setAllResidents(prev => [...residents, ...prev]); };
   const handleImportBoletos = (boletos: Boleto[]) => { setAllBoletos(prev => [...boletos, ...prev]); };
-  const handleDeleteBoleto = (boleto: Boleto) => { setAllBoletos(prev => prev.filter(b => b.id !== boleto.id)); };
-  const handleCameraScanSuccess = (data: { resident?: Resident; qrData?: string; image?: string }) => {
+  const handleDeleteBoleto = async (boleto: Boleto) => {
+    const result = await deleteBoleto(boleto.id);
+    if (result.success) {
+      setAllBoletos(prev => prev.filter(b => b.id !== boleto.id));
+    } else {
+      console.error('Erro ao deletar boleto:', result.error);
+      alert('Erro ao remover boleto: ' + (result.error || 'Erro desconhecido'));
+    }
+  };
+  const handleCameraScanSuccess = async (data: { resident?: Resident; qrData?: string; image?: string }) => {
     if (data.resident) {
       // Se encontrou o morador automaticamente, criar encomenda diretamente
       const newPkg: Package = {
-        id: Date.now().toString(),
+        id: `temp-${Date.now()}`,
         recipient: data.resident.name,
         unit: data.resident.unit,
         type: 'QR Code',
@@ -453,9 +570,18 @@ const App: React.FC = () => {
         residentPhone: data.resident.phone,
         items: data.qrData ? [{ id: '1', name: 'Encomenda via QR Code', description: data.qrData }] : undefined
       };
-      setAllPackages([newPkg, ...allPackages]);
-      setIsCameraScanModalOpen(false);
-      setActiveTab('packages');
+      
+      // Salvar no Supabase
+      const result = await savePackage(newPkg);
+      if (result.success && result.id) {
+        newPkg.id = result.id;
+        setAllPackages([newPkg, ...allPackages]);
+        setIsCameraScanModalOpen(false);
+        setActiveTab('packages');
+      } else {
+        console.error('Erro ao salvar pacote:', result.error);
+        alert('Erro ao salvar encomenda: ' + (result.error || 'Erro desconhecido'));
+      }
     } else if (data.qrData || data.image) {
       // Se não encontrou automaticamente, abrir modal de novo pacote pré-preenchido
       setIsCameraScanModalOpen(false);
@@ -874,7 +1000,33 @@ const App: React.FC = () => {
       <ImportResidentsModal isOpen={isImportResidentsModalOpen} onClose={() => setIsImportResidentsModalOpen(false)} onImport={handleImportResidents} existingResidents={allResidents} />
       <ImportBoletosModal isOpen={isImportBoletosModalOpen} onClose={() => setIsImportBoletosModalOpen(false)} onImport={handleImportBoletos} existingBoletos={allBoletos} allResidents={allResidents} />
       <CameraScanModal isOpen={isCameraScanModalOpen} onClose={() => setIsCameraScanModalOpen(false)} onScanSuccess={handleCameraScanSuccess} allResidents={allResidents} />
-      <NewOccurrenceModal isOpen={isOccurrenceModalOpen} onClose={() => setIsOccurrenceModalOpen(false)} description={occurrenceDescription} setDescription={setOccurrenceDescription} onSave={() => setIsOccurrenceModalOpen(false)} />
+      <NewOccurrenceModal isOpen={isOccurrenceModalOpen} onClose={() => setIsOccurrenceModalOpen(false)} description={occurrenceDescription} setDescription={setOccurrenceDescription} onSave={async () => {
+        if (!occurrenceDescription.trim()) {
+          alert('Por favor, descreva a ocorrência');
+          return;
+        }
+        
+        const newOccurrence: Occurrence = {
+          id: `temp-${Date.now()}`,
+          residentName: 'Sistema',
+          unit: 'N/A',
+          description: occurrenceDescription,
+          status: 'Aberto',
+          date: new Date().toISOString(),
+          reportedBy: role === 'PORTEIRO' ? 'Porteiro' : role === 'SINDICO' ? 'Síndico' : 'Sistema'
+        };
+        
+        const result = await saveOccurrence(newOccurrence);
+        if (result.success && result.id) {
+          newOccurrence.id = result.id;
+          setAllOccurrences(prev => [newOccurrence, ...prev]);
+          setOccurrenceDescription('');
+          setIsOccurrenceModalOpen(false);
+        } else {
+          console.error('Erro ao salvar ocorrência:', result.error);
+          alert('Erro ao registrar ocorrência: ' + (result.error || 'Erro desconhecido'));
+        }
+      }} />
       <NoticeEditModal notice={selectedNoticeForEdit} onClose={() => setSelectedNoticeForEdit(null)} onChange={setSelectedNoticeForEdit} onSave={handleSaveNoticeChanges} onDelete={handleDeleteNotice} />
     </>
   );
