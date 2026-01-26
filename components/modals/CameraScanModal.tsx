@@ -73,8 +73,10 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [qrJustRead, setQrJustRead] = useState(false);
+  const [photoJustCaptured, setPhotoJustCaptured] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const pendingQrSuccessRef = useRef<{ resident?: Resident; qrData: string } | null>(null);
+  const pendingPhotoSuccessRef = useRef<{ resident?: Resident; qrData?: string; image: string } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -124,8 +126,10 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     setCapturing(false);
     setUploading(false);
     setQrJustRead(false);
+    setPhotoJustCaptured(false);
     setLocalError(null);
     pendingQrSuccessRef.current = null;
+    pendingPhotoSuccessRef.current = null;
     clearError();
     setMode('qr');
   }, [stop, clearError]);
@@ -187,7 +191,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
 
   // QR scan loop (apenas quando stream pronto e modo qr)
   useEffect(() => {
-    if (status !== 'ready' || mode !== 'qr' || capturedImage || scannedData || qrJustRead) return;
+    if (status !== 'ready' || mode !== 'qr' || capturedImage || scannedData || qrJustRead || photoJustCaptured) return;
     scanIntervalRef.current = window.setInterval(() => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -220,7 +224,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
         scanIntervalRef.current = null;
       }
     };
-  }, [status, mode, capturedImage, scannedData, qrJustRead, findResidentByQR, stop]);
+  }, [status, mode, capturedImage, scannedData, qrJustRead, photoJustCaptured, findResidentByQR, stop]);
 
   // Feedback "QR lido" e redirecionamento
   useEffect(() => {
@@ -239,6 +243,26 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     }, 600);
     return () => clearTimeout(t);
   }, [qrJustRead, handleSuccess]);
+
+  // Feedback "Foto capturada" e redirecionamento automático (similar ao QR Code)
+  useEffect(() => {
+    if (!photoJustCaptured || !capturedImage) return;
+    const t = window.setTimeout(() => {
+      const pending = pendingPhotoSuccessRef.current;
+      pendingPhotoSuccessRef.current = null;
+      setPhotoJustCaptured(false);
+      if (!pending) return;
+      const { resident, qrData, image } = pending;
+      if (resident && qrData) {
+        handleSuccess({ resident, qrData, image, fromMode: 'photo' });
+      } else if (qrData) {
+        handleSuccess({ qrData, image, fromMode: 'photo' });
+      } else {
+        handleSuccess({ image, fromMode: 'photo' });
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [photoJustCaptured, capturedImage, handleSuccess]);
 
   const capturePhoto = useCallback(() => {
     const video = videoRef.current;
@@ -263,16 +287,34 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     detectQRFromImageData(imageData)
       .then((qrData) => {
-        if (qrData) setScannedData(qrData);
+        if (qrData) {
+          setScannedData(qrData);
+          // Tentar encontrar morador automaticamente se houver QR Code
+          const resident = findResidentByQR(qrData);
+          pendingPhotoSuccessRef.current = { resident, qrData, image: imageDataUrl };
+        } else {
+          // Sem QR Code, apenas foto
+          pendingPhotoSuccessRef.current = { image: imageDataUrl };
+        }
+        // Redirecionar automaticamente após detectar (ou não detectar) QR Code
+        setPhotoJustCaptured(true);
       })
-      .catch(() => {})
-      .finally(() => setQrDetecting(false));
-
-    setTimeout(() => setCapturing(false), 400);
-  }, [stream, stop]);
+      .catch(() => {
+        // Em caso de erro na detecção, continuar apenas com a foto
+        pendingPhotoSuccessRef.current = { image: imageDataUrl };
+        setPhotoJustCaptured(true);
+      })
+      .finally(() => {
+        setQrDetecting(false);
+        setTimeout(() => setCapturing(false), 400);
+      });
+  }, [stream, stop, findResidentByQR]);
 
   const handleConfirmPhoto = useCallback(() => {
     if (!capturedImage) return;
+    // Se já foi processado automaticamente, não fazer nada
+    if (photoJustCaptured) return;
+    
     const resident = scannedData ? findResidentByQR(scannedData) : undefined;
     const base = { image: capturedImage, fromMode: 'photo' as const };
     if (resident && scannedData) {
@@ -282,7 +324,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
     } else {
       handleSuccess(base);
     }
-  }, [capturedImage, scannedData, findResidentByQR, handleSuccess]);
+  }, [capturedImage, scannedData, photoJustCaptured, findResidentByQR, handleSuccess]);
 
   const handleRetry = useCallback(() => {
     setLocalError(null);
@@ -328,9 +370,23 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           detectQRFromImageData(imageData)
             .then((qr) => {
-              if (qr) setScannedData(qr);
+              if (qr) {
+                setScannedData(qr);
+                // Tentar encontrar morador automaticamente se houver QR Code
+                const resident = findResidentByQR(qr);
+                pendingPhotoSuccessRef.current = { resident, qrData: qr, image: dataUrl };
+              } else {
+                // Sem QR Code, apenas foto
+                pendingPhotoSuccessRef.current = { image: dataUrl };
+              }
+              // Redirecionar automaticamente após detectar (ou não detectar) QR Code
+              setPhotoJustCaptured(true);
             })
-            .catch(() => {})
+            .catch(() => {
+              // Em caso de erro na detecção, continuar apenas com a foto
+              pendingPhotoSuccessRef.current = { image: dataUrl };
+              setPhotoJustCaptured(true);
+            })
             .finally(() => setQrDetecting(false));
         };
         img.onerror = () => {
@@ -346,7 +402,7 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
       reader.readAsDataURL(file);
       e.target.value = '';
     },
-    [clearError]
+    [clearError, findResidentByQR]
   );
 
   if (!isOpen) return null;
@@ -492,10 +548,12 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
           >
             <canvas ref={canvasRef} className="hidden" />
 
-            {qrJustRead && (
+            {(qrJustRead || photoJustCaptured) && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/95">
                 <CheckCircle2 className="w-14 h-14 text-green-400" />
-                <p className="text-sm font-bold text-white">QR Code lido!</p>
+                <p className="text-sm font-bold text-white">
+                  {qrJustRead ? 'QR Code lido!' : 'Foto capturada!'}
+                </p>
                 <p className="text-xs text-white/70">Redirecionando…</p>
                 <Loader2 className="w-6 h-6 animate-spin text-white/60" />
               </div>
@@ -566,13 +624,18 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
                   <button
                     type="button"
                     onClick={handleConfirmPhoto}
-                    disabled={qrDetecting || capturing}
+                    disabled={qrDetecting || capturing || photoJustCaptured}
                     className="flex-1 py-3 rounded-xl bg-green-500 text-white text-xs font-black uppercase flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
                   >
                     {qrDetecting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Analisando QR…
+                      </>
+                    ) : photoJustCaptured ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Redirecionando…
                       </>
                     ) : (
                       <>
