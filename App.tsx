@@ -1247,6 +1247,10 @@ const App: React.FC = () => {
       <ResidentRegister 
         onRegister={handleResidentRegister}
         onLogin={handleResidentLogin}
+        onBack={() => {
+          setShowResidentRegister(false);
+          setShowLogoSplash(false);
+        }}
         theme={theme}
         toggleTheme={toggleTheme}
         existingResidents={allResidents}

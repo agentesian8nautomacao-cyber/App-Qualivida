@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Building, Mail, Phone, ArrowRight, Eye, EyeOff, CheckCircle2, AlertCircle, Sun, Moon } from 'lucide-react';
+import { User, Lock, Building, Mail, Phone, ArrowRight, Eye, EyeOff, CheckCircle2, AlertCircle, Sun, Moon, ChevronLeft } from 'lucide-react';
 import { Resident } from '../types';
 import { registerResident, loginResident } from '../services/residentAuth';
 import { validateUnit, normalizeUnit, formatUnit, compareUnits } from '../utils/unitFormatter';
@@ -7,6 +7,7 @@ import { validateUnit, normalizeUnit, formatUnit, compareUnits } from '../utils/
 interface ResidentRegisterProps {
   onRegister: (resident: Resident, password: string) => void;
   onLogin: (unit: string, password: string) => void;
+  onBack?: () => void; // Callback para voltar ao login
   theme?: 'dark' | 'light';
   toggleTheme?: () => void;
   existingResidents?: Resident[]; // Lista de moradores já cadastrados
@@ -15,6 +16,7 @@ interface ResidentRegisterProps {
 const ResidentRegister: React.FC<ResidentRegisterProps> = ({
   onRegister,
   onLogin,
+  onBack,
   theme = 'dark',
   toggleTheme,
   existingResidents = []
@@ -107,11 +109,10 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
         if (result.error) {
           if (typeof result.error === 'string') {
             errorMessage = result.error;
-          } else if (result.error instanceof Error) {
-            errorMessage = result.error.message;
-          } else if (typeof result.error === 'object') {
+          } else if (typeof result.error === 'object' && result.error !== null) {
             // Se for um objeto de erro do Supabase
-            errorMessage = (result.error as any).message || JSON.stringify(result.error);
+            const errObj = result.error as { message?: string };
+            errorMessage = errObj.message || JSON.stringify(result.error);
           }
         }
         setError(errorMessage);
@@ -126,19 +127,21 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
         setMode('login');
         setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
       }, 2000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Tratar erro de forma mais detalhada
       let errorMessage = 'Erro ao realizar cadastro';
       if (err) {
         if (typeof err === 'string') {
           errorMessage = err;
-        } else if (err instanceof Error) {
-          errorMessage = err.message;
-        } else if (err.message) {
-          errorMessage = err.message;
-        } else if (typeof err === 'object') {
-          // Se for um objeto de erro do Supabase
-          errorMessage = err.message || err.error?.message || JSON.stringify(err);
+        } else if (typeof err === 'object' && err !== null) {
+          // Verificar se é um Error
+          if ('message' in err && typeof (err as { message: unknown }).message === 'string') {
+            errorMessage = (err as { message: string }).message;
+          } else {
+            // Se for um objeto de erro do Supabase
+            const errObj = err as { message?: string; error?: { message?: string } };
+            errorMessage = errObj.message || errObj.error?.message || JSON.stringify(err);
+          }
         }
       }
       console.error('Erro ao cadastrar morador:', err);
@@ -206,6 +209,21 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
             ? 'bg-white border-gray-200/50' 
             : 'bg-white/[0.03] border-white/10'
         }`}>
+          
+          {/* Botão de voltar */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className={`absolute top-6 left-6 p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 flex items-center justify-center z-20 ${
+                theme === 'light'
+                  ? 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+              }`}
+              title="Voltar para login"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
           
           {/* Botão de alternar tema */}
           {toggleTheme && (

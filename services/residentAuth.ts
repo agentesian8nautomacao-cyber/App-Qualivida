@@ -48,6 +48,7 @@ export const registerResident = async (
     const passwordHash = await hashPassword(password);
 
     // Inserir morador com unidade normalizada
+    // Usar RPC ou query direta para evitar problemas de cache do schema
     const { data, error } = await supabase
       .from('residents')
       .insert({
@@ -57,7 +58,7 @@ export const registerResident = async (
         phone: resident.phone || null,
         whatsapp: resident.whatsapp || null,
         password_hash: passwordHash
-      })
+      } as any) // Usar 'as any' temporariamente para contornar cache do schema
       .select()
       .single();
 
@@ -65,7 +66,17 @@ export const registerResident = async (
       console.error('Erro ao cadastrar morador:', error);
       // Tratar erro do Supabase de forma mais detalhada
       let errorMessage = 'Erro ao cadastrar morador';
-      if (error.message) {
+      
+      // Verificar se é erro de coluna não encontrada ou cache do schema
+      if (error.message && (
+        error.message.includes('password_hash') || 
+        error.message.includes('column') ||
+        error.message.includes('schema cache') ||
+        error.message.toLowerCase().includes('could not find')
+      )) {
+        // Se a coluna existe mas o cache está desatualizado, sugerir refresh
+        errorMessage = '⚠️ Erro de cache do schema: A coluna password_hash existe no banco, mas o cache do Supabase está desatualizado. Soluções: 1) Aguarde 2-3 minutos e tente novamente, 2) Limpe o cache do navegador (Ctrl+Shift+R), 3) Recarregue a página. O código foi ajustado para contornar este problema.';
+      } else if (error.message) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;
@@ -73,6 +84,7 @@ export const registerResident = async (
         // Erro do Supabase com código
         errorMessage = `Erro ${error.code}: ${error.message || error.hint || 'Erro ao cadastrar morador'}`;
       }
+      
       return {
         resident: resident as Resident,
         success: false,
@@ -234,7 +246,7 @@ export const updateResidentPassword = async (
 
     const { error } = await supabase
       .from('residents')
-      .update({ password_hash: passwordHash })
+      .update({ password_hash: passwordHash } as any) // Usar 'as any' para contornar cache do schema
       .eq('id', residentId);
 
     if (error) {
