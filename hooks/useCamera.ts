@@ -100,7 +100,12 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
       return false;
     }
 
-    const constraints: MediaStreamConstraints = {
+    const tryConstraints = (
+      constraint: MediaStreamConstraints
+    ): Promise<MediaStream> =>
+      navigator.mediaDevices.getUserMedia(constraint);
+
+    const constraintsPreferred: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: opts.facingMode ?? 'environment' },
         width: { ideal: 1280 },
@@ -109,8 +114,25 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
       audio: false,
     };
 
+    const constraintsFallback: MediaStreamConstraints = {
+      video: true,
+      audio: false,
+    };
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await tryConstraints(constraintsPreferred);
+      } catch (firstErr: unknown) {
+        const e = firstErr as { name?: string };
+        const useFallback =
+          e?.name === 'NotFoundError' ||
+          e?.name === 'DevicesNotFoundError' ||
+          e?.name === 'OverconstrainedError' ||
+          e?.name === 'ConstraintNotSatisfiedError';
+        if (!useFallback) throw firstErr;
+        mediaStream = await tryConstraints(constraintsFallback);
+      }
       streamRef.current = mediaStream;
       setStream(mediaStream);
       setStatus('ready');

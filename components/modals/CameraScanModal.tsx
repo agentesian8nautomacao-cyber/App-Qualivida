@@ -352,21 +352,26 @@ const CameraScanModal: React.FC<CameraScanModalProps> = ({
             <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex flex-col gap-3">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs font-bold text-red-400 flex-1">{displayError}</p>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-red-400">{displayError}</p>
+                  <p className="text-xs mt-2 opacity-80" style={{ color: 'var(--text-secondary)' }}>
+                    Use <strong>Enviar imagem</strong> para anexar uma foto do seu dispositivo ou <strong>Tentar novamente</strong> para acessar a câmera.
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={handleRetry}
                   disabled={status === 'requesting'}
-                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg text-xs font-black uppercase disabled:opacity-50"
+                  className="px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-xl text-xs font-black uppercase disabled:opacity-50 transition-colors"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   {status === 'requesting' ? 'Solicitando…' : 'Tentar novamente'}
                 </button>
-                <label className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--glass-bg)] border border-[var(--border-color)] rounded-lg cursor-pointer hover:bg-[var(--border-color)] transition-colors">
-                  <Upload className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
-                  <span className="text-xs font-bold uppercase" style={{ color: 'var(--text-primary)' }}>
+                <label className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-[var(--text-primary)] rounded-xl cursor-pointer hover:opacity-90 transition-opacity">
+                  <Upload className="w-4 h-4" style={{ color: 'var(--bg-color)' }} />
+                  <span className="text-xs font-black uppercase" style={{ color: 'var(--bg-color)' }}>
                     Enviar imagem
                   </span>
                   <input
