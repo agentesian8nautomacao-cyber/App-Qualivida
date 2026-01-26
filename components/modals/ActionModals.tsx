@@ -388,10 +388,15 @@ export const NewNoteModal = ({
 // --- MODAL NOVO PACOTE (WIZARD) ---
 export const NewPackageModal = ({
   isOpen, onClose, step, setStep, searchResident, setSearchResident, selectedResident, setSelectedResident,
-  filteredResidents, packageType, setPackageType, packageCategories, isAddingPkgCategory, setIsAddingPkgCategory,
+  filteredResidents, allResidents = [], pendingImage, pendingQrData, packageType, setPackageType, packageCategories, isAddingPkgCategory, setIsAddingPkgCategory,
   newPkgCatName, setNewPkgCatName, handleAddPkgCategory, numItems, packageItems, handleAddItemRow,
   handleRemoveItemRow, updateItem, packageMessage, setPackageMessage, onConfirm
 }: any) => {
+  const fromCamera = Boolean(pendingImage || pendingQrData);
+  const displayResidents = fromCamera && !(searchResident || '').trim()
+    ? (allResidents || []).slice(0, 80)
+    : (filteredResidents || []);
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-4 overflow-auto">
@@ -406,19 +411,34 @@ export const NewPackageModal = ({
                   <button onClick={onClose} className="p-2 sm:p-3 md:p-4 bg-zinc-50 rounded-2xl sm:rounded-3xl hover:bg-zinc-100 transition-all flex-shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6"/></button>
                </header>
                <div className="space-y-6 sm:space-y-8 md:space-y-12">
+                  {pendingImage && (
+                    <div className="rounded-[24px] overflow-hidden border-2 border-black/5 bg-zinc-50">
+                      <p className="text-[10px] font-black uppercase tracking-widest opacity-60 px-4 py-2 bg-white/80">Foto da encomenda — relate ao morador</p>
+                      <img src={pendingImage} alt="Encomenda" className="w-full h-auto max-h-48 object-contain" />
+                    </div>
+                  )}
                   <div className="relative group">
                      <Search className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 opacity-20 group-focus-within:opacity-100 transition-opacity" />
                      <input type="text" placeholder="Buscar por nome ou unidade..." value={searchResident} onChange={e => { setSearchResident(e.target.value); setSelectedResident(null); }} className="w-full pl-10 sm:pl-12 md:pl-16 pr-4 sm:pr-6 py-3 sm:py-4 md:py-6 bg-zinc-50 rounded-[24px] sm:rounded-[32px] font-black text-sm sm:text-lg md:text-xl outline-none border-2 border-transparent focus:border-black/5 placeholder:opacity-20 shadow-inner" />
                   </div>
-                  {!selectedResident && filteredResidents.length > 0 && (
-                     <div className="bg-zinc-50 rounded-[32px] border border-black/5 p-4 space-y-2 animate-in slide-in-from-top-4">
-                        {filteredResidents.map((r: Resident) => (
+                  {fromCamera && !selectedResident && (
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Selecione o morador que recebe esta encomenda</p>
+                  )}
+                  {!selectedResident && displayResidents.length > 0 && (
+                     <div className="bg-zinc-50 rounded-[32px] border border-black/5 p-4 space-y-2 animate-in slide-in-from-top-4 max-h-64 overflow-y-auto custom-scrollbar">
+                        {displayResidents.map((r: Resident) => (
                           <button key={r.id} onClick={() => { setSelectedResident(r); setSearchResident(r.name); }} className="w-full p-6 bg-white rounded-[24px] flex items-center justify-between hover:scale-[1.02] active:scale-95 transition-all shadow-sm border border-transparent hover:border-black/5 group">
                              <div className="text-left"><h6 className="font-black text-lg uppercase tracking-tight">{r.name}</h6><p className="text-[10px] opacity-40 font-black uppercase tracking-widest">Unidade {r.unit}</p></div>
                              <div className="p-3 bg-zinc-50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"><Plus className="w-4 h-4" /></div>
                           </button>
                         ))}
                      </div>
+                  )}
+                  {!selectedResident && fromCamera && displayResidents.length === 0 && (allResidents || []).length === 0 && (
+                    <p className="text-xs font-bold uppercase tracking-wider opacity-40">Nenhum morador cadastrado. Cadastre em Moradores primeiro.</p>
+                  )}
+                  {!selectedResident && (searchResident || '').trim() && displayResidents.length === 0 && (
+                    <p className="text-xs font-bold uppercase tracking-wider opacity-40">Nenhum morador encontrado</p>
                   )}
                   {selectedResident && (
                      <div className="p-6 sm:p-8 md:p-10 bg-black text-white rounded-[32px] sm:rounded-[40px] md:rounded-[48px] flex flex-col items-center text-center animate-in zoom-in duration-500 shadow-2xl relative overflow-hidden">

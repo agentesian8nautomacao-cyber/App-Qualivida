@@ -1,12 +1,13 @@
 
-import React from 'react';
-import { Search, Plus, Camera, Image as ImageIcon } from 'lucide-react';
-import { Package } from '../../types';
+import React, { useState } from 'react';
+import { Search, Plus, Camera, Image as ImageIcon, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, Resident } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { isMobile } from '../../utils/deviceDetection';
 
 interface PackagesViewProps {
   allPackages: Package[];
+  allResidents?: Resident[];
   packageSearch: string;
   setPackageSearch: (val: string) => void;
   setIsNewPackageModalOpen: (val: boolean) => void;
@@ -16,6 +17,7 @@ interface PackagesViewProps {
 
 const PackagesView: React.FC<PackagesViewProps> = ({
   allPackages,
+  allResidents = [],
   packageSearch,
   setPackageSearch,
   setIsNewPackageModalOpen,
@@ -24,6 +26,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({
 }) => {
   const mobile = isMobile();
   const canUseCamera = mobile && !!onCameraScan;
+  const [residentsExpanded, setResidentsExpanded] = useState(false);
 
   const displayPackages = allPackages.filter((p) => 
     p.recipient.toLowerCase().includes(packageSearch.toLowerCase()) ||
@@ -80,6 +83,36 @@ const PackagesView: React.FC<PackagesViewProps> = ({
           </div>
         </div>
       </header>
+
+      {allResidents.length > 0 && (
+        <section className="premium-glass rounded-[24px] p-4 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setResidentsExpanded((e) => !e)}
+            className="w-full flex items-center justify-between gap-2 py-2"
+          >
+            <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-70" style={{ color: 'var(--text-secondary)' }}>
+              <Users className="w-4 h-4" />
+              Moradores cadastrados ({allResidents.length})
+            </span>
+            {residentsExpanded ? <ChevronUp className="w-4 h-4 opacity-50" /> : <ChevronDown className="w-4 h-4 opacity-50" />}
+          </button>
+          {residentsExpanded && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 pt-2 mt-2 border-t border-white/5 max-h-64 overflow-y-auto custom-scrollbar">
+              {allResidents.map((r) => (
+                <div
+                  key={r.id}
+                  className="px-3 py-2 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all"
+                >
+                  <p className="font-black text-sm truncate" style={{ color: 'var(--text-primary)' }}>{r.name}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>{formatUnit(r.unit)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {displayPackages.map(pkg => (
           <div 

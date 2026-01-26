@@ -353,6 +353,8 @@ const App: React.FC = () => {
   const [isImportResidentsModalOpen, setIsImportResidentsModalOpen] = useState(false);
   const [isImportBoletosModalOpen, setIsImportBoletosModalOpen] = useState(false);
   const [isCameraScanModalOpen, setIsCameraScanModalOpen] = useState(false);
+  const [pendingPackageImage, setPendingPackageImage] = useState<string | null>(null);
+  const [pendingPackageQrData, setPendingPackageQrData] = useState<string | null>(null);
   const [residentFormData, setResidentFormData] = useState({ id: '', name: '', unit: '', email: '', phone: '', whatsapp: '' });
   const [selectedResidentProfile, setSelectedResidentProfile] = useState<Resident | null>(null);
 
@@ -423,8 +425,28 @@ const App: React.FC = () => {
   const handleAddItemRow = () => { setPackageItems([...packageItems, { id: Date.now().toString(), name: '', description: '' }]); setNumItems(prev => prev + 1); };
   const handleRemoveItemRow = (id: string) => { if (packageItems.length <= 1) return; setPackageItems(packageItems.filter(it => it.id !== id)); setNumItems(prev => prev + 1); };
   const updateItem = (id: string, field: 'name' | 'description', value: string) => { setPackageItems(packageItems.map(it => it.id === id ? { ...it, [field]: value } : it)); };
-  const resetPackageModal = () => { setIsNewPackageModalOpen(false); setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); };
-  const handleOpenNewPackageModal = () => { setPackageStep(1); setSelectedResident(null); setSearchResident(''); setPackageType('Amazon'); setNumItems(1); setPackageItems([{ id: '1', name: '', description: '' }]); setIsNewPackageModalOpen(true); };
+  const resetPackageModal = () => {
+    setIsNewPackageModalOpen(false);
+    setPackageStep(1);
+    setSelectedResident(null);
+    setSearchResident('');
+    setPackageType('Amazon');
+    setNumItems(1);
+    setPackageItems([{ id: '1', name: '', description: '' }]);
+    setPendingPackageImage(null);
+    setPendingPackageQrData(null);
+  };
+  const handleOpenNewPackageModal = () => {
+    setPackageStep(1);
+    setSelectedResident(null);
+    setSearchResident('');
+    setPackageType('Amazon');
+    setNumItems(1);
+    setPackageItems([{ id: '1', name: '', description: '' }]);
+    setPendingPackageImage(null);
+    setPendingPackageQrData(null);
+    setIsNewPackageModalOpen(true);
+  };
   const handleRegisterPackageFinal = async (sendNotify: boolean) => {
     if (!selectedResident) return;
     const newPkg: Package = { id: `temp-${Date.now()}`, recipient: selectedResident.name, unit: selectedResident.unit, type: packageType, receivedAt: new Date().toISOString(), displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), status: 'Pendente', deadlineMinutes: 45, residentPhone: selectedResident.phone, items: packageItems.filter(it => it.name.trim() !== '') };
@@ -634,6 +656,8 @@ const App: React.FC = () => {
       setPackageType(pkgType);
       setNumItems(1);
       setPackageItems([{ id: '1', name: '', description: '' }]);
+      setPendingPackageImage(data.image ?? null);
+      setPendingPackageQrData(data.qrData ?? null);
       if (data.qrData) {
         const found = findResidentByQRData(data.qrData);
         if (found) {
@@ -641,6 +665,7 @@ const App: React.FC = () => {
           setSearchResident(found.name);
         }
       }
+      setActiveTab('packages');
       setIsNewPackageModalOpen(true);
     }
   };
@@ -850,7 +875,7 @@ const App: React.FC = () => {
       case 'packages': 
         if (role === 'MORADOR' && currentResident) {
           const myPackages = allPackages.filter(p => p.unit === currentResident.unit);
-          return <PackagesView allPackages={myPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={undefined} />;
+          return <PackagesView allPackages={myPackages} allResidents={[]} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={undefined} />;
         }
         if (role === 'SINDICO') {
           return (
@@ -863,7 +888,7 @@ const App: React.FC = () => {
             </div>
           );
         }
-        return <PackagesView allPackages={allPackages} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={() => setIsCameraScanModalOpen(true)} />;
+        return <PackagesView allPackages={allPackages} allResidents={allResidents} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onCameraScan={() => setIsCameraScanModalOpen(true)} />;
       case 'settings': 
         if (role === 'MORADOR') {
           return (
@@ -1035,7 +1060,7 @@ const App: React.FC = () => {
       {/* MODALS */}
       <NewReservationModal isOpen={isReservationModalOpen} onClose={() => setIsReservationModalOpen(false)} data={newReservationData} setData={setNewReservationData} areasStatus={areasStatus} searchQuery={reservationSearchQuery} setSearchQuery={setReservationSearchQuery} showSuggestions={showResSuggestions} setShowSuggestions={setShowResSuggestions} filteredResidents={filteredResForReservation} hasConflict={hasTimeConflict} onConfirm={handleCreateReservation} />
       <NewVisitorModal isOpen={isVisitorModalOpen} onClose={resetVisitorModal} step={newVisitorStep} setStep={setNewVisitorStep} data={newVisitorData} setData={setNewVisitorData} searchResident={searchResident} setSearchResident={setSearchResident} filteredResidents={filteredResidents} accessTypes={visitorAccessTypes} handleRemoveAccessType={handleRemoveAccessType} isAddingAccessType={isAddingAccessType} setIsAddingAccessType={setIsAddingAccessType} newAccessTypeInput={newAccessTypeInput} setNewAccessTypeInput={setNewAccessTypeInput} handleAddAccessType={handleAddAccessType} onConfirm={handleRegisterVisitor} />
-      <NewPackageModal isOpen={isNewPackageModalOpen} onClose={resetPackageModal} step={packageStep} setStep={setPackageStep} searchResident={searchResident} setSearchResident={setSearchResident} selectedResident={selectedResident} setSelectedResident={setSelectedResident} filteredResidents={filteredResidents} packageType={packageType} setPackageType={setPackageType} packageCategories={packageCategories} isAddingPkgCategory={isAddingPkgCategory} setIsAddingPkgCategory={setIsAddingPkgCategory} newPkgCatName={newPkgCatName} setNewPkgCatName={setNewPkgCatName} handleAddPkgCategory={handleAddPkgCategory} numItems={numItems} packageItems={packageItems} handleAddItemRow={handleAddItemRow} handleRemoveItemRow={handleRemoveItemRow} updateItem={updateItem} packageMessage={packageMessage} setPackageMessage={setPackageMessage} onConfirm={handleRegisterPackageFinal} />
+      <NewPackageModal isOpen={isNewPackageModalOpen} onClose={resetPackageModal} step={packageStep} setStep={setPackageStep} searchResident={searchResident} setSearchResident={setSearchResident} selectedResident={selectedResident} setSelectedResident={setSelectedResident} filteredResidents={filteredResidents} allResidents={allResidents} pendingImage={pendingPackageImage} pendingQrData={pendingPackageQrData} packageType={packageType} setPackageType={setPackageType} packageCategories={packageCategories} isAddingPkgCategory={isAddingPkgCategory} setIsAddingPkgCategory={setIsAddingPkgCategory} newPkgCatName={newPkgCatName} setNewPkgCatName={setNewPkgCatName} handleAddPkgCategory={handleAddPkgCategory} numItems={numItems} packageItems={packageItems} handleAddItemRow={handleAddItemRow} handleRemoveItemRow={handleRemoveItemRow} updateItem={updateItem} packageMessage={packageMessage} setPackageMessage={setPackageMessage} onConfirm={handleRegisterPackageFinal} />
       <NewNoteModal isOpen={isNewNoteModalOpen} onClose={() => { setIsNewNoteModalOpen(false); setEditingNoteId(null); setIsAddingCategory(false); setIsManagingCategories(false); }} editingId={editingNoteId} categories={noteCategories} newCategory={newNoteCategory} setNewCategory={setNewNoteCategory} isManaging={isManagingCategories} setIsManaging={setIsManagingCategories} removeCategory={handleRemoveCategory} isAdding={isAddingCategory} setIsAdding={setIsAddingCategory} newCatName={newCatName} setNewCatName={setNewCatName} addCategory={handleAddCategory} content={newNoteContent} setContent={setNewNoteContent} isScheduleOpen={isScheduleOpen} setIsScheduleOpen={setIsScheduleOpen} scheduled={newNoteScheduled} setScheduled={setNewNoteScheduled} allNotes={allNotes} setAllNotes={setAllNotes} onSave={handleSaveNote} />
       <StaffFormModal isOpen={isStaffModalOpen} onClose={() => setIsStaffModalOpen(false)} data={staffFormData} setData={setStaffFormData} onSave={handleSaveStaff} />
 
