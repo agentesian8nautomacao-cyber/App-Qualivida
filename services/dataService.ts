@@ -18,7 +18,7 @@ export const savePackage = async (pkg: Package): Promise<{ success: boolean; err
       recipientId = resident?.id || null;
     }
 
-    // Preparar dados para inserção
+    // Preparar dados para inserção (apenas campos obrigatórios)
     const insertData: any = {
       recipient_id: recipientId,
       recipient_name: pkg.recipient,
@@ -28,11 +28,13 @@ export const savePackage = async (pkg: Package): Promise<{ success: boolean; err
       display_time: pkg.displayTime,
       status: pkg.status,
       deadline_minutes: pkg.deadlineMinutes || 45,
-      resident_phone: pkg.residentPhone || null,
-      qr_code_data: (pkg.qrCodeData ?? null) || null
+      resident_phone: pkg.residentPhone || null
     };
 
-    // Tentar inserir com image_url primeiro
+    // Adicionar campos opcionais se existirem
+    if (pkg.qrCodeData) {
+      insertData.qr_code_data = pkg.qrCodeData;
+    }
     if (pkg.imageUrl) {
       insertData.image_url = pkg.imageUrl;
     }
@@ -43,17 +45,30 @@ export const savePackage = async (pkg: Package): Promise<{ success: boolean; err
       .select()
       .single();
 
-    // Se falhar por causa da coluna image_url não existir, tentar sem ela
-    if (error && error.message && error.message.includes("image_url")) {
-      console.warn('Coluna image_url não encontrada, tentando sem ela...');
-      delete insertData.image_url;
-      const retryResult = await supabase
-        .from('packages')
-        .insert(insertData)
-        .select()
-        .single();
-      data = retryResult.data;
-      error = retryResult.error;
+    // Se falhar por causa de colunas opcionais não existirem, tentar sem elas
+    if (error && error.message) {
+      const errorMsg = error.message.toLowerCase();
+      const missingColumns: string[] = [];
+      
+      if (errorMsg.includes('qr_code_data') || errorMsg.includes("qr_code_data")) {
+        missingColumns.push('qr_code_data');
+        delete insertData.qr_code_data;
+      }
+      if (errorMsg.includes('image_url') || errorMsg.includes("image_url")) {
+        missingColumns.push('image_url');
+        delete insertData.image_url;
+      }
+
+      if (missingColumns.length > 0) {
+        console.warn(`Colunas não encontradas no schema: ${missingColumns.join(', ')}, tentando sem elas...`);
+        const retryResult = await supabase
+          .from('packages')
+          .insert(insertData)
+          .select()
+          .single();
+        data = retryResult.data;
+        error = retryResult.error;
+      }
     }
 
     if (error) {
