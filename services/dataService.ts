@@ -8,16 +8,46 @@ import { createNotification } from './notificationService';
 
 export const savePackage = async (pkg: Package): Promise<{ success: boolean; error?: string; id?: string }> => {
   try {
+    console.log('[savePackage] Iniciando salvamento de encomenda:', {
+      recipient: pkg.recipient,
+      unit: pkg.unit,
+      recipientId: pkg.recipientId || 'null/undefined'
+    });
+    
     let recipientId: string | null = pkg.recipientId ?? null;
-    if (!recipientId && pkg.recipient) {
-      const { data: resident } = await supabase
+    
+    // Se não tiver recipientId, tentar buscar pelo nome e unidade
+    if (!recipientId && pkg.recipient && pkg.unit) {
+      console.log('[savePackage] Buscando recipientId no banco...', {
+        recipient: pkg.recipient,
+        unit: pkg.unit
+      });
+      
+      const { data: resident, error: residentError } = await supabase
         .from('residents')
-        .select('id')
-        .eq('name', pkg.recipient)
-        .eq('unit', pkg.unit)
-        .single();
-      recipientId = resident?.id || null;
+        .select('id, name, unit')
+        .eq('name', pkg.recipient.trim())
+        .eq('unit', pkg.unit.trim())
+        .maybeSingle(); // Usar maybeSingle ao invés de single para não dar erro se não encontrar
+      
+      if (residentError) {
+        console.warn('[savePackage] Erro ao buscar morador:', residentError);
+      }
+      
+      if (resident) {
+        recipientId = resident.id;
+        console.log('[savePackage] ✅ recipientId encontrado:', recipientId, 'Morador:', resident.name, resident.unit);
+      } else {
+        console.warn('[savePackage] ⚠️ Morador não encontrado:', {
+          recipient: pkg.recipient,
+          unit: pkg.unit,
+          message: 'A encomenda será salva, mas a notificação não será criada porque o morador não foi encontrado.'
+        });
+      }
     }
+    
+    // Log final do recipientId
+    console.log('[savePackage] recipientId final:', recipientId || 'NULL - Notificação não será criada');
 
     // Preparar dados para inserção (apenas campos obrigatórios)
     const insertData: any = {
@@ -97,19 +127,67 @@ export const savePackage = async (pkg: Package): Promise<{ success: boolean; err
 
     // Criar notificação automática no app (independente do WhatsApp)
     // Isso acontece automaticamente sempre que uma encomenda é registrada
+    console.log('[savePackage] Verificando condições para criar notificação:', {
+      recipientId: recipientId || 'null/undefined',
+      hasData: !!data,
+      dataId: data?.id || 'null'
+    });
+    
     if (recipientId && data) {
-      const notificationResult = await createNotification(
-        recipientId,
-        '📦 Nova encomenda na portaria',
-        'Uma encomenda foi recebida e está disponível para retirada.',
-        'package',
-        data.id
-      );
+      console.log('[Notificação] ✅ Condições OK. Criando notificação para morador:', recipientId, 'Encomenda:', data.id);
+      
+      try {
+        const notificationResult = await createNotification(
+          recipientId,
+          '📦 Nova encomenda na portaria',
+          'Uma encomenda foi recebida e está disponível para retirada.',
+          'package',
+          data.id
+        );
 
-      if (!notificationResult.success) {
-        // Log do erro mas não falha o salvamento da encomenda
-        console.warn('Erro ao criar notificação automática:', notificationResult.error);
+        if (notificationResult.success) {
+          console.log('[Notificação] ✅✅✅ Notificação criada com sucesso! ID:', notificationResult.id);
+        } else {
+          // Log detalhado do erro mas não falha o salvamento da encomenda
+          const errorDetails = {
+            error: notificationResult.error,
+            moradorId: recipientId,
+            packageId: data.id,
+            message: 'A encomenda foi salva, mas a notificação não foi criada.',
+            action: 'Verifique o console para mais detalhes e execute supabase_fix_notifications_rls.sql se necessário.'
+          };
+          
+          console.error('[Notificação] ❌❌❌ ERRO ao criar notificação automática:', errorDetails);
+          
+          // Mostrar erro no console de forma mais visível
+          console.group('%c❌ ERRO: Notificação não foi criada', 'color: red; font-weight: bold; font-size: 14px;');
+          console.error('Detalhes:', errorDetails);
+          console.error('Erro específico:', notificationResult.error);
+          console.groupEnd();
+        }
+      } catch (err: any) {
+        console.error('[Notificação] ❌❌❌ EXCEÇÃO ao criar notificação:', err);
+        console.group('%c❌ EXCEÇÃO: Erro ao criar notificação', 'color: red; font-weight: bold; font-size: 14px;');
+        console.error('Erro:', err);
+        console.error('Stack:', err?.stack);
+        console.groupEnd();
       }
+    } else {
+      const warningDetails = {
+        recipientId: recipientId || 'null/undefined',
+        hasData: !!data,
+        dataId: data?.id || 'null',
+        message: 'A encomenda foi salva, mas não há recipientId ou data.id para criar a notificação.'
+      };
+      
+      console.warn('[Notificação] ⚠️⚠️⚠️ Não foi possível criar notificação - condições não atendidas:', warningDetails);
+      
+      // Mostrar warning no console de forma mais visível
+      console.group('%c⚠️ AVISO: Notificação não foi criada - condições não atendidas', 'color: orange; font-weight: bold; font-size: 14px;');
+      console.warn('Detalhes:', warningDetails);
+      console.warn('recipientId:', recipientId);
+      console.warn('data:', data);
+      console.groupEnd();
     }
 
     return { success: true, id: data.id };

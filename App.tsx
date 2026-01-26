@@ -567,6 +567,12 @@ const App: React.FC = () => {
       alert('Selecione o morador que recebe a encomenda antes de finalizar.');
       return;
     }
+    
+    console.log('[handleRegisterPackageFinal] Iniciando registro de encomenda:', {
+      selectedResident: selectedResident.name,
+      recipientId: selectedResident.id,
+      unit: selectedResident.unit
+    });
     if (packageSaving) return;
     setPackageSaving(true);
     try {

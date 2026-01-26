@@ -130,6 +130,13 @@ export const createNotification = async (
   relatedId?: string
 ): Promise<{ success: boolean; error?: string; id?: string }> => {
   try {
+    console.log('[createNotification] Iniciando criação de notificação:', {
+      moradorId,
+      title,
+      type,
+      relatedId
+    });
+
     const insertData: any = {
       morador_id: moradorId,
       title,
@@ -142,20 +149,42 @@ export const createNotification = async (
       insertData.related_id = relatedId;
     }
 
+    console.log('[createNotification] Dados para inserção:', insertData);
+
     const { data, error } = await supabase
       .from('notifications')
-      .insert(insertData)
+      .insert(insertData as any) // Usar 'as any' para contornar cache do schema se necessário
       .select()
       .single();
 
     if (error) {
-      console.error('Erro ao criar notificação:', error);
-      return { success: false, error: error.message };
+      console.error('[createNotification] ❌ Erro do Supabase:', {
+        error,
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
+      // Verificar se é erro de tabela não encontrada
+      if (error.message && (
+        error.message.includes('relation') ||
+        error.message.includes('does not exist') ||
+        error.message.includes('not found')
+      )) {
+        return { 
+          success: false, 
+          error: 'A tabela notifications não existe no Supabase. Execute o script supabase_notifications.sql no SQL Editor.' 
+        };
+      }
+      
+      return { success: false, error: error.message || 'Erro ao criar notificação' };
     }
 
+    console.log('[createNotification] ✅ Notificação criada:', data);
     return { success: true, id: data.id };
   } catch (err: any) {
-    console.error('Erro ao criar notificação:', err);
+    console.error('[createNotification] ❌ Erro inesperado:', err);
     return { success: false, error: err?.message ?? 'Erro ao criar notificação' };
   }
 };
