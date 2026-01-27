@@ -4,7 +4,7 @@ interface VideoIntroProps {
   onComplete: () => void;
 }
 
-// Duração esperada do vídeo "Gestão Qualivida.mp4" (~6s) + pequena margem
+// Duração esperada do vídeo "GestaoQualivida.mp4" (~6s) + pequena margem
 const FALLBACK_TIMEOUT_MS = 8000;
 
 const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
@@ -253,7 +253,7 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
     >
       <video
         ref={videoRef}
-        src="/Gestão Qualivida.mp4"
+        src="/GestaoQualivida.mp4"
         autoPlay
         playsInline
         preload="auto"
