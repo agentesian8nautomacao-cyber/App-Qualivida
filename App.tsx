@@ -35,6 +35,7 @@ import NotificationsView from './components/views/NotificationsView';
 // Contexts
 import { useAppConfig } from './contexts/AppConfigContext';
 import { useToast } from './contexts/ToastContext';
+import { ConnectivityProvider } from './contexts/ConnectivityContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Utils
@@ -1620,14 +1621,16 @@ const App: React.FC = () => {
   }
 
   return (
-    <>
-      {isSupabasePlaceholder && (
-        <div className="fixed top-0 left-0 right-0 z-[9999] px-4 py-2 bg-amber-600 text-white text-center text-xs font-bold uppercase tracking-wider shadow-lg">
-          Supabase não configurado. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou Vercel.
-        </div>
-      )}
-      {content}
-    </>
+    <ConnectivityProvider>
+      <>
+        {isSupabasePlaceholder && (
+          <div className="fixed top-0 left-0 right-0 z-[9999] px-4 py-2 bg-amber-600 text-white text-center text-xs font-bold uppercase tracking-wider shadow-lg">
+            Supabase não configurado. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou Vercel.
+          </div>
+        )}
+        {content}
+      </>
+    </ConnectivityProvider>
   );
 };
 

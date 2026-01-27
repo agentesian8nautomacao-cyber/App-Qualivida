@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { useConnectivity } from '../contexts/ConnectivityContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ const Layout: React.FC<LayoutProps> = ({
   onOpenNotifications
 }) => {
   const { config } = useAppConfig();
+  const { isOnline } = useConnectivity();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
@@ -304,6 +306,12 @@ const Layout: React.FC<LayoutProps> = ({
              </button>
           </div>
         </header>
+
+        {!isOnline && (
+          <div className="z-20 px-4 md:px-10 py-2 text-xs font-bold tracking-widest uppercase bg-amber-500/90 text-white text-center shadow-md">
+            Modo offline ativado — dados recentes serão sincronizados automaticamente quando a conexão voltar.
+          </div>
+        )}
 
         <main className="flex-1 overflow-y-auto p-4 md:p-10 scroll-smooth custom-scrollbar">
           <div className="max-w-[1400px] mx-auto">
