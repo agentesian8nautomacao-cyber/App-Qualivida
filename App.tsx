@@ -68,6 +68,7 @@ import ImportStaffModal from './components/modals/ImportStaffModal';
 
 // Services
 import { registerResident, loginResident } from './services/residentAuth';
+import { checkUserSession, User as AdminUser } from './services/userAuth';
 
 // Helper para calcular permanência
 const calculatePermanence = (receivedAt: string) => {
@@ -95,6 +96,8 @@ const App: React.FC = () => {
   const [role, setRole] = useState<UserRole>('PORTEIRO');
   const [currentResident, setCurrentResident] = useState<Resident | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
+  const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
@@ -103,6 +106,47 @@ const App: React.FC = () => {
     const hasSeenIntro = sessionStorage.getItem('hasSeenVideoIntro');
     return hasSeenIntro !== 'true';
   });
+
+  // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCurrentAdminUser(null);
+      setAdminAvatar(null);
+      return;
+    }
+
+    const user = checkUserSession();
+    setCurrentAdminUser(user);
+
+    if (user) {
+      try {
+        const stored = localStorage.getItem(`admin_avatar_${user.id}`);
+        if (stored) {
+          setAdminAvatar(stored);
+        } else {
+          setAdminAvatar(null);
+        }
+      } catch {
+        setAdminAvatar(null);
+      }
+    }
+  }, [isAuthenticated, role]);
+
+  const handleAdminAvatarChange = (file: File | null) => {
+    if (!file || !currentAdminUser) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (!dataUrl) return;
+      setAdminAvatar(dataUrl);
+      try {
+        localStorage.setItem(`admin_avatar_${currentAdminUser.id}`, dataUrl);
+      } catch (err) {
+        console.warn('Falha ao salvar avatar do administrador localmente:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   
   // Verificar se deve mostrar cadastro de morador baseado na URL ou query param
   useEffect(() => {
@@ -1314,6 +1358,86 @@ const App: React.FC = () => {
             <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
             <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
               A página de perfil é exclusiva para o morador autenticado.
+            </p>
+          </div>
+        );
+      case 'sindicoProfile':
+        if (role === 'SINDICO' && currentAdminUser) {
+          return (
+            <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+              <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter" style={{ color: 'var(--text-primary)' }}>
+                    Meu Perfil
+                  </h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    Dados do síndico
+                  </p>
+                </div>
+              </header>
+              <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
+                <div className="flex items-center gap-4 mb-6">
+                  <label className="relative cursor-pointer group">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file) handleAdminAvatarChange(file);
+                      }}
+                    />
+                    <div className="w-14 h-14 rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-black text-xl overflow-hidden relative">
+                      {adminAvatar ? (
+                        <img
+                          src={adminAvatar}
+                          alt="Foto do síndico"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{(currentAdminUser.name || currentAdminUser.username || '?').charAt(0)}</span>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest transition-opacity">
+                        Alterar
+                      </div>
+                    </div>
+                  </label>
+                  <div>
+                    <h4 className="text-xl font-black uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                      {currentAdminUser.name || currentAdminUser.username}
+                    </h4>
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                      Síndico
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      E-mail
+                    </p>
+                    <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.email || 'Não informado'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      Telefone
+                    </p>
+                    <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.phone || 'Não informado'}</p>
+                  </div>
+                </div>
+                <p className="mt-6 text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                  A foto do perfil é armazenada apenas neste dispositivo para manter o acesso rápido e offline.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+            <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
+            <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
+            <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
+              A página de perfil do síndico é exclusiva para usuários autenticados com perfil de síndico.
             </p>
           </div>
         );

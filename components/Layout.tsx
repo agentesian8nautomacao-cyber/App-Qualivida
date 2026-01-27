@@ -118,6 +118,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'notifications', label: 'Notificações', icon: Bell, roles: ['MORADOR'] },
     { id: 'boletos', label: 'Boletos', icon: Receipt, roles: ['MORADOR', 'SINDICO'] },
     { id: 'residentProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['MORADOR'] },
+    { id: 'sindicoProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['SINDICO'] },
     { id: 'reservations', label: 'Reservas', icon: Calendar, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     
     // Apenas Porteiro e Síndico
