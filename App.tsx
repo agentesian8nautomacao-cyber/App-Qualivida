@@ -67,8 +67,8 @@ import CameraScanModal from './components/modals/CameraScanModal';
 import ImportStaffModal from './components/modals/ImportStaffModal';
 
 // Services
-import { registerResident, loginResident } from './services/residentAuth';
-import { checkUserSession, User as AdminUser } from './services/userAuth';
+import { registerResident, loginResident, updateResidentPassword } from './services/residentAuth';
+import { checkUserSession, User as AdminUser, updateUserProfile, changeUserPassword } from './services/userAuth';
 
 // Helper para calcular permanência
 const calculatePermanence = (receivedAt: string) => {
@@ -146,6 +146,120 @@ const App: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Estados para edição de perfil
+  const [isEditingAdminProfile, setIsEditingAdminProfile] = useState(false);
+  const [adminProfileData, setAdminProfileData] = useState({ name: '', email: '', phone: '' });
+  const [adminPasswordData, setAdminPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [isChangingAdminPassword, setIsChangingAdminPassword] = useState(false);
+  const [isEditingResidentProfile, setIsEditingResidentProfile] = useState(false);
+  const [residentProfileData, setResidentProfileData] = useState({ email: '', phone: '', whatsapp: '' });
+  const [residentPasswordData, setResidentPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [isChangingResidentPassword, setIsChangingResidentPassword] = useState(false);
+
+  // Handlers para perfil do síndico/porteiro
+  const handleStartEditAdminProfile = () => {
+    if (currentAdminUser) {
+      setAdminProfileData({
+        name: currentAdminUser.name || '',
+        email: currentAdminUser.email || '',
+        phone: currentAdminUser.phone || ''
+      });
+      setIsEditingAdminProfile(true);
+    }
+  };
+
+  const handleSaveAdminProfile = async () => {
+    if (!currentAdminUser) return;
+    const result = await updateUserProfile(currentAdminUser.id, adminProfileData);
+    if (result.success && result.user) {
+      setCurrentAdminUser(result.user);
+      setIsEditingAdminProfile(false);
+      toast.success('Perfil atualizado com sucesso!');
+    } else {
+      toast.error(result.error || 'Erro ao atualizar perfil');
+    }
+  };
+
+  const handleChangeAdminPassword = async () => {
+    if (!currentAdminUser) return;
+    if (adminPasswordData.new !== adminPasswordData.confirm) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    if (adminPasswordData.new.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    const result = await changeUserPassword(
+      currentAdminUser.username,
+      adminPasswordData.current,
+      adminPasswordData.new
+    );
+    if (result.success) {
+      setIsChangingAdminPassword(false);
+      setAdminPasswordData({ current: '', new: '', confirm: '' });
+      toast.success('Senha alterada com sucesso!');
+    } else {
+      toast.error(result.error || 'Erro ao alterar senha');
+    }
+  };
+
+  // Handlers para perfil do morador
+  const handleStartEditResidentProfile = () => {
+    if (currentResident) {
+      setResidentProfileData({
+        email: currentResident.email || '',
+        phone: currentResident.phone || '',
+        whatsapp: currentResident.whatsapp || ''
+      });
+      setIsEditingResidentProfile(true);
+    }
+  };
+
+  const handleSaveResidentProfile = async () => {
+    if (!currentResident) return;
+    const updatedResident: Resident = {
+      ...currentResident,
+      email: residentProfileData.email,
+      phone: residentProfileData.phone,
+      whatsapp: residentProfileData.whatsapp
+    };
+    const result = await saveResident(updatedResident);
+    if (result.success) {
+      setCurrentResident(updatedResident);
+      setIsEditingResidentProfile(false);
+      toast.success('Perfil atualizado com sucesso!');
+    } else {
+      toast.error(result.error || 'Erro ao atualizar perfil');
+    }
+  };
+
+  const handleChangeResidentPassword = async () => {
+    if (!currentResident) return;
+    if (residentPasswordData.new !== residentPasswordData.confirm) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    if (residentPasswordData.new.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    // Validar senha atual
+    const loginResult = await loginResident(currentResident.unit, residentPasswordData.current);
+    if (!loginResult.success) {
+      toast.error('Senha atual incorreta');
+      return;
+    }
+    const result = await updateResidentPassword(currentResident.id, residentPasswordData.new);
+    if (result.success) {
+      setIsChangingResidentPassword(false);
+      setResidentPasswordData({ current: '', new: '', confirm: '' });
+      toast.success('Senha alterada com sucesso!');
+    } else {
+      toast.error(result.error || 'Erro ao alterar senha');
+    }
   };
   
   // Verificar se deve mostrar cadastro de morador baseado na URL ou query param
@@ -1310,6 +1424,15 @@ const App: React.FC = () => {
                     Dados do morador
                   </p>
                 </div>
+                {!isEditingResidentProfile && !isChangingResidentPassword && (
+                  <button
+                    onClick={handleStartEditResidentProfile}
+                    className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                  >
+                    Editar Perfil
+                  </button>
+                )}
               </header>
               <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
                 <div className="flex items-center gap-4 mb-6">
@@ -1325,29 +1448,164 @@ const App: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      E-mail
-                    </p>
-                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.email || 'Não informado'}</p>
+
+                {isEditingResidentProfile ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          E-mail
+                        </label>
+                        <input
+                          type="email"
+                          value={residentProfileData.email}
+                          onChange={(e) => setResidentProfileData({ ...residentProfileData, email: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          Telefone
+                        </label>
+                        <input
+                          type="tel"
+                          value={residentProfileData.phone}
+                          onChange={(e) => setResidentProfileData({ ...residentProfileData, phone: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="(00) 00000-0000"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          WhatsApp
+                        </label>
+                        <input
+                          type="tel"
+                          value={residentProfileData.whatsapp}
+                          onChange={(e) => setResidentProfileData({ ...residentProfileData, whatsapp: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="(00) 00000-0000"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={handleSaveResidentProfile}
+                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditingResidentProfile(false);
+                          setResidentProfileData({ email: '', phone: '', whatsapp: '' });
+                        }}
+                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      Telefone
-                    </p>
-                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.phone || 'Não informado'}</p>
+                ) : isChangingResidentPassword ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Senha Atual
+                      </label>
+                      <input
+                        type="password"
+                        value={residentPasswordData.current}
+                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, current: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Digite sua senha atual"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Nova Senha
+                      </label>
+                      <input
+                        type="password"
+                        value={residentPasswordData.new}
+                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, new: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Digite a nova senha"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Confirmar Nova Senha
+                      </label>
+                      <input
+                        type="password"
+                        value={residentPasswordData.confirm}
+                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, confirm: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Confirme a nova senha"
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={handleChangeResidentPassword}
+                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
+                      >
+                        Alterar Senha
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsChangingResidentPassword(false);
+                          setResidentPasswordData({ current: '', new: '', confirm: '' });
+                        }}
+                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      WhatsApp
-                    </p>
-                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.whatsapp || 'Não informado'}</p>
-                  </div>
-                </div>
-                <p className="mt-6 text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                  Para atualizar seus dados cadastrais, entre em contato com a portaria ou síndico.
-                </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                          E-mail
+                        </p>
+                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.email || 'Não informado'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                          Telefone
+                        </p>
+                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.phone || 'Não informado'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                          WhatsApp
+                        </p>
+                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.whatsapp || 'Não informado'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                      <button
+                        onClick={() => setIsChangingResidentPassword(true)}
+                        className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Alterar Senha
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -1374,6 +1632,15 @@ const App: React.FC = () => {
                     Dados do síndico
                   </p>
                 </div>
+                {!isEditingAdminProfile && !isChangingAdminPassword && (
+                  <button
+                    onClick={handleStartEditAdminProfile}
+                    className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                  >
+                    Editar Perfil
+                  </button>
+                )}
               </header>
               <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
                 <div className="flex items-center gap-4 mb-6">
@@ -1411,23 +1678,161 @@ const App: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      E-mail
-                    </p>
-                    <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.email || 'Não informado'}</p>
+
+                {isEditingAdminProfile ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          Nome
+                        </label>
+                        <input
+                          type="text"
+                          value={adminProfileData.name}
+                          onChange={(e) => setAdminProfileData({ ...adminProfileData, name: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Nome completo"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          E-mail
+                        </label>
+                        <input
+                          type="email"
+                          value={adminProfileData.email}
+                          onChange={(e) => setAdminProfileData({ ...adminProfileData, email: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          Telefone
+                        </label>
+                        <input
+                          type="tel"
+                          value={adminProfileData.phone}
+                          onChange={(e) => setAdminProfileData({ ...adminProfileData, phone: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="(00) 00000-0000"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={handleSaveAdminProfile}
+                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsEditingAdminProfile(false);
+                          setAdminProfileData({ name: '', email: '', phone: '' });
+                        }}
+                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                      Telefone
-                    </p>
-                    <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.phone || 'Não informado'}</p>
+                ) : isChangingAdminPassword ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Senha Atual
+                      </label>
+                      <input
+                        type="password"
+                        value={adminPasswordData.current}
+                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, current: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Digite sua senha atual"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Nova Senha
+                      </label>
+                      <input
+                        type="password"
+                        value={adminPasswordData.new}
+                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, new: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Digite a nova senha"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                        Confirmar Nova Senha
+                      </label>
+                      <input
+                        type="password"
+                        value={adminPasswordData.confirm}
+                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, confirm: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                        placeholder="Confirme a nova senha"
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={handleChangeAdminPassword}
+                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
+                      >
+                        Alterar Senha
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsChangingAdminPassword(false);
+                          setAdminPasswordData({ current: '', new: '', confirm: '' });
+                        }}
+                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <p className="mt-6 text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                  A foto do perfil é armazenada apenas neste dispositivo para manter o acesso rápido e offline.
-                </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                          E-mail
+                        </p>
+                        <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.email || 'Não informado'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                          Telefone
+                        </p>
+                        <p style={{ color: 'var(--text-primary)' }}>{currentAdminUser.phone || 'Não informado'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                      <button
+                        onClick={() => setIsChangingAdminPassword(true)}
+                        className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                      >
+                        Alterar Senha
+                      </button>
+                    </div>
+                    <p className="mt-6 text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                      A foto do perfil é armazenada apenas neste dispositivo para manter o acesso rápido e offline.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           );

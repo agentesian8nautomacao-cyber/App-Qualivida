@@ -221,67 +221,127 @@ export async function deleteData(
 }
 
 // =============================
-// ENGINE DE SYNC (BÁSICO)
+// ENGINE DE SYNC (MELHORADO)
 // =============================
 
-export async function syncOutbox(): Promise<void> {
-  if (!isOnline()) return;
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+
+export async function syncOutbox(): Promise<{ synced: number; errors: number }> {
+  if (!isOnline()) {
+    console.log('[offlineDataService] Offline - sincronização não executada');
+    return { synced: 0, errors: 0 };
+  }
 
   const pending = await listPendingOutbox();
-  if (!pending.length) return;
+  if (!pending.length) {
+    return { synced: 0, errors: 0 };
+  }
 
+  console.log(`[offlineDataService] Iniciando sincronização de ${pending.length} operações pendentes`);
+
+  let synced = 0;
+  let errors = 0;
+
+  // Processar em ordem de timestamp (mais antigas primeiro)
   for (const entry of pending) {
+    const success = await processOutboxEntryWithRetry(entry);
+    if (success) {
+      synced++;
+    } else {
+      errors++;
+    }
+  }
+
+  console.log(`[offlineDataService] Sincronização concluída: ${synced} sucesso, ${errors} erros`);
+  return { synced, errors };
+}
+
+async function processOutboxEntryWithRetry(entry: OutboxRecord, attempt = 1): Promise<boolean> {
+  try {
     await processOutboxEntry(entry);
+    return true;
+  } catch (err: any) {
+    console.warn(`[offlineDataService] Tentativa ${attempt}/${MAX_RETRY_ATTEMPTS} falhou para ${entry.id}:`, err);
+
+    if (attempt < MAX_RETRY_ATTEMPTS) {
+      // Aguardar antes de tentar novamente (backoff exponencial)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      return processOutboxEntryWithRetry(entry, attempt + 1);
+    } else {
+      // Máximo de tentativas atingido, marcar como erro
+      console.error(`[offlineDataService] Máximo de tentativas atingido para ${entry.id}`);
+      await markOutboxAsError(entry.id, err?.message || 'Erro ao sincronizar após múltiplas tentativas');
+      return false;
+    }
   }
 }
 
 async function processOutboxEntry(entry: OutboxRecord): Promise<void> {
-  try {
-    const table = entry.table;
-    const payload = entry.payload || {};
-    const id = payload.id || entry.id;
+  const table = entry.table;
+  const payload = entry.payload || {};
+  const id = payload.id || entry.id;
 
-    // Política simples: last write wins baseada em updated_at do payload.
-    // O Supabase/Postgres mantém updated_at como fonte de verdade.
+  // Política: last write wins baseada em updated_at do payload.
+  // O Supabase/Postgres mantém updated_at como fonte de verdade.
 
-    if (entry.operation === 'INSERT') {
-      const { data, error } = await supabase
-        .from(table)
-        .insert(payload as any)
-        .select()
-        .single();
+  if (entry.operation === 'INSERT') {
+    const { data, error } = await supabase
+      .from(table)
+      .insert(payload as any)
+      .select()
+      .single();
 
-      if (error) throw error;
-
-      if (data?.id) {
-        await upsertCachedRecord(table, data);
+    if (error) {
+      // Se o erro for de duplicação (já existe), tentar UPDATE
+      if (error.code === '23505' || error.message?.includes('duplicate')) {
+        console.log(`[offlineDataService] Registro já existe, convertendo INSERT em UPDATE para ${id}`);
+        const { data: updateData, error: updateError } = await supabase
+          .from(table)
+          .update(payload as any)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+        
+        if (updateError) throw updateError;
+        if (updateData) {
+          await upsertCachedRecord(table, updateData);
+        }
+      } else {
+        throw error;
       }
-    } else if (entry.operation === 'UPDATE') {
-      const { data, error } = await supabase
-        .from(table)
-        .update(payload as any)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        await upsertCachedRecord(table, data);
-      }
-    } else if (entry.operation === 'DELETE') {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      await deleteCachedRecord(table, id);
+    } else if (data?.id) {
+      await upsertCachedRecord(table, data);
     }
+  } else if (entry.operation === 'UPDATE') {
+    const { data, error } = await supabase
+      .from(table)
+      .update(payload as any)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
 
-    await markOutboxAsSynced(entry.id);
-  } catch (err: any) {
-    console.error('[offlineDataService] Erro ao processar outbox', entry, err);
-    await markOutboxAsError(entry.id, err?.message || 'Erro ao sincronizar');
+    if (error) throw error;
+    if (data) {
+      await upsertCachedRecord(table, data);
+    }
+  } else if (entry.operation === 'DELETE') {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      // Se o registro já foi deletado, considerar sucesso
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) {
+        console.log(`[offlineDataService] Registro ${id} já foi deletado, considerando sucesso`);
+      } else {
+        throw error;
+      }
+    }
+    await deleteCachedRecord(table, id);
   }
+
+  await markOutboxAsSynced(entry.id);
 }
 

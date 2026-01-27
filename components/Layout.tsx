@@ -187,10 +187,17 @@ const Layout: React.FC<LayoutProps> = ({
         ))}
       </nav>
 
-      <div className="hidden lg:flex px-4 py-4 justify-center">
+      <div className="px-4 py-4 flex justify-center">
         <button 
-          onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
+          onClick={() => {
+            setIsDesktopCollapsed(!isDesktopCollapsed);
+            // No mobile, quando colapsar, manter o menu visível
+            if (window.innerWidth < 1024 && !isDesktopCollapsed) {
+              setIsMobileMenuOpen(true);
+            }
+          }}
           className="p-3 w-full border border-[var(--border-color)] rounded-2xl bg-[var(--glass-bg)] hover:bg-[var(--border-color)] transition-all flex items-center justify-center group"
+          title={isDesktopCollapsed ? 'Expandir menu' : 'Colapsar menu'}
         >
           {isDesktopCollapsed ? <ChevronRight className="w-5 h-5 opacity-60 group-hover:opacity-100" /> : <ChevronLeft className="w-5 h-5 opacity-60 group-hover:opacity-100" />}
         </button>
@@ -257,8 +264,12 @@ const Layout: React.FC<LayoutProps> = ({
 
       <aside 
         className={`fixed inset-y-0 left-0 lg:static flex flex-col border-r flex-shrink-0 z-[50] transition-all duration-500 cubic-bezier(0.16, 1, 0.3, 1) ${
-          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'
-        } ${isDesktopCollapsed ? 'lg:w-24' : 'lg:w-72'}`} 
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
+          isDesktopCollapsed 
+            ? 'w-24 lg:w-24' 
+            : 'w-72 lg:w-72'
+        }`} 
         style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border-color)', backdropFilter: 'blur(30px)' }}
       >
         <SidebarContent />
@@ -309,8 +320,9 @@ const Layout: React.FC<LayoutProps> = ({
         </header>
 
         {!isOnline && (
-          <div className="z-20 px-4 md:px-10 py-2 text-xs font-bold tracking-widest uppercase bg-amber-500/90 text-white text-center shadow-md">
-            Modo offline ativado — dados recentes serão sincronizados automaticamente quando a conexão voltar.
+          <div className="z-20 px-4 md:px-10 py-3 text-xs font-bold tracking-widest uppercase bg-amber-500/95 text-white text-center shadow-lg flex items-center justify-center gap-2">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span>Sem conexão. Alterações serão sincronizadas automaticamente.</span>
           </div>
         )}
 

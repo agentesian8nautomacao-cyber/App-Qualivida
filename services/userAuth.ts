@@ -267,6 +267,81 @@ export const clearUserSession = (): void => {
 };
 
 /**
+ * Atualiza dados do perfil do usuário (nome, email, telefone)
+ */
+export const updateUserProfile = async (
+  userId: string,
+  updates: { name?: string; email?: string; phone?: string }
+): Promise<{ success: boolean; error?: string; user?: User }> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        name: updates.name || null,
+        email: updates.email || null,
+        phone: updates.phone || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select('id, username, role, name, email, phone, is_active')
+      .single();
+
+    if (error) {
+      console.error('Erro ao atualizar perfil do usuário:', error);
+      return { success: false, error: error.message };
+    }
+
+    const updatedUser = data as User;
+    // Atualizar sessão com dados atualizados
+    saveUserSession(updatedUser);
+
+    return { success: true, user: updatedUser };
+  } catch (err: any) {
+    console.error('Erro ao atualizar perfil do usuário:', err);
+    return { success: false, error: err?.message || 'Erro ao atualizar perfil' };
+  }
+};
+
+/**
+ * Altera senha do usuário (validando senha atual)
+ */
+export const changeUserPassword = async (
+  username: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // Validar senha atual
+    const loginResult = await loginUser(username, currentPassword);
+    if (!loginResult.user) {
+      return { success: false, error: 'Senha atual incorreta' };
+    }
+
+    // Hash da nova senha
+    const newPasswordHash = await hashPassword(newPassword);
+
+    // Atualizar senha no banco
+    const { error } = await supabase
+      .from('users')
+      .update({
+        password_hash: newPasswordHash,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loginResult.user.id);
+
+    if (error) {
+      console.error('Erro ao atualizar senha:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Erro ao alterar senha:', err);
+    return { success: false, error: err?.message || 'Erro ao alterar senha' };
+  }
+};
+
+/**
  * Gera token de recuperação de senha
  */
 export const generatePasswordResetToken = async (usernameOrEmail: string): Promise<{
