@@ -4,6 +4,7 @@ import App from './App';
 import { AppConfigProvider } from './contexts/AppConfigContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { registerSW } from 'virtual:pwa-register';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -35,3 +36,8 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Registrar service worker do PWA (cache do app para uso offline)
+registerSW({
+  immediate: true
+});
