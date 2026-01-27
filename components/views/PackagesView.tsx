@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
-import { Search, Plus, Camera, Image as ImageIcon, Users, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Search, Plus, Camera, Image as ImageIcon, Users, ChevronDown, ChevronUp, Trash2, Download, Filter } from 'lucide-react';
 import { Package, Resident } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { isMobile } from '../../utils/deviceDetection';
+import { exportPackagesToCSV, exportPackagesToJSON } from '../../utils/exportPackages';
 
 interface PackagesViewProps {
   allPackages: Package[];
@@ -29,14 +30,29 @@ const PackagesView: React.FC<PackagesViewProps> = ({
   const mobile = isMobile();
   const canUseCamera = mobile && !!onCameraScan;
   const [residentsExpanded, setResidentsExpanded] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Pendente' | 'Entregue'>('all');
 
-  const displayPackages = allPackages.filter((p) => 
-    p.recipient.toLowerCase().includes(packageSearch.toLowerCase()) ||
-    p.type.toLowerCase().includes(packageSearch.toLowerCase()) ||
-    p.unit.toLowerCase().includes(packageSearch.toLowerCase()) ||
-    p.displayTime.toLowerCase().includes(packageSearch.toLowerCase()) ||
-    p.status.toLowerCase().includes(packageSearch.toLowerCase())
-  );
+  const displayPackages = allPackages.filter((p) => {
+    // Aplicar filtro de status
+    if (statusFilter !== 'all' && p.status !== statusFilter) {
+      return false;
+    }
+    
+    // Aplicar busca por texto
+    const searchLower = packageSearch.toLowerCase();
+    return (
+      p.recipient.toLowerCase().includes(searchLower) ||
+      p.type.toLowerCase().includes(searchLower) ||
+      p.unit.toLowerCase().includes(searchLower) ||
+      p.displayTime.toLowerCase().includes(searchLower) ||
+      p.status.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const pendingCount = allPackages.filter(p => p.status === 'Pendente').length;
+  const deliveredCount = allPackages.filter(p => p.status === 'Entregue').length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -53,6 +69,40 @@ const PackagesView: React.FC<PackagesViewProps> = ({
               className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[11px] sm:text-xs font-bold outline-none focus:border-[var(--text-primary)]/50 transition-all placeholder:opacity-40"
               style={{ color: 'var(--text-primary)' }}
             />
+          </div>
+          {/* Filtros rápidos de status */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 opacity-40" style={{ color: 'var(--text-secondary)' }} />
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-color)]'
+                  : 'bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--border-color)]'
+              }`}
+            >
+              Todas ({allPackages.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('Pendente')}
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase transition-all ${
+                statusFilter === 'Pendente'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
+              }`}
+            >
+              Pendentes ({pendingCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('Entregue')}
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase transition-all ${
+                statusFilter === 'Entregue'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20'
+              }`}
+            >
+              Entregues ({deliveredCount})
+            </button>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {canUseCamera && (
@@ -76,6 +126,59 @@ const PackagesView: React.FC<PackagesViewProps> = ({
                 Registro por câmera disponível apenas no celular
               </p>
             )}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={isExporting}
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[9px] sm:text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-1.5 sm:gap-2 hover:bg-[var(--border-color)] disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Exportar encomendas"
+              >
+                <Download className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isExporting ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isExporting ? 'Exportando...' : 'Exportar'}</span>
+              </button>
+              {showExportMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowExportMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 z-20 bg-[var(--glass-bg)] border border-[var(--border-color)] rounded-2xl shadow-xl overflow-hidden min-w-[180px]">
+                    <button
+                      onClick={async () => {
+                        setIsExporting(true);
+                        setShowExportMenu(false);
+                        try {
+                          await exportPackagesToCSV(allPackages);
+                        } finally {
+                          setIsExporting(false);
+                        }
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm font-bold hover:bg-[var(--border-color)] transition-colors flex items-center gap-2"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      <Download className="w-4 h-4" />
+                      Exportar CSV
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setIsExporting(true);
+                        setShowExportMenu(false);
+                        try {
+                          await exportPackagesToJSON(allPackages);
+                        } finally {
+                          setIsExporting(false);
+                        }
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm font-bold hover:bg-[var(--border-color)] transition-colors flex items-center gap-2 border-t border-[var(--border-color)]"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      <Download className="w-4 h-4" />
+                      Exportar JSON
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setIsNewPackageModalOpen(true)}
               className="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[9px] sm:text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-1.5 sm:gap-2"

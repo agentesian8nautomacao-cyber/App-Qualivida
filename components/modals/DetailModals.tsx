@@ -98,8 +98,13 @@ export const ResidentProfileModal = ({
 };
 
 // --- MODAL DETALHE PACOTE ---
-export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculatePermanence }: any) => {
+export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculatePermanence, currentRole, currentResident }: any) => {
   if (!pkg) return null;
+  
+  // Verificar se o morador pode dar baixa (só em encomendas da sua unidade)
+  const canResidentDeliver = currentRole === 'MORADOR' && currentResident && pkg.unit === currentResident.unit && pkg.status === 'Pendente';
+  // Porteiro/Síndico sempre pode dar baixa
+  const canStaffDeliver = (currentRole === 'PORTEIRO' || currentRole === 'SINDICO') && pkg.status === 'Pendente';
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl" onClick={onClose} />
@@ -148,8 +153,32 @@ export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculat
            <div className="flex flex-col gap-4">
              {pkg.status === 'Pendente' ? (
                <>
-                 <button onClick={() => onNotify(pkg)} className="w-full py-4 sm:py-6 md:py-8 bg-green-600 text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"><MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" /> <span className="whitespace-nowrap">Notificar Morador agora</span></button>
-                 <button onClick={() => onDeliver(pkg.id)} className="w-full py-4 sm:py-6 md:py-8 bg-zinc-100 text-black rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 hover:bg-zinc-200 active:scale-95 transition-all shadow-xl"><CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> <span className="whitespace-nowrap">Marcar como Entregue</span></button>
+                 {/* Botão de notificar - apenas para porteiro/síndico */}
+                 {(currentRole === 'PORTEIRO' || currentRole === 'SINDICO') && (
+                   <button onClick={() => onNotify(pkg)} className="w-full py-4 sm:py-6 md:py-8 bg-green-600 text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"><MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" /> <span className="whitespace-nowrap">Notificar Morador agora</span></button>
+                 )}
+                 {/* Botão de dar baixa - para porteiro/síndico ou morador (quando é sua encomenda) */}
+                 {(canStaffDeliver || canResidentDeliver) && (
+                   <button 
+                     onClick={() => onDeliver(pkg.id)} 
+                     className={`w-full py-4 sm:py-6 md:py-8 rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 active:scale-95 transition-all shadow-xl ${
+                       canResidentDeliver 
+                         ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02]' 
+                         : 'bg-zinc-100 text-black hover:bg-zinc-200'
+                     }`}
+                   >
+                     <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> 
+                     <span className="whitespace-nowrap">
+                       {canResidentDeliver ? 'Confirmar Retirada' : 'Marcar como Entregue'}
+                     </span>
+                   </button>
+                 )}
+                 {/* Mensagem quando morador não pode dar baixa (não é sua encomenda) */}
+                 {currentRole === 'MORADOR' && !canResidentDeliver && pkg.status === 'Pendente' && (
+                   <div className="w-full py-4 bg-amber-50 border border-amber-200 rounded-[24px] text-center">
+                     <p className="text-xs font-bold text-amber-800">Esta encomenda não pertence à sua unidade</p>
+                   </div>
+                 )}
                </>
              ) : (
                <div className="w-full py-8 bg-zinc-50 border border-black/5 rounded-[32px] flex items-center justify-center gap-4"><Check className="w-6 h-6 text-green-600" /><span className="text-[11px] font-black uppercase tracking-widest opacity-40 text-black">Este volume já foi entregue</span></div>

@@ -127,16 +127,26 @@ export const savePackage = async (pkg: Package): Promise<{ success: boolean; err
   }
 };
 
-export const updatePackage = async (pkg: Package): Promise<{ success: boolean; error?: string }> => {
+export const updatePackage = async (pkg: Package, deliveredBy?: string | null): Promise<{ success: boolean; error?: string }> => {
   try {
-    const result = await updateData('packages', {
+    const updateDataObj: any = {
       id: pkg.id,
       recipient_name: pkg.recipient,
       unit: pkg.unit,
       type: pkg.type,
       status: pkg.status,
       delivered_at: pkg.status === 'Entregue' ? new Date().toISOString() : null
-    });
+    };
+
+    // Se foi marcado como entregue, registrar quem entregou
+    if (pkg.status === 'Entregue' && deliveredBy) {
+      updateDataObj.delivered_by = deliveredBy;
+    } else if (pkg.status !== 'Entregue') {
+      // Se não está entregue, limpar delivered_by
+      updateDataObj.delivered_by = null;
+    }
+
+    const result = await updateData('packages', updateDataObj);
 
     return { success: result.success, error: result.error };
   } catch (err: any) {

@@ -898,12 +898,32 @@ const App: React.FC = () => {
     const pkg = allPackages.find(p => p.id === id);
     if (!pkg) return;
     
+    // Verificar se é morador tentando dar baixa em encomenda que não é dele
+    if (role === 'MORADOR' && currentResident) {
+      // Morador só pode dar baixa em encomendas da sua unidade
+      if (pkg.unit !== currentResident.unit) {
+        toast.error('Você só pode dar baixa em encomendas da sua unidade.');
+        return;
+      }
+    }
+    
+    // Determinar quem está dando a baixa
+    let deliveredBy: string | null = null;
+    if (role === 'MORADOR' && currentResident) {
+      // Se for morador, usar o recipient_id (ID do morador)
+      deliveredBy = pkg.recipientId || currentResident.id;
+    } else if (role === 'PORTEIRO' || role === 'SINDICO') {
+      // Se for porteiro/síndico, usar o ID do usuário admin
+      deliveredBy = currentAdminUser?.id || null;
+    }
+    
     const updatedPkg = { ...pkg, status: 'Entregue' as const };
-    const result = await updatePackage(updatedPkg);
+    const result = await updatePackage(updatedPkg, deliveredBy);
     
     if (result.success) {
       setAllPackages(prev => prev.map(p => p.id === id ? updatedPkg : p));
       setSelectedPackageForDetail(null);
+      toast.success('Encomenda marcada como entregue com sucesso!');
     } else {
       console.error('Erro ao atualizar pacote:', result.error);
       toast.error('Erro ao marcar como entregue: ' + (result.error || 'Erro desconhecido'));
@@ -2098,7 +2118,15 @@ const App: React.FC = () => {
       <StaffFormModal isOpen={isStaffModalOpen} onClose={() => setIsStaffModalOpen(false)} data={staffFormData} setData={setStaffFormData} onSave={handleSaveStaff} />
 
       <ResidentProfileModal resident={selectedResidentProfile} onClose={() => setSelectedResidentProfile(null)} onEdit={() => { handleOpenResidentModal(selectedResidentProfile); setSelectedResidentProfile(null); }} onDelete={selectedResidentProfile ? () => handleDeleteResident(selectedResidentProfile.id) : undefined} allPackages={allPackages} visitorLogs={visitorLogs} onPackageSelect={setSelectedPackageForDetail} onCheckOutVisitor={handleVisitorCheckOut} />
-      <PackageDetailModal pkg={selectedPackageForDetail} onClose={() => setSelectedPackageForDetail(null)} onDeliver={handleDeliverPackage} onNotify={handleSendReminder} calculatePermanence={calculatePermanence} />
+      <PackageDetailModal 
+        pkg={selectedPackageForDetail} 
+        onClose={() => setSelectedPackageForDetail(null)} 
+        onDeliver={handleDeliverPackage} 
+        onNotify={handleSendReminder} 
+        calculatePermanence={calculatePermanence}
+        currentRole={role}
+        currentResident={currentResident}
+      />
       <VisitorDetailModal visitor={selectedVisitorForDetail} onClose={() => setSelectedVisitorForDetail(null)} onCheckout={handleVisitorCheckOut} calculatePermanence={calculatePermanence} />
       <OccurrenceDetailModal occurrence={selectedOccurrenceForDetail} onClose={() => setSelectedOccurrenceForDetail(null)} onSave={handleSaveOccurrenceDetails} setOccurrence={setSelectedOccurrenceForDetail} />
       <ResidentFormModal 
