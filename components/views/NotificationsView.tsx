@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Package, CheckCircle2, X, Eye, Clock, Trash2 } from 'lucide-react';
 import { Notification, Package as PackageType } from '../../types';
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from '../../services/notificationService';
+import { useToast } from '../../contexts/ToastContext';
 
 interface NotificationsViewProps {
   moradorId: string;
@@ -14,6 +15,7 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({
   allPackages,
   onViewPackage
 }) => {
+  const toast = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
@@ -54,7 +56,7 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({
       if (result.success) {
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
       } else {
-        alert('Erro ao excluir notificação: ' + (result.error || 'Erro desconhecido'));
+        toast.error('Erro ao excluir notificação: ' + (result.error || 'Erro desconhecido'));
       }
     }
   };

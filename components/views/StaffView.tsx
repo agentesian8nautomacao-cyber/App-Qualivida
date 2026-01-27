@@ -1,8 +1,9 @@
 
 import React from 'react';
-import { Search, UserPlus, Phone, MessageCircle, MoreVertical, Trash2, Edit2, Briefcase } from 'lucide-react';
+import { Search, UserPlus, Phone, MessageCircle, MoreVertical, Trash2, Edit2, Briefcase, Upload } from 'lucide-react';
 import { Staff } from '../../types';
 import { openWhatsApp } from '../../utils/phoneNormalizer';
+import { useToast } from '../../contexts/ToastContext';
 
 interface StaffViewProps {
   allStaff: Staff[];
@@ -11,6 +12,7 @@ interface StaffViewProps {
   onAddStaff: () => void;
   onEditStaff: (staff: Staff) => void;
   onDeleteStaff: (id: string) => void;
+  onImportClick?: () => void;
 }
 
 const StaffView: React.FC<StaffViewProps> = ({
@@ -19,8 +21,10 @@ const StaffView: React.FC<StaffViewProps> = ({
   setStaffSearch,
   onAddStaff,
   onEditStaff,
-  onDeleteStaff
+  onDeleteStaff,
+  onImportClick
 }) => {
+  const toast = useToast();
   const displayStaff = allStaff.filter(s => 
     s.name.toLowerCase().includes(staffSearch.toLowerCase()) || 
     s.role.toLowerCase().includes(staffSearch.toLowerCase()) ||
@@ -58,7 +62,7 @@ const StaffView: React.FC<StaffViewProps> = ({
       </div>
 
       {/* BARRA DE AÇÕES */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
          <div className="relative flex-1">
              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
              <input 
@@ -69,12 +73,22 @@ const StaffView: React.FC<StaffViewProps> = ({
                 className="w-full pl-10 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold outline-none focus:border-white/30 transition-all placeholder:opacity-20"
              />
          </div>
-         <button 
-           onClick={onAddStaff} 
-           className="px-8 py-4 bg-white text-black rounded-2xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
-         >
-           <UserPlus className="w-4 h-4" /> Novo Colaborador
-         </button>
+         <div className="flex gap-2 justify-end">
+           <button 
+             onClick={onAddStaff} 
+             className="px-6 py-3 bg-white text-black rounded-2xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
+           >
+             <UserPlus className="w-4 h-4" /> Novo Colaborador
+           </button>
+           {onImportClick && (
+             <button
+               onClick={onImportClick}
+               className="px-6 py-3 bg-white/5 border border-white/10 text-[10px] font-black uppercase rounded-2xl hover:bg-white/10 transition-transform hover:scale-105 whitespace-nowrap flex items-center gap-2"
+             >
+               <Upload className="w-4 h-4" /> Importar Funcionários
+             </button>
+           )}
+         </div>
       </div>
 
       {/* GRID DE CARDS */}
@@ -126,7 +140,7 @@ const StaffView: React.FC<StaffViewProps> = ({
                 </button>
                 <button 
                   disabled={!staff.phone}
-                  onClick={() => openWhatsApp(staff.phone, undefined, (error) => alert(`Erro ao abrir WhatsApp: ${error}`))}
+                  onClick={() => openWhatsApp(staff.phone, undefined, (error) => toast.error(`Erro ao abrir WhatsApp: ${error}`))}
                   className="py-3 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                    <MessageCircle className="w-4 h-4" />

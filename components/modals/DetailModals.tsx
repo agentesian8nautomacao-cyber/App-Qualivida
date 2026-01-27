@@ -4,11 +4,13 @@ import { X, Edit2, MessageCircle, Mail, Package as PackageIcon, CheckCircle2, Ch
 import { Resident, Package, VisitorLog, Occurrence, Notice } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { openWhatsApp } from '../../utils/phoneNormalizer';
+import { useToast } from '../../contexts/ToastContext';
 
 // --- PROFILE RESIDENTE 360 ---
 export const ResidentProfileModal = ({
   resident, onClose, onEdit, onDelete, allPackages, visitorLogs, onPackageSelect, onCheckOutVisitor
 }: { resident: Resident | null, onClose: () => void, onEdit: () => void, onDelete?: () => void, allPackages: Package[], visitorLogs: VisitorLog[], onPackageSelect: (p: Package) => void, onCheckOutVisitor: (id: string) => void }) => {
+  const toast = useToast();
   if (!resident) return null;
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
@@ -31,7 +33,7 @@ export const ResidentProfileModal = ({
                 </div>
                 <span className="inline-block px-2 sm:px-3 py-0.5 sm:py-1 bg-white text-black rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest">{formatUnit(resident.unit)}</span>
                 <div className="flex gap-2 sm:gap-3 mt-2 sm:mt-4">
-                   {resident.whatsapp && <button onClick={() => openWhatsApp(resident.whatsapp, undefined, (error) => alert(`Erro ao abrir WhatsApp: ${error}`))} className="p-1.5 sm:p-2 bg-green-500/20 text-green-400 rounded-lg sm:rounded-xl hover:bg-green-500 hover:text-white transition-all flex-shrink-0" title="WhatsApp"><MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" /></button>}
+                   {resident.whatsapp && <button onClick={() => openWhatsApp(resident.whatsapp, undefined, (error) => toast.error(`Erro ao abrir WhatsApp: ${error}`))} className="p-1.5 sm:p-2 bg-green-500/20 text-green-400 rounded-lg sm:rounded-xl hover:bg-green-500 hover:text-white transition-all flex-shrink-0" title="WhatsApp"><MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" /></button>}
                    {resident.email ? (
                      <a href={`mailto:${resident.email}`} className="p-1.5 sm:p-2 bg-white/5 rounded-lg sm:rounded-xl hover:bg-white hover:text-black transition-all flex-shrink-0 inline-flex" title="E-mail"><Mail className="w-4 h-4 sm:w-5 sm:h-5" /></a>
                    ) : (

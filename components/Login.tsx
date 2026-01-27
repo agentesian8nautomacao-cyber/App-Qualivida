@@ -21,6 +21,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
   const [showForm, setShowForm] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetFromLink, setResetFromLink] = useState<{ token: string } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const reset = params.get('reset');
+    if (reset === '1' && token) {
+      setResetFromLink({ token });
+      setShowForgotPassword(true);
+      setSelectedRole('PORTEIRO');
+      window.history.replaceState({}, '', window.location.pathname || '/');
+    }
+  }, []);
 
   // Intro removida - o vídeo já foi exibido antes
   // useEffect(() => {
@@ -129,7 +142,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
       <div className={`relative min-h-screen w-full flex items-center justify-center overflow-hidden transition-colors duration-500 ${
         theme === 'light' ? 'bg-gray-50' : 'bg-[#050505]'
       }`}>
-        <ForgotPassword onBack={() => setShowForgotPassword(false)} theme={theme} />
+        <ForgotPassword
+          onBack={() => { setShowForgotPassword(false); setResetFromLink(null); }}
+          theme={theme}
+          initialToken={resetFromLink?.token}
+          initialStep={resetFromLink ? 'reset' : undefined}
+        />
       </div>
     );
   }

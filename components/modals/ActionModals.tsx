@@ -156,7 +156,7 @@ export const NewVisitorModal = ({
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-white text-black rounded-[48px] shadow-2xl p-8 md:p-12 animate-in zoom-in duration-500">
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white text-black rounded-[48px] shadow-2xl p-8 md:p-12 animate-in zoom-in duration-500">
          <header className="flex justify-between items-start mb-8">
             <div>
                <h4 className="text-3xl font-black uppercase tracking-tighter">Novo Acesso</h4>

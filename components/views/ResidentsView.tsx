@@ -4,6 +4,7 @@ import { Search, UserPlus, Edit2, Trash2, MessageCircle, Mail, UserCircle, Uploa
 import { Resident, Package, VisitorLog } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { openWhatsApp } from '../../utils/phoneNormalizer';
+import { useToast } from '../../contexts/ToastContext';
 
 interface ResidentsViewProps {
   allResidents: Resident[];
@@ -28,6 +29,7 @@ const ResidentsView: React.FC<ResidentsViewProps> = ({
   visitorLogs,
   onImportClick
 }) => {
+  const toast = useToast();
   const displayResidents = allResidents.filter(r => 
     r.name.toLowerCase().includes(residentSearch.toLowerCase()) || 
     r.unit.toLowerCase().includes(residentSearch.toLowerCase())
@@ -122,7 +124,7 @@ const ResidentsView: React.FC<ResidentsViewProps> = ({
                      onClick={(e) => { 
                        e.stopPropagation(); 
                        openWhatsApp(resident.whatsapp, undefined, (error) => {
-                         alert(`Erro ao abrir WhatsApp: ${error}`);
+                         toast.error(`Erro ao abrir WhatsApp: ${error}`);
                        });
                      }}
                      className="flex-1 py-3 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white transition-all text-[10px] font-black uppercase flex items-center justify-center gap-2"

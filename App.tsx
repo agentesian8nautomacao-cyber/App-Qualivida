@@ -34,6 +34,7 @@ import NotificationsView from './components/views/NotificationsView';
 
 // Contexts
 import { useAppConfig } from './contexts/AppConfigContext';
+import { useToast } from './contexts/ToastContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Utils
@@ -54,7 +55,7 @@ import {
   getAreas, getReservations, saveReservation, updateReservation
 } from './services/dataService';
 import { getNotifications, countUnreadNotifications } from './services/notificationService';
-import { supabase } from './services/supabase';
+import { supabase, isSupabasePlaceholder } from './services/supabase';
 
 // Modals
 import { NewReservationModal, NewVisitorModal, NewPackageModal, NewNoteModal, StaffFormModal } from './components/modals/ActionModals';
@@ -62,6 +63,7 @@ import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, Occurrenc
 import ImportResidentsModal from './components/modals/ImportResidentsModal';
 import ImportBoletosModal from './components/modals/ImportBoletosModal';
 import CameraScanModal from './components/modals/CameraScanModal';
+import ImportStaffModal from './components/modals/ImportStaffModal';
 
 // Services
 import { registerResident, loginResident } from './services/residentAuth';
@@ -87,6 +89,7 @@ const calculatePermanence = (receivedAt: string) => {
 
 const App: React.FC = () => {
   const { config } = useAppConfig();
+  const toast = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<UserRole>('PORTEIRO');
   const [currentResident, setCurrentResident] = useState<Resident | null>(null);
@@ -216,6 +219,7 @@ const App: React.FC = () => {
   const [staffSearch, setStaffSearch] = useState('');
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [staffFormData, setStaffFormData] = useState<Partial<Staff>>({});
+  const [isImportStaffModalOpen, setIsImportStaffModalOpen] = useState(false);
 
   const [noticeFilter, setNoticeFilter] = useState<'all' | 'urgent' | 'unread'>('all');
   const [activeNoticeTab, setActiveNoticeTab] = useState<'wall' | 'chat'>('wall');
@@ -263,7 +267,11 @@ const App: React.FC = () => {
       const n = a.name.toLowerCase();
       return n.includes('gourmet') || n.includes('salão') || n.includes('festas');
     });
-    return reservable.map((a) => {
+    // Evitar áreas em duplicidade (por nome), como salão de festas duplicado
+    const uniqueByName = reservable.filter((area, index, self) =>
+      self.findIndex(a => a.name.toLowerCase() === area.name.toLowerCase()) === index
+    );
+    return uniqueByName.map((a) => {
       const todayCount = reservationsData.filter(
         (r) => r.areaId === a.id && r.date === todayYMD && (r.status === 'scheduled' || r.status === 'active')
       ).length;
@@ -344,7 +352,7 @@ const App: React.FC = () => {
       setReservationSearchQuery('');
       setShowResSuggestions(false);
     } else {
-      alert('Erro ao criar reserva: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao criar reserva: ' + (res.error || 'Erro desconhecido'));
     }
   };
 
@@ -435,18 +443,21 @@ const App: React.FC = () => {
   const globalResults = useMemo(() => {
     if (!globalSearchQuery || globalSearchQuery.length < 2) return null;
     const q = globalSearchQuery.toLowerCase();
+    const resFilter = (r: { resident?: string; unit?: string; area?: string; time?: string; date?: string }) =>
+      (r.resident?.toLowerCase().includes(q)) || (r.unit?.toLowerCase().includes(q)) || (r.area?.toLowerCase().includes(q)) || (r.time?.toLowerCase().includes(q)) || (r.date?.toLowerCase().includes(q));
     return {
       residents: allResidents.filter(r => r.name.toLowerCase().includes(q) || r.unit.toLowerCase().includes(q)).slice(0, 4),
-      packages: allPackages.filter(p => p.recipient.toLowerCase().includes(q) || p.unit.toLowerCase().includes(q) || p.type.toLowerCase().includes(q) || p.status.toLowerCase().includes(q) || p.displayTime.toLowerCase().includes(q)).slice(0, 4),
+      packages: allPackages.filter(p => p.recipient.toLowerCase().includes(q) || p.unit.toLowerCase().includes(q) || p.type.toLowerCase().includes(q) || p.status.toLowerCase().includes(q) || (p.displayTime && p.displayTime.toLowerCase().includes(q))).slice(0, 4),
       visitors: visitorLogs.filter(v => (v.visitorNames?.toLowerCase().includes(q) || v.unit.toLowerCase().includes(q) || v.residentName.toLowerCase().includes(q) || v.status.toLowerCase().includes(q)) && v.status === 'active').slice(0, 4),
       occurrences: allOccurrences.filter(o => o.description.toLowerCase().includes(q) || o.unit.toLowerCase().includes(q) || o.residentName.toLowerCase().includes(q) || o.status.toLowerCase().includes(q)).slice(0, 4),
-      notes: allNotes.filter(n => n.content.toLowerCase().includes(q) || (n.category && n.category.toLowerCase().includes(q))).slice(0, 4)
+      notes: allNotes.filter(n => n.content.toLowerCase().includes(q) || (n.category && n.category.toLowerCase().includes(q))).slice(0, 4),
+      reservations: dayReservations.filter(r => resFilter(r)).slice(0, 4)
     };
-  }, [globalSearchQuery, allResidents, allPackages, visitorLogs, allOccurrences, allNotes]);
+  }, [globalSearchQuery, allResidents, allPackages, visitorLogs, allOccurrences, allNotes, dayReservations]);
 
   const hasAnyGlobalResult = useMemo(() => {
     if (!globalResults) return false;
-    return (globalResults.residents.length > 0 || globalResults.packages.length > 0 || globalResults.visitors.length > 0 || globalResults.occurrences.length > 0 || globalResults.notes.length > 0);
+    return (globalResults.residents.length > 0 || globalResults.packages.length > 0 || globalResults.visitors.length > 0 || globalResults.occurrences.length > 0 || globalResults.notes.length > 0 || globalResults.reservations.length > 0);
   }, [globalResults]);
 
   useEffect(() => {
@@ -590,7 +601,7 @@ const App: React.FC = () => {
       if (data) setVisitorLogs(data);
     } else {
       console.error('Erro ao atualizar visitante:', result.error);
-      alert('Erro ao fazer checkout: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao fazer checkout: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const resetVisitorModal = () => { setIsVisitorModalOpen(false); setNewVisitorStep(1); setNewVisitorData({ unit: '', name: '', doc: '', type: 'Visita', vehicle: '', plate: '', residentName: '' }); setSearchResident(''); };
@@ -615,7 +626,7 @@ const App: React.FC = () => {
       resetVisitorModal();
     } else {
       console.error('Erro ao salvar visitante:', result.error);
-      alert('Erro ao registrar visitante: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao registrar visitante: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleAddAccessType = () => { if (newAccessTypeInput.trim()) { setVisitorAccessTypes([...visitorAccessTypes, newAccessTypeInput.trim()]); setNewAccessTypeInput(''); setIsAddingAccessType(false); } };
@@ -647,7 +658,7 @@ const App: React.FC = () => {
   };
   const handleRegisterPackageFinal = async (sendNotify: boolean) => {
     if (!selectedResident) {
-      alert('Selecione o morador que recebe a encomenda antes de finalizar.');
+      toast.error('Selecione o morador que recebe a encomenda antes de finalizar.');
       return;
     }
     
@@ -697,7 +708,7 @@ const App: React.FC = () => {
           
           // Normalizar e validar número antes de enviar
           const success = openWhatsApp(whatsappNumber, packageMessage, (error) => {
-            alert(`${feedbackMessages.join('\n')}\n\n⚠️ Não foi possível enviar via WhatsApp: ${error}\n\nVerifique se o morador tem WhatsApp cadastrado corretamente ou configure o WhatsApp do condomínio nas configurações.`);
+            toast.error(`${feedbackMessages.join('\n')}\n\n⚠️ Não foi possível enviar via WhatsApp: ${error}\n\nVerifique se o morador tem WhatsApp cadastrado corretamente ou configure o WhatsApp do condomínio nas configurações.`);
           });
           
           if (success) {
@@ -714,7 +725,7 @@ const App: React.FC = () => {
         }, 100);
       } else {
         console.error('Erro ao salvar pacote:', result.error);
-        alert('Erro ao salvar encomenda: ' + (result.error || 'Erro desconhecido'));
+        toast.error('Erro ao salvar encomenda: ' + (result.error || 'Erro desconhecido'));
         return;
       }
       
@@ -736,7 +747,7 @@ const App: React.FC = () => {
       setSelectedPackageForDetail(null);
     } else {
       console.error('Erro ao atualizar pacote:', result.error);
-      alert('Erro ao marcar como entregue: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao marcar como entregue: ' + (result.error || 'Erro desconhecido'));
     }
   };
 
@@ -760,7 +771,7 @@ const App: React.FC = () => {
       setSelectedPackageForDetail(prev => (prev?.id === id ? null : prev));
     } else {
       console.error('Erro ao excluir encomenda:', result.error);
-      alert('Erro ao excluir encomenda: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao excluir encomenda: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleResolveOccurrence = async (id: string) => {
@@ -773,7 +784,7 @@ const App: React.FC = () => {
       if (data) setAllOccurrences(data);
     } else {
       console.error('Erro ao resolver ocorrência:', result.error);
-      alert('Erro ao resolver ocorrência: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao resolver ocorrência: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleSaveOccurrenceDetails = async () => {
@@ -785,7 +796,7 @@ const App: React.FC = () => {
       setSelectedOccurrenceForDetail(null);
     } else {
       console.error('Erro ao salvar ocorrência:', result.error);
-      alert('Erro ao salvar ocorrência: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao salvar ocorrência: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleSendReminder = (pkg: Package) => {
@@ -819,7 +830,7 @@ const App: React.FC = () => {
     
     // Normalizar e validar número antes de enviar
     const success = openWhatsApp(whatsappNumber, message, (error) => {
-      alert(`Não foi possível enviar o lembrete via WhatsApp: ${error}\n\nVerifique se o morador tem WhatsApp cadastrado corretamente ou configure o WhatsApp do condomínio nas configurações.`);
+      toast.error(`Não foi possível enviar o lembrete via WhatsApp: ${error}\n\nVerifique se o morador tem WhatsApp cadastrado corretamente ou configure o WhatsApp do condomínio nas configurações.`);
     });
     
     if (!success) {
@@ -892,7 +903,7 @@ const App: React.FC = () => {
       setIsResidentModalOpen(false);
     } else {
       console.error('Erro ao salvar morador:', result.error);
-      alert('Erro ao salvar morador: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao salvar morador: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleDeleteResident = async (id: string) => {
@@ -904,7 +915,7 @@ const App: React.FC = () => {
       if (selectedResidentProfile?.id === id) setSelectedResidentProfile(null);
     } else {
       console.error('Erro ao deletar morador:', result.error);
-      alert('Erro ao remover morador: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao remover morador: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const handleImportResidents = async (residents: Resident[]) => {
@@ -913,7 +924,7 @@ const App: React.FC = () => {
       const res = await saveResident(r);
       if (!res.success) {
         const msg = `Erro ao importar "${r.name}": ${res.error || 'Erro desconhecido'}`;
-        alert(msg);
+        toast.error(msg);
         throw new Error(msg);
       }
     }
@@ -925,7 +936,7 @@ const App: React.FC = () => {
       const res = await saveBoleto(b);
       if (!res.success) {
         const msg = `Erro ao importar boleto "${b.residentName}": ${res.error || 'Erro desconhecido'}`;
-        alert(msg);
+        toast.error(msg);
         throw new Error(msg);
       }
     }
@@ -938,7 +949,7 @@ const App: React.FC = () => {
       setAllBoletos(prev => prev.filter(b => b.id !== boleto.id));
     } else {
       console.error('Erro ao deletar boleto:', result.error);
-      alert('Erro ao remover boleto: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao remover boleto: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const findResidentByQRData = (qrData: string): Resident | undefined => {
@@ -1004,7 +1015,7 @@ const App: React.FC = () => {
       if (data) setAllNotices(data);
       setSelectedNoticeForEdit(null);
     } else {
-      alert('Erro ao salvar aviso: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao salvar aviso: ' + (res.error || 'Erro desconhecido'));
     }
   };
   const handleDeleteNotice = async () => {
@@ -1015,7 +1026,7 @@ const App: React.FC = () => {
       if (data) setAllNotices(data);
       setSelectedNoticeForEdit(null);
     } else {
-      alert('Erro ao excluir aviso: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao excluir aviso: ' + (res.error || 'Erro desconhecido'));
     }
   };
 
@@ -1121,13 +1132,13 @@ const App: React.FC = () => {
       if (!note) return;
       const res = await updateNote({ ...note, content: newNoteContent, category: newNoteCategory, scheduled: newNoteScheduled });
       if (!res.success) {
-        alert('Erro ao atualizar nota: ' + (res.error || 'Erro desconhecido'));
+        toast.error('Erro ao atualizar nota: ' + (res.error || 'Erro desconhecido'));
         return;
       }
     } else {
       const res = await saveNote({ id: `temp-${Date.now()}`, content: newNoteContent, date: iso, completed: false, category: newNoteCategory, scheduled: newNoteScheduled });
       if (!res.success) {
-        alert('Erro ao criar nota: ' + (res.error || 'Erro desconhecido'));
+        toast.error('Erro ao criar nota: ' + (res.error || 'Erro desconhecido'));
         return;
       }
     }
@@ -1156,7 +1167,7 @@ const App: React.FC = () => {
       setIsStaffModalOpen(false);
       setStaffFormData({});
     } else {
-      alert('Erro ao salvar funcionário: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao salvar funcionário: ' + (res.error || 'Erro desconhecido'));
     }
   };
 
@@ -1167,8 +1178,20 @@ const App: React.FC = () => {
       const { data } = await getStaff();
       if (data) setAllStaff(data);
     } else {
-      alert('Erro ao remover funcionário: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao remover funcionário: ' + (res.error || 'Erro desconhecido'));
     }
+  };
+
+  const handleImportStaff = async (staffList: Staff[]) => {
+    for (let i = 0; i < staffList.length; i++) {
+      const s = { ...staffList[i], id: `temp-${Date.now()}-${i}` };
+      const res = await saveStaff(s);
+      if (!res.success) {
+        throw new Error(res.error || 'Erro desconhecido ao importar funcionário');
+      }
+    }
+    const { data } = await getStaff();
+    if (data) setAllStaff(data);
   };
 
   const renderContent = () => {
@@ -1197,7 +1220,19 @@ const App: React.FC = () => {
           setResidentSearch={setResidentSearch} 
           eventStates={eventStates} 
           setQuickViewCategory={setQuickViewCategory} 
-          setIsNewPackageModalOpen={handleOpenNewPackageModal} 
+          setIsNewPackageModalOpen={handleOpenNewPackageModal}
+          setPackageSearch={setPackageSearch}
+          setOccurrenceSearch={setOccurrenceSearch}
+          setVisitorSearch={setVisitorSearch}
+          setSelectedPackageForDetail={setSelectedPackageForDetail}
+          setSelectedVisitorForDetail={setSelectedVisitorForDetail}
+          setSelectedOccurrenceForDetail={setSelectedOccurrenceForDetail}
+          setReservationFilter={setReservationFilter}
+          setEditingNoteId={setEditingNoteId}
+          setNewNoteContent={setNewNoteContent}
+          setNewNoteCategory={setNewNoteCategory}
+          setNewNoteScheduled={setNewNoteScheduled}
+          setIsNewNoteModalOpen={setIsNewNoteModalOpen}
         />
       );
     }
@@ -1218,6 +1253,70 @@ const App: React.FC = () => {
           );
         }
         return <ResidentsView allResidents={allResidents} residentSearch={residentSearch} setResidentSearch={setResidentSearch} handleOpenResidentModal={handleOpenResidentModal} setSelectedResidentProfile={setSelectedResidentProfile} handleDeleteResident={handleDeleteResident} allPackages={allPackages} visitorLogs={visitorLogs} onImportClick={() => setIsImportResidentsModalOpen(true)} />;
+      case 'residentProfile':
+        if (role === 'MORADOR' && currentResident) {
+          return (
+            <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+              <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter" style={{ color: 'var(--text-primary)' }}>
+                    Meu Perfil
+                  </h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    Dados do morador
+                  </p>
+                </div>
+              </header>
+              <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-black text-xl">
+                    {currentResident.name?.charAt(0) || '?'}
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                      {currentResident.name}
+                    </h4>
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                      Unidade {currentResident.unit}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      E-mail
+                    </p>
+                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.email || 'Não informado'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      Telefone
+                    </p>
+                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.phone || 'Não informado'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
+                      WhatsApp
+                    </p>
+                    <p style={{ color: 'var(--text-primary)' }}>{currentResident.whatsapp || 'Não informado'}</p>
+                  </div>
+                </div>
+                <p className="mt-6 text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                  Para atualizar seus dados cadastrais, entre em contato com a portaria ou síndico.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+            <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
+            <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
+            <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
+              A página de perfil é exclusiva para o morador autenticado.
+            </p>
+          </div>
+        );
       case 'boletos': 
         if (role === 'MORADOR' && currentResident) {
           const myBoletos = allBoletos.filter(b => b.unit === currentResident.unit);
@@ -1282,17 +1381,39 @@ const App: React.FC = () => {
         return <SettingsView />;
       case 'occurrences': 
         if (role === 'MORADOR') {
+          if (!currentResident) {
+            return (
+              <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+                <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
+                <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
+                <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
+                  É necessário estar autenticado como morador para visualizar suas ocorrências.
+                </p>
+              </div>
+            );
+          }
+          const myOccurrences = allOccurrences.filter(
+            (occ) => occ.unit === currentResident.unit || occ.residentName === currentResident.name
+          );
           return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-              <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-              <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                Esta página é de acesso exclusivo do Porteiro e Síndico.
-              </p>
-            </div>
+            <OccurrencesView
+              allOccurrences={myOccurrences}
+              occurrenceSearch={occurrenceSearch}
+              setOccurrenceSearch={setOccurrenceSearch}
+              setIsOccurrenceModalOpen={setIsOccurrenceModalOpen}
+              handleResolveOccurrence={handleResolveOccurrence}
+            />
           );
         }
-        return <OccurrencesView allOccurrences={allOccurrences} occurrenceSearch={occurrenceSearch} setOccurrenceSearch={setOccurrenceSearch} setIsOccurrenceModalOpen={setIsOccurrenceModalOpen} handleResolveOccurrence={handleResolveOccurrence} />;
+        return (
+          <OccurrencesView
+            allOccurrences={allOccurrences}
+            occurrenceSearch={occurrenceSearch}
+            setOccurrenceSearch={setOccurrenceSearch}
+            setIsOccurrenceModalOpen={setIsOccurrenceModalOpen}
+            handleResolveOccurrence={handleResolveOccurrence}
+          />
+        );
       case 'notes': 
         if (role === 'MORADOR') {
           return (
@@ -1351,6 +1472,7 @@ const App: React.FC = () => {
               onAddStaff={() => { setStaffFormData({}); setIsStaffModalOpen(true); }}
               onEditStaff={(staff) => { setStaffFormData(staff); setIsStaffModalOpen(true); }}
               onDeleteStaff={handleDeleteStaff}
+              onImportClick={() => setIsImportStaffModalOpen(true)}
            />
         );
       case 'reports':
@@ -1378,51 +1500,37 @@ const App: React.FC = () => {
     }
   };
 
-  if (isScreenSaverActive) return <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
-  
-  // Mostrar tela de apresentação apenas no primeiro acesso
-  if (!isAuthenticated && showLogoSplash) {
-    return (
-      <LogoSplash
-        onComplete={() => setShowLogoSplash(false)}
-        durationMs={2200}
-      />
-    );
-  }
-
-  if (showVideoIntro) {
-    return (
-      <VideoIntro 
+  let content: React.ReactNode;
+  if (isScreenSaverActive) {
+    content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
+  } else if (!isAuthenticated && showLogoSplash) {
+    content = <LogoSplash onComplete={() => setShowLogoSplash(false)} durationMs={2200} />;
+  } else if (showVideoIntro) {
+    content = (
+      <VideoIntro
         onComplete={() => {
           sessionStorage.setItem('hasSeenVideoIntro', 'true');
           setShowVideoIntro(false);
-        }} 
+        }}
       />
     );
-  }
-  
-  // Se for link de morador ou modo registro, mostrar cadastro/login de morador
-  if (!isAuthenticated && showResidentRegister) {
-    return (
-      <ResidentRegister 
+  } else if (!isAuthenticated && showResidentRegister) {
+    content = (
+      <ResidentRegister
         onRegister={handleResidentRegister}
         onLogin={handleResidentLogin}
-        onBack={() => {
-          setShowResidentRegister(false);
-          setShowLogoSplash(false);
-        }}
+        onBack={() => { setShowResidentRegister(false); setShowLogoSplash(false); }}
         theme={theme}
         toggleTheme={toggleTheme}
         existingResidents={allResidents}
       />
     );
-  }
-  
-  if (!isAuthenticated) return <Login onLogin={handleLogin} theme={theme} toggleTheme={toggleTheme} />;
-
-  return (
-    <>
-      <Layout 
+  } else if (!isAuthenticated) {
+    content = <Login onLogin={handleLogin} theme={theme} toggleTheme={toggleTheme} />;
+  } else {
+    content = (
+      <>
+        <Layout 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         role={role} 
@@ -1479,20 +1587,21 @@ const App: React.FC = () => {
       <ImportResidentsModal isOpen={isImportResidentsModalOpen} onClose={() => setIsImportResidentsModalOpen(false)} onImport={handleImportResidents} existingResidents={allResidents} />
       <ImportBoletosModal isOpen={isImportBoletosModalOpen} onClose={() => setIsImportBoletosModalOpen(false)} onImport={handleImportBoletos} existingBoletos={allBoletos} allResidents={allResidents} />
       <CameraScanModal isOpen={isCameraScanModalOpen} onClose={() => setIsCameraScanModalOpen(false)} onScanSuccess={handleCameraScanSuccess} allResidents={allResidents} />
+      <ImportStaffModal isOpen={isImportStaffModalOpen} onClose={() => setIsImportStaffModalOpen(false)} onImport={handleImportStaff} existingStaff={allStaff} />
       <NewOccurrenceModal isOpen={isOccurrenceModalOpen} onClose={() => setIsOccurrenceModalOpen(false)} description={occurrenceDescription} setDescription={setOccurrenceDescription} onSave={async () => {
         if (!occurrenceDescription.trim()) {
-          alert('Por favor, descreva a ocorrência');
+          toast.error('Por favor, descreva a ocorrência');
           return;
         }
         
         const newOccurrence: Occurrence = {
           id: `temp-${Date.now()}`,
-          residentName: 'Sistema',
-          unit: 'N/A',
+          residentName: role === 'MORADOR' && currentResident ? currentResident.name : 'Sistema',
+          unit: role === 'MORADOR' && currentResident ? currentResident.unit : 'N/A',
           description: occurrenceDescription,
           status: 'Aberto',
           date: new Date().toISOString(),
-          reportedBy: role === 'PORTEIRO' ? 'Porteiro' : role === 'SINDICO' ? 'Síndico' : 'Sistema'
+          reportedBy: role === 'PORTEIRO' ? 'Porteiro' : role === 'SINDICO' ? 'Síndico' : 'Morador'
         };
         
         const result = await saveOccurrence(newOccurrence);
@@ -1503,10 +1612,22 @@ const App: React.FC = () => {
           setIsOccurrenceModalOpen(false);
         } else {
           console.error('Erro ao salvar ocorrência:', result.error);
-          alert('Erro ao registrar ocorrência: ' + (result.error || 'Erro desconhecido'));
+          toast.error('Erro ao registrar ocorrência: ' + (result.error || 'Erro desconhecido'));
         }
       }} />
       <NoticeEditModal notice={selectedNoticeForEdit} onClose={() => setSelectedNoticeForEdit(null)} onChange={setSelectedNoticeForEdit} onSave={handleSaveNoticeChanges} onDelete={handleDeleteNotice} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {isSupabasePlaceholder && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] px-4 py-2 bg-amber-600 text-white text-center text-xs font-bold uppercase tracking-wider shadow-lg">
+          Supabase não configurado. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou Vercel.
+        </div>
+      )}
+      {content}
     </>
   );
 };

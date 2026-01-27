@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { SearchCode, Search, Package as PackageIcon, ArrowRight, Users, ShieldAlert, ChevronRight, Home } from 'lucide-react';
+import { SearchCode, Search, Package as PackageIcon, ArrowRight, Users, ShieldAlert, ChevronRight, Home, MessageSquare, Calendar } from 'lucide-react';
 import RecentEventsBar from '../RecentEventsBar';
 import { QuickViewCategory } from '../../types';
 import { useAppConfig } from '../../contexts/AppConfigContext';
@@ -16,6 +15,18 @@ interface DashboardViewProps {
   eventStates: any;
   setQuickViewCategory: (cat: QuickViewCategory) => void;
   setIsNewPackageModalOpen: () => void;
+  setPackageSearch?: (val: string) => void;
+  setOccurrenceSearch?: (val: string) => void;
+  setVisitorSearch?: (val: string) => void;
+  setSelectedPackageForDetail?: (pkg: any) => void;
+  setSelectedVisitorForDetail?: (v: any) => void;
+  setSelectedOccurrenceForDetail?: (o: any) => void;
+  setReservationFilter?: (f: 'all' | 'today' | 'pending') => void;
+  setEditingNoteId?: (id: string | null) => void;
+  setNewNoteContent?: (val: string) => void;
+  setNewNoteCategory?: (val: string) => void;
+  setNewNoteScheduled?: (val: string) => void;
+  setIsNewNoteModalOpen?: (open: boolean) => void;
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({
@@ -27,7 +38,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   setResidentSearch,
   eventStates,
   setQuickViewCategory,
-  setIsNewPackageModalOpen
+  setIsNewPackageModalOpen,
+  setPackageSearch,
+  setOccurrenceSearch,
+  setVisitorSearch,
+  setSelectedPackageForDetail,
+  setSelectedVisitorForDetail,
+  setSelectedOccurrenceForDetail,
+  setReservationFilter,
+  setEditingNoteId,
+  setNewNoteContent,
+  setNewNoteCategory,
+  setNewNoteScheduled,
+  setIsNewNoteModalOpen
 }) => {
   const { config } = useAppConfig();
   return (
@@ -50,10 +73,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
         {/* PAINEL DE BUSCA GLOBAL (COMMAND PALETTE STYLE) */}
         {globalSearchQuery.length >= 2 && (
           <div className="absolute top-full left-0 right-0 mt-3 p-4 premium-glass rounded-[40px] shadow-2xl animate-in slide-in-from-top-4 duration-300 max-h-[70vh] overflow-y-auto custom-scrollbar">
-            {/* ... Global Search Content ... */}
             {hasAnyGlobalResult ? (
               <div className="space-y-6 p-2">
-                {globalResults?.residents.length > 0 && (
+                {globalResults?.residents?.length > 0 && (
                   <section>
                     <header className="flex items-center gap-2 mb-3 px-3">
                       <Users className="w-3 h-3 opacity-30" />
@@ -76,7 +98,121 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </section>
                 )}
-                {/* ... other categories (simplified for brevity) ... */}
+                {globalResults?.packages?.length > 0 && setPackageSearch && setSelectedPackageForDetail && (
+                  <section>
+                    <header className="flex items-center gap-2 mb-3 px-3">
+                      <PackageIcon className="w-3 h-3 opacity-30" />
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Encomendas</span>
+                    </header>
+                    <div className="grid grid-cols-1 gap-2">
+                      {globalResults.packages.map((p: any) => (
+                        <button 
+                          key={p.id} 
+                          onClick={() => { setActiveTab('packages'); setGlobalSearchQuery(''); setPackageSearch(p.recipient || ''); setSelectedPackageForDetail(p); }}
+                          className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between text-left transition-all group"
+                        >
+                          <div>
+                            <h6 className="text-sm font-black uppercase tracking-tight">{p.recipient}</h6>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{formatUnit(p.unit)} • {p.type} • {p.status}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {globalResults?.visitors?.length > 0 && setVisitorSearch && setSelectedVisitorForDetail && (
+                  <section>
+                    <header className="flex items-center gap-2 mb-3 px-3">
+                      <Users className="w-3 h-3 opacity-30" />
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Visitantes</span>
+                    </header>
+                    <div className="grid grid-cols-1 gap-2">
+                      {globalResults.visitors.map((v: any) => (
+                        <button 
+                          key={v.id} 
+                          onClick={() => { setActiveTab('visitors'); setGlobalSearchQuery(''); setVisitorSearch?.(v.visitorNames || v.residentName || ''); setSelectedVisitorForDetail(v); }}
+                          className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between text-left transition-all group"
+                        >
+                          <div>
+                            <h6 className="text-sm font-black uppercase tracking-tight">{v.visitorNames || v.residentName || '—'}</h6>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{formatUnit(v.unit)} • {v.residentName}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {globalResults?.occurrences?.length > 0 && setOccurrenceSearch && setSelectedOccurrenceForDetail && (
+                  <section>
+                    <header className="flex items-center gap-2 mb-3 px-3">
+                      <ShieldAlert className="w-3 h-3 opacity-30" />
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Ocorrências</span>
+                    </header>
+                    <div className="grid grid-cols-1 gap-2">
+                      {globalResults.occurrences.map((o: any) => (
+                        <button 
+                          key={o.id} 
+                          onClick={() => { setActiveTab('occurrences'); setGlobalSearchQuery(''); setOccurrenceSearch?.(o.description?.slice(0, 30) || ''); setSelectedOccurrenceForDetail(o); }}
+                          className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between text-left transition-all group"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <h6 className="text-sm font-black uppercase tracking-tight truncate">{o.description}</h6>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{formatUnit(o.unit)} • {o.status}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {globalResults?.notes?.length > 0 && setEditingNoteId && setNewNoteContent && setNewNoteCategory && setNewNoteScheduled && setIsNewNoteModalOpen && (
+                  <section>
+                    <header className="flex items-center gap-2 mb-3 px-3">
+                      <MessageSquare className="w-3 h-3 opacity-30" />
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Notas</span>
+                    </header>
+                    <div className="grid grid-cols-1 gap-2">
+                      {globalResults.notes.map((n: any) => (
+                        <button 
+                          key={n.id} 
+                          onClick={() => { setActiveTab('notes'); setGlobalSearchQuery(''); setEditingNoteId(n.id); setNewNoteContent(n.content || ''); setNewNoteCategory(n.category || 'Geral'); setNewNoteScheduled(n.scheduled || ''); setIsNewNoteModalOpen(true); }}
+                          className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between text-left transition-all group"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <h6 className="text-sm font-black uppercase tracking-tight truncate">{n.content}</h6>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{n.category || 'Geral'}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {globalResults?.reservations?.length > 0 && setReservationFilter && (
+                  <section>
+                    <header className="flex items-center gap-2 mb-3 px-3">
+                      <Calendar className="w-3 h-3 opacity-30" />
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-30">Reservas</span>
+                    </header>
+                    <div className="grid grid-cols-1 gap-2">
+                      {globalResults.reservations.map((r: any) => (
+                        <button 
+                          key={r.id} 
+                          onClick={() => { setActiveTab('reservations'); setGlobalSearchQuery(''); setReservationFilter('all'); }}
+                          className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-between text-left transition-all group"
+                        >
+                          <div>
+                            <h6 className="text-sm font-black uppercase tracking-tight">{r.resident} • {r.area}</h6>
+                            <p className="text-[10px] opacity-40 uppercase font-black">{formatUnit(r.unit)} • {r.date} • {r.time}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             ) : (
               <div className="py-12 text-center">

@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { useAppConfig } from '../../contexts/AppConfigContext';
+import { useToast } from '../../contexts/ToastContext';
+import { extractGeminiText } from '../../utils/geminiHelpers';
+import { logger } from '../../utils/logger';
 
 interface AiReportsViewProps {
   allPackages: any[];
@@ -38,6 +41,7 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
   dayReservations
 }) => {
   const { config } = useAppConfig();
+  const toast = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportContent, setReportContent] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'previous'>('current');
@@ -119,10 +123,12 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
         `,
       });
 
-      setReportContent(response.text || "Não foi possível gerar o relatório.");
-    } catch (error: any) {
-      console.error(error);
-      const msg = error?.message?.toLowerCase?.().includes('api') || !hasGeminiKey
+      const text = extractGeminiText(response);
+      setReportContent(text || "Não foi possível gerar o relatório.");
+    } catch (error: unknown) {
+      logger.error(error);
+      const err = error as { message?: string };
+      const msg = (typeof err?.message === 'string' && err.message.toLowerCase().includes('api')) || !hasGeminiKey
         ? 'Configure GEMINI_API_KEY no .env ou nas variáveis do Vercel para gerar relatórios com IA.'
         : 'Erro ao conectar com a Inteligência Artificial. Verifique sua conexão e tente novamente.';
       setReportContent(msg);
@@ -133,12 +139,12 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
 
   const handleExportPDF = () => {
     if (!reportContent) {
-      alert('Gere o relatório antes de exportar.');
+      toast.error('Gere o relatório antes de exportar.');
       return;
     }
     const win = window.open('', '_blank');
     if (!win) {
-      alert('Permita pop-ups para exportar o PDF.');
+      toast.error('Permita pop-ups para exportar o PDF.');
       return;
     }
     const title = `Relatório IA - ${config.condominiumName} - ${new Date().toLocaleDateString('pt-BR')}`;

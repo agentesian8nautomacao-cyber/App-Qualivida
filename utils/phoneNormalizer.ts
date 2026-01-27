@@ -200,8 +200,6 @@ export function openWhatsApp(
     console.error('Erro ao abrir WhatsApp:', error);
     if (onError) {
       onError(error);
-    } else {
-      alert(error);
     }
     return false;
   }

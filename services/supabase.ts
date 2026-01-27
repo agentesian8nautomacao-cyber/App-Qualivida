@@ -15,22 +15,14 @@ if (supabaseUrl) {
   supabaseUrl = supabaseUrl.replace(/\/$/, '');
 }
 
-// Logs de debug (sempre, para ajudar a diagnosticar)
-const envMode = import.meta.env.MODE || 'unknown';
-console.log(`[Supabase Config] Mode: ${envMode}`);
-console.log(`[Supabase Config] URL original:`, rawSupabaseUrl || 'NÃO DEFINIDA');
-console.log(`[Supabase Config] URL processada:`, supabaseUrl || 'NÃO DEFINIDA');
-console.log(`[Supabase Config] Key:`, supabaseAnonKey ? '✅ Configurada' : '❌ Não configurada');
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  const errorMsg = '❌ Variáveis de ambiente do Supabase não configuradas!\n' +
-    'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY\n' +
-    'No Vercel: Settings > Environment Variables > Redeploy após adicionar\n' +
-    'Localmente: arquivo .env.local';
-  console.error(errorMsg);
+const isPlaceholder = !rawSupabaseUrl?.trim() || !supabaseAnonKey?.trim();
+if (import.meta.env.DEV && isPlaceholder) {
+  const envMode = import.meta.env.MODE || 'unknown';
+  console.warn(`[Supabase] Mode: ${envMode}. URL: ${rawSupabaseUrl ? 'ok' : 'NÃO DEFINIDA'}. Key: ${supabaseAnonKey ? 'ok' : 'NÃO DEFINIDA'}. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou Vercel.`);
 }
 
 // Criar cliente Supabase (mesmo que as variáveis estejam vazias, para evitar erros)
+export const isSupabasePlaceholder = isPlaceholder;
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',

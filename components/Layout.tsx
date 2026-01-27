@@ -57,6 +57,8 @@ const Layout: React.FC<LayoutProps> = ({
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const baseUserRole = typeof window !== 'undefined' ? (sessionStorage.getItem('userRole') as UserRole | null) : null;
+  const canSwitchRole = baseUserRole === 'SINDICO';
 
   useEffect(() => {
     if (theme === 'light') {
@@ -100,8 +102,8 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   const handleSwitchRole = () => {
-    // Moradores não podem alternar de role
-    if (role === 'MORADOR') return;
+    // Apenas usuários com papel base de síndico podem alternar o perfil
+    if (!canSwitchRole) return;
     const nextRole = role === 'PORTEIRO' ? 'SINDICO' : 'PORTEIRO';
     setRole(nextRole);
     setActiveTab('dashboard');
@@ -113,11 +115,12 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'notices', label: 'Mural de Avisos', icon: Bell, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     { id: 'notifications', label: 'Notificações', icon: Bell, roles: ['MORADOR'] },
     { id: 'boletos', label: 'Boletos', icon: Receipt, roles: ['MORADOR', 'SINDICO'] },
+    { id: 'residentProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['MORADOR'] },
     { id: 'reservations', label: 'Reservas', icon: Calendar, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     
     // Apenas Porteiro e Síndico
     { id: 'residents', label: 'Moradores', icon: Users, roles: ['PORTEIRO', 'SINDICO'] },
-    { id: 'occurrences', label: 'Ocorrências', icon: AlertCircle, roles: ['PORTEIRO', 'SINDICO'] },
+    { id: 'occurrences', label: 'Ocorrências', icon: AlertCircle, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     
     // Apenas Porteiro
     { id: 'packages', label: 'Encomendas', icon: Package, roles: ['PORTEIRO'] },
@@ -204,7 +207,7 @@ const Layout: React.FC<LayoutProps> = ({
               <p className="text-xs font-black truncate uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
                 {role === 'SINDICO' ? 'Admin' : role === 'MORADOR' ? 'Morador' : 'Portaria'}
               </p>
-              {role !== 'MORADOR' && (
+              {canSwitchRole && (
                 <button 
                   onClick={handleSwitchRole}
                   className="text-[9px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 flex items-center gap-1 mt-0.5 transition-all active:scale-95"
@@ -214,7 +217,7 @@ const Layout: React.FC<LayoutProps> = ({
               )}
             </div>
           )}
-          {isDesktopCollapsed && role !== 'MORADOR' && (
+          {isDesktopCollapsed && canSwitchRole && (
             <button onClick={handleSwitchRole} className="p-1 opacity-40 hover:opacity-100" title="Alternar Perfil">
               <RefreshCw className="w-4 h-4" />
             </button>

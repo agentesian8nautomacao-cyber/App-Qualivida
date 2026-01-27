@@ -1,20 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, Lock, CheckCircle, XCircle } from 'lucide-react';
-import { generatePasswordResetToken, validateResetToken, resetPasswordWithToken } from '../services/userAuth';
+import { generatePasswordResetToken, resetPasswordWithToken } from '../services/userAuth';
 
 interface ForgotPasswordProps {
   onBack: () => void;
   theme?: 'dark' | 'light';
+  initialToken?: string;
+  initialStep?: 'request' | 'reset';
 }
 
-const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark' }) => {
-  const [step, setStep] = useState<'request' | 'reset'>('request');
+const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark', initialToken, initialStep }) => {
+  const [step, setStep] = useState<'request' | 'reset'>(initialStep || 'request');
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(initialToken || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (initialStep === 'reset' && initialToken) {
+      setStep('reset');
+      setToken(initialToken);
+    }
+  }, [initialStep, initialToken]);
 
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,20 +35,36 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark' 
     setLoading(true);
     setMessage(null);
 
-    const result = await generatePasswordResetToken(usernameOrEmail.trim());
+    try {
+      const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+      const res = await fetch(`${base}/api/request-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrUsername: usernameOrEmail.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
 
+      if (res.ok && data.success) {
+        setLoading(false);
+        setMessage({
+          type: 'success',
+          text: data.message || 'Se o usuário existir e tiver email cadastrado, você receberá um link por email. Verifique a caixa de entrada e o spam.',
+        });
+        return;
+      }
+    } catch {
+      /* fallback abaixo */
+    }
+
+    const result = await generatePasswordResetToken(usernameOrEmail.trim());
     setLoading(false);
 
     if (result.success) {
-      setMessage({ 
-        type: 'success', 
-        text: result.message || 'Instruções enviadas! Verifique seu email (ou console no modo desenvolvimento).'
+      setMessage({
+        type: 'success',
+        text: 'API de email não configurada. Em desenvolvimento: verifique o console do navegador para o token e use o passo "Redefinir senha".',
       });
-      // Em produção, o usuário receberia o token por email
-      // Por enquanto, mostramos uma mensagem
-      setTimeout(() => {
-        setStep('reset');
-      }, 2000);
+      setTimeout(() => setStep('reset'), 1500);
     } else {
       setMessage({ type: 'error', text: result.message || 'Erro ao solicitar recuperação.' });
     }

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppConfigProvider } from './contexts/AppConfigContext';
+import { ToastProvider } from './contexts/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
 
 const rootElement = document.getElementById('root');
@@ -27,7 +28,9 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <AppConfigProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </AppConfigProvider>
     </ErrorBoundary>
   </React.StrictMode>
