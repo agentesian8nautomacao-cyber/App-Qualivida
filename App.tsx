@@ -97,7 +97,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  const [showLogoSplash, setShowLogoSplash] = useState(true);
+  const [showLogoSplash, setShowLogoSplash] = useState(false);
   const [showVideoIntro, setShowVideoIntro] = useState(() => {
     const hasSeenIntro = sessionStorage.getItem('hasSeenVideoIntro');
     return hasSeenIntro !== 'true';
@@ -1098,8 +1098,7 @@ const App: React.FC = () => {
   const handleLogin = (selectedRole: UserRole) => { 
     // Se for morador, mostrar cadastro/login de morador imediatamente
     if (selectedRole === 'MORADOR') {
-      // Pular tela de apresentação e ir direto para cadastro
-      setShowLogoSplash(false);
+      // Ir direto para cadastro de morador
       setShowResidentRegister(true);
       return;
     }
@@ -1114,7 +1113,7 @@ const App: React.FC = () => {
     setIsAuthenticated(false); 
     setCurrentResident(null);
     setShowResidentRegister(false);
-    setShowLogoSplash(true);
+    setShowLogoSplash(false);
     setActiveTab('dashboard');
     // Limpar dados do morador da sessão
     sessionStorage.removeItem('currentResident');
@@ -1503,8 +1502,6 @@ const App: React.FC = () => {
   let content: React.ReactNode;
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
-  } else if (!isAuthenticated && showLogoSplash) {
-    content = <LogoSplash onComplete={() => setShowLogoSplash(false)} durationMs={2200} />;
   } else if (showVideoIntro) {
     content = (
       <VideoIntro
@@ -1514,6 +1511,8 @@ const App: React.FC = () => {
         }}
       />
     );
+  } else if (!isAuthenticated && showLogoSplash) {
+    content = <LogoSplash onComplete={() => setShowLogoSplash(false)} durationMs={2200} />;
   } else if (!isAuthenticated && showResidentRegister) {
     content = (
       <ResidentRegister

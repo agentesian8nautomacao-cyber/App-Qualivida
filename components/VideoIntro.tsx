@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 
 interface VideoIntroProps {
   onComplete: () => void;
@@ -11,12 +11,24 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const completedRef = useRef(false);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
     onComplete();
   }, [onComplete]);
+
+  // Detectar tamanho de tela para ajustar proporção em telas grandes
+  useEffect(() => {
+    const updateSize = () => {
+      if (typeof window === 'undefined') return;
+      setIsLargeScreen(window.innerWidth >= 1024);
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -103,20 +115,39 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         playsInline
         preload="auto"
         className="video-intro-responsive"
-        style={{
-          width: '100vw',
-          height: '100vh',
-          minWidth: '100%',
-          minHeight: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center',
-          pointerEvents: 'none',
-          willChange: 'auto',
-          transform: 'translateZ(0)',
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-          WebkitTransform: 'translateZ(0)'
-        }}
+        style={
+          isLargeScreen
+            ? {
+                width: '70vw',
+                maxWidth: '960px',
+                height: 'auto',
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                objectPosition: 'center',
+                borderRadius: '24px',
+                boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
+                pointerEvents: 'none',
+                willChange: 'auto',
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                WebkitTransform: 'translateZ(0)'
+              }
+            : {
+                width: '100vw',
+                height: '100vh',
+                minWidth: '100%',
+                minHeight: '100%',
+                objectFit: 'cover',
+                objectPosition: 'center',
+                pointerEvents: 'none',
+                willChange: 'auto',
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                WebkitTransform: 'translateZ(0)'
+              }
+        }
         onError={() => {
           console.error('Erro ao carregar vídeo.');
           setTimeout(handleComplete, 500);
