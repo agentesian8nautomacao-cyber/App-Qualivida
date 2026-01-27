@@ -3,15 +3,27 @@ import { Resident } from '../types';
 import { normalizeUnit, compareUnits } from '../utils/unitFormatter';
 
 // Função simples para hash de senha (usando bcrypt via Supabase Edge Function seria ideal)
-// Por enquanto, vamos usar uma função simples baseada em crypto
+// Por enquanto, vamos usar uma função baseada em crypto quando disponível,
+// com fallback para ambientes inseguros (ex: http em rede local no celular).
 const hashPassword = async (password: string): Promise<string> => {
-  // Usar Web Crypto API para hash simples
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      // Usar Web Crypto API para hash simples
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashHex;
+    }
+  } catch (err) {
+    console.warn('Falha ao usar crypto.subtle para hash de senha (morador), usando fallback:', err);
+  }
+
+  // Fallback: retorna a senha em texto puro.
+  // Isso permite logins de teste em ambiente de desenvolvimento (ex: acesso via http://192.168.x.x)
+  // desde que o campo password_hash no banco esteja configurado de forma compatível.
+  return password;
 };
 
 const verifyPassword = async (password: string, hash: string): Promise<boolean> => {

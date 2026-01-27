@@ -94,15 +94,32 @@ export const isUserBlocked = (username: string): { blocked: boolean; remainingMi
 };
 
 /**
- * Faz hash da senha usando SHA-256 (Web Crypto API)
+ * Faz hash da senha usando SHA-256 (Web Crypto API) quando disponível.
+ * Em contexto não seguro (ex: http em rede local no celular), crypto.subtle
+ * não está disponível, então usamos um fallback simples para não quebrar o login.
+ *
+ * IMPORTANTE: em produção (https://app-qualivida.vercel.app) a versão com
+ * SHA-256 será usada normalmente.
  */
 const hashPassword = async (password: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.subtle && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashHex;
+    }
+  } catch (err) {
+    console.warn('Falha ao usar crypto.subtle para hash de senha, usando fallback:', err);
+  }
+
+  // Fallback para ambiente não seguro (ex: http://192.168.x.x no celular)
+  // Aqui apenas retornamos a senha em texto puro, o que funciona para:
+  // - contas com password_hash no formato "plain:senha"
+  // - ambiente de desenvolvimento com senhas simples
+  return password;
 };
 
 /**
