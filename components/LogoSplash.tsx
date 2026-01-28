@@ -172,6 +172,7 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
           alignItems: 'center',
           gap: '1.5rem',
         }}
+        
       >
         <img
           src="/1024.png"
@@ -193,19 +194,7 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
             textAlign: 'center',
           }}
         >
-          Bem vido ao Gestão QUALIVIDA
-        </p>
-        <p
-          className="logoSplash-name"
-          style={{
-            fontSize: 'clamp(0.75rem, 3vw, 1rem)',
-            fontWeight: 700,
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
-            color: 'var(--text-secondary, rgba(255,255,255,0.6))',
-          }}
-        >
-          {config.condominiumName}
+          Bem vido ao Gestão Qualivida
         </p>
       </div>
     </div>
