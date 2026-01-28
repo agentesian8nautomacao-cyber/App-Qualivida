@@ -99,6 +99,16 @@ const App: React.FC = () => {
   // Splash de abertura com o vídeo institucional
   const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
 
+  const handleSkipSplash = useCallback(() => {
+    console.log('[App] Pulando vídeo de abertura');
+    try {
+      localStorage.setItem('hasSeenLogoSplash', 'true');
+    } catch (e) {
+      console.warn('[App] Erro ao salvar no localStorage ao pular splash:', e);
+    }
+    setShowLogoSplash(false);
+  }, []);
+
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
     if (!isAuthenticated) {
@@ -2158,21 +2168,27 @@ const App: React.FC = () => {
     // Mostrar vídeo de abertura para usuários não autenticados
     console.log('[App] Renderizando vídeo de abertura', { showLogoSplash });
     content = (
-      <div className="w-screen h-screen bg-black flex items-center justify-center">
+      <div
+        className="w-screen h-screen bg-black flex items-center justify-center relative cursor-pointer"
+        onClick={handleSkipSplash}
+      >
         <video
           src="/GestaoQualivida.mp4"
           controls
           className="w-full h-full object-cover"
-          onEnded={() => {
-            console.log('[App] Vídeo de abertura finalizado');
-            try {
-              localStorage.setItem('hasSeenLogoSplash', 'true');
-            } catch (e) {
-              console.warn('[App] Erro ao salvar no localStorage:', e);
-            }
-            setShowLogoSplash(false);
-          }}
+          onClick={(e) => e.stopPropagation()}
+          onEnded={handleSkipSplash}
         />
+        <button
+          type="button"
+          className="absolute top-4 right-4 bg-white/80 text-black px-4 py-2 rounded-lg text-sm font-semibold shadow-lg hover:bg-white transition"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSkipSplash();
+          }}
+        >
+          Pular
+        </button>
       </div>
     );
   } else if (!isAuthenticated && showResidentRegister) {
