@@ -28,7 +28,10 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
   calculatePermanence,
   role = 'PORTEIRO'
 }) => {
-  const canCreateVisitor = role !== 'MORADOR';
+  const isResident = role === 'MORADOR';
+  const isDoorman = role === 'PORTEIRO';
+  const canCreateVisitor = isResident || isDoorman;
+  const canCheckoutVisitor = isResident;
   const displayVisitors = visitorLogs.filter(v => {
     const matchSearch = (v.visitorNames || '').toLowerCase().includes(visitorSearch.toLowerCase()) || 
                         (v.residentName || '').toLowerCase().includes(visitorSearch.toLowerCase()) ||
@@ -63,7 +66,7 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
               onClick={() => setIsVisitorModalOpen(true)}
               className="px-6 py-3 bg-white text-black rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" /> Novo Acesso
+              <Plus className="w-4 h-4" /> {isResident ? 'Registrar Visita' : 'Novo Acesso'}
             </button>
           )}
         </div>
@@ -131,12 +134,12 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
                  )}
               </div>
 
-              {visitor.status === 'active' && canCreateVisitor && (
+              {visitor.status === 'active' && canCheckoutVisitor && (
                 <button 
                   onClick={() => handleVisitorCheckOut(visitor.id)}
                   className="w-full py-4 bg-zinc-100 dark:bg-white/10 text-black dark:text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2"
                 >
-                  <LogOut className="w-4 h-4" /> Registrar Saída
+                  <LogOut className="w-4 h-4" /> Concluir Visita
                 </button>
               )}
             </div>

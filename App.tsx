@@ -1469,6 +1469,35 @@ const App: React.FC = () => {
   const renderContent = () => {
     // RENDERIZAÇÃO DO DASHBOARD BASEADA NO CARGO
     if (activeTab === 'dashboard') {
+      // Dashboard do Morador: visão simplificada, sem registro de encomendas
+      if (role === 'MORADOR' && currentResident) {
+        return (
+          <MoradorDashboardView
+            currentResident={currentResident}
+            allBoletos={allBoletos}
+            allNotices={allNotices}
+            allPackages={allPackages}
+            allReservations={dayReservations}
+            onViewBoleto={(boleto) => {
+              if (boleto.pdfUrl) {
+                window.open(boleto.pdfUrl, '_blank');
+              }
+            }}
+            onDownloadBoleto={(boleto) => {
+              if (boleto.pdfUrl) {
+                const link = document.createElement('a');
+                link.href = boleto.pdfUrl;
+                link.download = `boleto-${boleto.unit}-${boleto.referenceMonth}.pdf`;
+                link.click();
+              }
+            }}
+            onViewPackage={setSelectedPackageForDetail}
+            onViewNotice={(_notice) => {
+              setActiveTab('notices');
+            }}
+          />
+        );
+      }
       if (role === 'SINDICO') {
         return (
           <SindicoDashboardView 
@@ -2009,7 +2038,20 @@ const App: React.FC = () => {
             myPackages: myPackages.map(p => ({ id: p.id, unit: p.unit, status: p.status, receivedAt: p.receivedAt }))
           });
           
-          return <PackagesView allPackages={myPackages} allResidents={[]} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onDeletePackage={handleDeletePackage} onCameraScan={undefined} />;
+          // Morador pode apenas visualizar suas encomendas, sem registrar novas
+          return (
+            <PackagesView
+              allPackages={myPackages}
+              allResidents={[]}
+              packageSearch={packageSearch}
+              setPackageSearch={setPackageSearch}
+              setIsNewPackageModalOpen={() => {}}
+              setSelectedPackageForDetail={setSelectedPackageForDetail}
+              onDeletePackage={undefined}
+              onCameraScan={undefined}
+              canRegister={false}
+            />
+          );
         }
         if (role === 'SINDICO') {
           return (

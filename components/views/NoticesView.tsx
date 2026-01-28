@@ -236,22 +236,40 @@ const NoticesView: React.FC<NoticesViewProps> = ({
          <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 ${!isChatOpen ? 'hidden md:block' : 'block'}`}>
             {chatMessages.map((msg) => {
                const isMe = msg.senderRole === role;
+               const senderLabel = msg.senderRole === 'MORADOR'
+                  ? 'Morador'
+                  : msg.senderRole === 'SINDICO'
+                     ? 'Síndico'
+                     : 'Portaria';
+
                return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                     <div className={`max-w-[85%] p-4 relative group transition-all hover:scale-[1.01] rounded-2xl ${
-                        isMe 
-                           ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white rounded-tr-sm shadow-lg shadow-emerald-900/20' 
-                           : 'backdrop-blur-md rounded-tl-sm border'
-                     }`}
-                     style={!isMe ? {
-                        backgroundColor: 'var(--glass-bg)',
-                        color: 'var(--text-primary)',
-                        borderColor: 'var(--border-color)'
-                     } : {}}
+                     <div
+                        className={`max-w-[85%] p-4 relative group transition-all hover:scale-[1.01] rounded-2xl ${
+                           isMe
+                              ? 'bg-gradient-to-br from-emerald-600 to-emerald-800 text-white rounded-tr-sm shadow-lg shadow-emerald-900/20'
+                              : 'backdrop-blur-md rounded-tl-sm border'
+                        }`}
+                        style={
+                           !isMe
+                              ? {
+                                   backgroundColor: 'var(--glass-bg)',
+                                   color: 'var(--text-primary)',
+                                   borderColor: 'var(--border-color)'
+                                }
+                              : {}
+                        }
                      >
+                        <div className="flex items-center justify-between mb-1">
+                           <span className="text-[9px] font-black uppercase tracking-widest opacity-70">
+                              {isMe ? 'Você' : senderLabel}
+                           </span>
+                        </div>
                         <p className="text-xs font-bold leading-relaxed">{msg.text}</p>
                         <div className="flex items-center justify-end gap-1 mt-2 opacity-50">
-                           <span className="text-[9px] font-black uppercase">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                           <span className="text-[9px] font-black uppercase">
+                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                           </span>
                            {isMe && <CheckCheck className="w-3 h-3 text-blue-300" />}
                         </div>
                      </div>

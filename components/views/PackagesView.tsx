@@ -15,6 +15,11 @@ interface PackagesViewProps {
   setSelectedPackageForDetail: (pkg: Package) => void;
   onDeletePackage?: (id: string) => void;
   onCameraScan?: () => void;
+  /** 
+   * Define se o usuário atual pode registrar novas encomendas.
+   * Para moradores, este valor deve ser false para impedir o registro.
+   */
+  canRegister?: boolean;
 }
 
 const PackagesView: React.FC<PackagesViewProps> = ({
@@ -26,6 +31,7 @@ const PackagesView: React.FC<PackagesViewProps> = ({
   setSelectedPackageForDetail,
   onDeletePackage,
   onCameraScan,
+  canRegister = true,
 }) => {
   const mobile = isMobile();
   const canUseCamera = mobile && !!onCameraScan;
@@ -195,12 +201,14 @@ const PackagesView: React.FC<PackagesViewProps> = ({
                 </>
               )}
             </div>
-            <button
-              onClick={() => setIsNewPackageModalOpen(true)}
-              className="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[9px] sm:text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-1.5 sm:gap-2"
-            >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Novo Registro</span>
-            </button>
+            {canRegister && (
+              <button
+                onClick={() => setIsNewPackageModalOpen(true)}
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-full text-[9px] sm:text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-1.5 sm:gap-2"
+              >
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span>Novo Registro</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
