@@ -175,11 +175,13 @@ export const loginUser = async (
 
     // Verificar senha
     let isValidPassword = false;
-    
+    let usedDefaultPassword = false; // porteiro com senha 123456 deve alterar no primeiro acesso
+
     // Se o password_hash começar com "plain:", comparar diretamente (senha em texto plano)
     if (data.password_hash && data.password_hash.startsWith('plain:')) {
       const plainPassword = data.password_hash.substring(6); // Remove "plain:"
       isValidPassword = plainPassword === password;
+      if (isValidPassword && data.role === 'PORTEIRO' && plainPassword === '123456') usedDefaultPassword = true;
     }
     // Se o password_hash for placeholder, aceitar senhas padrão conhecidas
     else if (data.password_hash === '$2a$10$placeholder_hash_here') {
@@ -224,7 +226,8 @@ export const loginUser = async (
     const { password_hash: _, ...userData } = data;
     return {
       user: userData as User,
-      error: null
+      error: null,
+      mustChangePassword: usedDefaultPassword // porteiro com senha 123456 deve alterar no primeiro acesso
     };
   } catch (error) {
     console.error('Erro ao fazer login:', error);
@@ -303,12 +306,14 @@ export const updateUserProfile = async (
 };
 
 /**
- * Altera senha do usuário (validando senha atual)
+ * Altera senha do usuário (validando senha atual).
+ * @param storePlain - se true, salva como "plain:senha" (para porteiros; o síndico pode ver no modal de edição)
  */
 export const changeUserPassword = async (
   username: string,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  options?: { storePlain?: boolean }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     // Validar senha atual
@@ -317,10 +322,10 @@ export const changeUserPassword = async (
       return { success: false, error: 'Senha atual incorreta' };
     }
 
-    // Hash da nova senha
-    const newPasswordHash = await hashPassword(newPassword);
+    const newPasswordHash = options?.storePlain
+      ? `plain:${newPassword}`
+      : await hashPassword(newPassword);
 
-    // Atualizar senha no banco
     const { error } = await supabase
       .from('users')
       .update({

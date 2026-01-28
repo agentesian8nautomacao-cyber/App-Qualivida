@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Mail, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { generatePasswordResetToken, resetPasswordWithToken } from '../services/userAuth';
 
 interface ForgotPasswordProps {
@@ -15,6 +15,8 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
   const [token, setToken] = useState(initialToken || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -238,14 +240,14 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                   theme === 'light' ? 'text-gray-400' : 'text-zinc-600'
                 }`} />
                 <input 
-                  type="password"
+                  type={showNewPassword ? 'text' : 'password'}
                   placeholder="Nova Senha (mínimo 6 caracteres)" 
                   value={newPassword}
                   onChange={(e) => {
                     setNewPassword(e.target.value);
                     setMessage(null);
                   }}
-                  className={`w-full pl-8 pr-4 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
+                  className={`w-full pl-8 pr-10 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
                     theme === 'light'
                       ? 'border-gray-300/50 text-gray-900 placeholder:text-gray-400 focus:border-gray-600'
                       : 'border-white/10 text-white placeholder:text-zinc-700 focus:border-white'
@@ -254,6 +256,15 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                   minLength={6}
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className={`absolute right-0 top-1/2 -translate-y-1/2 p-1 opacity-50 hover:opacity-100 transition-opacity ${
+                    theme === 'light' ? 'text-gray-600' : 'text-zinc-400'
+                  }`}
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
 
               <div className="relative">
@@ -261,14 +272,14 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                   theme === 'light' ? 'text-gray-400' : 'text-zinc-600'
                 }`} />
                 <input 
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Confirmar Nova Senha" 
                   value={confirmPassword}
                   onChange={(e) => {
                     setConfirmPassword(e.target.value);
                     setMessage(null);
                   }}
-                  className={`w-full pl-8 pr-4 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
+                  className={`w-full pl-8 pr-10 py-3 bg-transparent border-b text-sm outline-none transition-all font-medium ${
                     theme === 'light'
                       ? 'border-gray-300/50 text-gray-900 placeholder:text-gray-400 focus:border-gray-600'
                       : 'border-white/10 text-white placeholder:text-zinc-700 focus:border-white'
@@ -277,6 +288,15 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                   minLength={6}
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className={`absolute right-0 top-1/2 -translate-y-1/2 p-1 opacity-50 hover:opacity-100 transition-opacity ${
+                    theme === 'light' ? 'text-gray-600' : 'text-zinc-400'
+                  }`}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
 
               <button 

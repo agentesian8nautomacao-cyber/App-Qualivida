@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { AlertCircle, Volume2, VolumeX } from 'lucide-react';
+import { AlertCircle, Volume2, VolumeX, Eye, EyeOff, Lock, X } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import ResidentRegister from './components/ResidentRegister';
@@ -47,14 +47,14 @@ import {
   getBoletos, saveBoleto, updateBoleto, deleteBoleto,
   getNotices, saveNotice, updateNotice, deleteNotice,
   getChatMessages, saveChatMessage,
-  getStaff, saveStaff, deleteStaff,
+  getStaff, saveStaff, deleteStaff, getPorteiroLoginInfo,
   getAreas, getReservations, saveReservation, updateReservation
 } from './services/dataService';
 import { getNotifications, deleteNotification, markNotificationAsRead, markAllNotificationsAsRead } from './services/notificationService';
 import { supabase, isSupabasePlaceholder } from './services/supabase';
 
 // Modals
-import { NewReservationModal, NewVisitorModal, NewPackageModal, StaffFormModal } from './components/modals/ActionModals';
+import { NewReservationModal, NewVisitorModal, NewPackageModal, StaffFormModal, type StaffFormData } from './components/modals/ActionModals';
 import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, OccurrenceDetailModal, ResidentFormModal, NewOccurrenceModal, NoticeEditModal } from './components/modals/DetailModals';
 import ImportResidentsModal from './components/modals/ImportResidentsModal';
 import ImportBoletosModal from './components/modals/ImportBoletosModal';
@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
+  const [residentAvatar, setResidentAvatar] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
@@ -117,6 +118,7 @@ const App: React.FC = () => {
     if (!isAuthenticated) {
       setCurrentAdminUser(null);
       setAdminAvatar(null);
+      setResidentAvatar(null);
       return;
     }
 
@@ -153,6 +155,36 @@ const App: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  // Carregar avatar do morador autenticado (perfil "Meu Perfil")
+  useEffect(() => {
+    if (!currentResident) {
+      setResidentAvatar(null);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(`resident_avatar_${currentResident.id}`);
+      setResidentAvatar(stored || null);
+    } catch {
+      setResidentAvatar(null);
+    }
+  }, [currentResident]);
+
+  const handleResidentAvatarChange = (file: File | null) => {
+    if (!file || !currentResident) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (!dataUrl) return;
+      setResidentAvatar(dataUrl);
+      try {
+        localStorage.setItem(`resident_avatar_${currentResident.id}`, dataUrl);
+      } catch (err) {
+        console.warn('Falha ao salvar avatar do morador localmente:', err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Estados para edição de perfil
   const [isEditingAdminProfile, setIsEditingAdminProfile] = useState(false);
   const [adminProfileData, setAdminProfileData] = useState({ name: '', email: '', phone: '' });
@@ -162,6 +194,11 @@ const App: React.FC = () => {
   const [residentProfileData, setResidentProfileData] = useState({ email: '', phone: '', whatsapp: '' });
   const [residentPasswordData, setResidentPasswordData] = useState({ current: '', new: '', confirm: '' });
   const [isChangingResidentPassword, setIsChangingResidentPassword] = useState(false);
+  // Estados para visibilidade de senhas (olhinho)
+  const [showResidentPasswords, setShowResidentPasswords] = useState({ current: false, new: false, confirm: false });
+  const [showAdminPasswords, setShowAdminPasswords] = useState({ current: false, new: false, confirm: false });
+  const [showFirstLoginChangePasswordModal, setShowFirstLoginChangePasswordModal] = useState(false);
+  const [firstLoginPasswordData, setFirstLoginPasswordData] = useState({ new: '', confirm: '' });
 
   // Handlers para perfil do síndico/porteiro
   const handleStartEditAdminProfile = () => {
@@ -206,6 +243,31 @@ const App: React.FC = () => {
       setIsChangingAdminPassword(false);
       setAdminPasswordData({ current: '', new: '', confirm: '' });
       toast.success('Senha alterada com sucesso!');
+    } else {
+      toast.error(result.error || 'Erro ao alterar senha');
+    }
+  };
+
+  const handleFirstLoginChangePassword = async () => {
+    if (!currentAdminUser) return;
+    if (firstLoginPasswordData.new !== firstLoginPasswordData.confirm) {
+      toast.error('As senhas não coincidem');
+      return;
+    }
+    if (firstLoginPasswordData.new.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+    const result = await changeUserPassword(
+      currentAdminUser.username,
+      '123456',
+      firstLoginPasswordData.new,
+      { storePlain: true }
+    );
+    if (result.success) {
+      setShowFirstLoginChangePasswordModal(false);
+      setFirstLoginPasswordData({ new: '', confirm: '' });
+      toast.success('Senha definida com sucesso!');
     } else {
       toast.error(result.error || 'Erro ao alterar senha');
     }
@@ -395,7 +457,7 @@ const App: React.FC = () => {
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [staffSearch, setStaffSearch] = useState('');
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-  const [staffFormData, setStaffFormData] = useState<Partial<Staff>>({});
+  const [staffFormData, setStaffFormData] = useState<StaffFormData>({});
   const [isImportStaffModalOpen, setIsImportStaffModalOpen] = useState(false);
 
   const [noticeFilter, setNoticeFilter] = useState<'all' | 'urgent' | 'unread'>('all');
@@ -1370,18 +1432,18 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (selectedRole: UserRole) => { 
-    // Se for morador, mostrar cadastro/login de morador imediatamente
+  const handleLogin = (selectedRole: UserRole, options?: { mustChangePassword?: boolean }) => {
     if (selectedRole === 'MORADOR') {
-      // Ir direto para cadastro de morador
       setShowResidentRegister(true);
       return;
     }
-    
+
     setRole(selectedRole);
     setCurrentResident(null);
     setIsAuthenticated(true);
     setActiveTab('dashboard');
+    setShowFirstLoginChangePasswordModal(!!options?.mustChangePassword);
+    if (options?.mustChangePassword) setFirstLoginPasswordData({ new: '', confirm: '' });
   };
   
   const handleLogout = () => { 
@@ -1401,6 +1463,11 @@ const App: React.FC = () => {
 
   const handleSaveStaff = async () => {
     if (!staffFormData.name || !staffFormData.role) return;
+    const isNewStaff = !staffFormData.id || String(staffFormData.id).startsWith('temp-');
+    const isPorteiro = (staffFormData.role || '').toLowerCase() === 'porteiro';
+    if (isNewStaff && isPorteiro && (!staffFormData.passwordPlain || staffFormData.passwordPlain.length < 6 || staffFormData.passwordPlain !== staffFormData.passwordConfirm)) {
+      return;
+    }
     const staff: Staff = {
       id: (staffFormData.id && !String(staffFormData.id).startsWith('temp-') ? staffFormData.id : `temp-${Date.now()}`) as string,
       name: staffFormData.name,
@@ -1410,7 +1477,8 @@ const App: React.FC = () => {
       phone: staffFormData.phone,
       email: staffFormData.email
     };
-    const res = await saveStaff(staff);
+    const options = isPorteiro && staffFormData.passwordPlain ? { passwordPlain: staffFormData.passwordPlain } : undefined;
+    const res = await saveStaff(staff, options);
     if (res.success) {
       const { data } = await getStaff();
       if (data) setAllStaff(data);
@@ -1552,9 +1620,31 @@ const App: React.FC = () => {
               </header>
               <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="w-14 h-14 rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-black text-xl">
-                    {currentResident.name?.charAt(0) || '?'}
-                  </div>
+                  <label className="relative cursor-pointer group">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        if (file) handleResidentAvatarChange(file);
+                      }}
+                    />
+                    <div className="w-14 h-14 rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-black text-xl overflow-hidden relative">
+                      {residentAvatar ? (
+                        <img
+                          src={residentAvatar}
+                          alt="Foto do morador"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span>{currentResident.name?.charAt(0) || '?'}</span>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest transition-opacity">
+                        Alterar
+                      </div>
+                    </div>
+                  </label>
                   <div>
                     <h4 className="text-xl font-black uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
                       {currentResident.name}
@@ -1634,40 +1724,70 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Senha Atual
                       </label>
-                      <input
-                        type="password"
-                        value={residentPasswordData.current}
-                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, current: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Digite sua senha atual"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showResidentPasswords.current ? 'text' : 'password'}
+                          value={residentPasswordData.current}
+                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, current: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Digite sua senha atual"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, current: !showResidentPasswords.current })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showResidentPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Nova Senha
                       </label>
-                      <input
-                        type="password"
-                        value={residentPasswordData.new}
-                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, new: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Digite a nova senha"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showResidentPasswords.new ? 'text' : 'password'}
+                          value={residentPasswordData.new}
+                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, new: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Digite a nova senha"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, new: !showResidentPasswords.new })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showResidentPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Confirmar Nova Senha
                       </label>
-                      <input
-                        type="password"
-                        value={residentPasswordData.confirm}
-                        onChange={(e) => setResidentPasswordData({ ...residentPasswordData, confirm: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Confirme a nova senha"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showResidentPasswords.confirm ? 'text' : 'password'}
+                          value={residentPasswordData.confirm}
+                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, confirm: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Confirme a nova senha"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, confirm: !showResidentPasswords.confirm })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showResidentPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex gap-3 pt-4">
                       <button
@@ -1681,6 +1801,7 @@ const App: React.FC = () => {
                         onClick={() => {
                           setIsChangingResidentPassword(false);
                           setResidentPasswordData({ current: '', new: '', confirm: '' });
+                          setShowResidentPasswords({ current: false, new: false, confirm: false });
                         }}
                         className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
                         style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
@@ -1736,7 +1857,7 @@ const App: React.FC = () => {
           </div>
         );
       case 'sindicoProfile':
-        if (role === 'SINDICO' && currentAdminUser) {
+        if ((role === 'SINDICO' || role === 'PORTEIRO') && currentAdminUser) {
           return (
             <div className="space-y-8 animate-in fade-in duration-500 pb-20">
               <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1745,7 +1866,7 @@ const App: React.FC = () => {
                     Meu Perfil
                   </h3>
                   <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    Dados do síndico
+                    {role === 'SINDICO' ? 'Dados do síndico' : 'Dados do porteiro'}
                   </p>
                 </div>
                 {!isEditingAdminProfile && !isChangingAdminPassword && (
@@ -1790,7 +1911,7 @@ const App: React.FC = () => {
                       {currentAdminUser.name || currentAdminUser.username}
                     </h4>
                     <p className="text-xs font-bold uppercase tracking-widest opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                      Síndico
+                      {role === 'SINDICO' ? 'Síndico' : 'Porteiro'}
                     </p>
                   </div>
                 </div>
@@ -1864,40 +1985,70 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Senha Atual
                       </label>
-                      <input
-                        type="password"
-                        value={adminPasswordData.current}
-                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, current: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Digite sua senha atual"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showAdminPasswords.current ? 'text' : 'password'}
+                          value={adminPasswordData.current}
+                          onChange={(e) => setAdminPasswordData({ ...adminPasswordData, current: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Digite sua senha atual"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPasswords({ ...showAdminPasswords, current: !showAdminPasswords.current })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showAdminPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Nova Senha
                       </label>
-                      <input
-                        type="password"
-                        value={adminPasswordData.new}
-                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, new: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Digite a nova senha"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showAdminPasswords.new ? 'text' : 'password'}
+                          value={adminPasswordData.new}
+                          onChange={(e) => setAdminPasswordData({ ...adminPasswordData, new: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Digite a nova senha"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPasswords({ ...showAdminPasswords, new: !showAdminPasswords.new })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showAdminPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                         Confirmar Nova Senha
                       </label>
-                      <input
-                        type="password"
-                        value={adminPasswordData.confirm}
-                        onChange={(e) => setAdminPasswordData({ ...adminPasswordData, confirm: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                        style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                        placeholder="Confirme a nova senha"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showAdminPasswords.confirm ? 'text' : 'password'}
+                          value={adminPasswordData.confirm}
+                          onChange={(e) => setAdminPasswordData({ ...adminPasswordData, confirm: e.target.value })}
+                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="Confirme a nova senha"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPasswords({ ...showAdminPasswords, confirm: !showAdminPasswords.confirm })}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {showAdminPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex gap-3 pt-4">
                       <button
@@ -1911,6 +2062,7 @@ const App: React.FC = () => {
                         onClick={() => {
                           setIsChangingAdminPassword(false);
                           setAdminPasswordData({ current: '', new: '', confirm: '' });
+                          setShowAdminPasswords({ current: false, new: false, confirm: false });
                         }}
                         className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
                         style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
@@ -2135,7 +2287,15 @@ const App: React.FC = () => {
               staffSearch={staffSearch}
               setStaffSearch={setStaffSearch}
               onAddStaff={() => { setStaffFormData({}); setIsStaffModalOpen(true); }}
-              onEditStaff={(staff) => { setStaffFormData(staff); setIsStaffModalOpen(true); }}
+              onEditStaff={(staff) => {
+                setStaffFormData(staff);
+                setIsStaffModalOpen(true);
+                if ((staff.role || '').toLowerCase() === 'porteiro' && staff.id && !String(staff.id).startsWith('temp-')) {
+                  getPorteiroLoginInfo(staff).then((info) => {
+                    if (info) setStaffFormData((prev) => ({ ...prev, passwordPlain: info.password, passwordConfirm: info.password }));
+                  });
+                }
+              }}
               onDeleteStaff={handleDeleteStaff}
               onImportClick={() => setIsImportStaffModalOpen(true)}
            />
@@ -2280,6 +2440,35 @@ const App: React.FC = () => {
       <NewVisitorModal isOpen={isVisitorModalOpen} onClose={resetVisitorModal} step={newVisitorStep} setStep={setNewVisitorStep} data={newVisitorData} setData={setNewVisitorData} searchResident={searchResident} setSearchResident={setSearchResident} filteredResidents={filteredResidents} accessTypes={visitorAccessTypes} handleRemoveAccessType={handleRemoveAccessType} isAddingAccessType={isAddingAccessType} setIsAddingAccessType={setIsAddingAccessType} newAccessTypeInput={newAccessTypeInput} setNewAccessTypeInput={setNewAccessTypeInput} handleAddAccessType={handleAddAccessType} onConfirm={handleRegisterVisitor} />
       <NewPackageModal isOpen={isNewPackageModalOpen} onClose={resetPackageModal} step={packageStep} setStep={setPackageStep} searchResident={searchResident} setSearchResident={setSearchResident} selectedResident={selectedResident} setSelectedResident={setSelectedResident} filteredResidents={filteredResidents} allResidents={allResidents} residentsLoading={residentsLoading} residentsError={residentsError} onRetryResidents={() => fetchResidents(false)} packageSaving={packageSaving} pendingImage={pendingPackageImage} pendingQrData={pendingPackageQrData} packageType={packageType} setPackageType={setPackageType} packageCategories={packageCategories} isAddingPkgCategory={isAddingPkgCategory} setIsAddingPkgCategory={setIsAddingPkgCategory} newPkgCatName={newPkgCatName} setNewPkgCatName={setNewPkgCatName} handleAddPkgCategory={handleAddPkgCategory} numItems={numItems} packageItems={packageItems} handleAddItemRow={handleAddItemRow} handleRemoveItemRow={handleRemoveItemRow} updateItem={updateItem} packageMessage={packageMessage} setPackageMessage={setPackageMessage} onConfirm={handleRegisterPackageFinal} />
       <StaffFormModal isOpen={isStaffModalOpen} onClose={() => setIsStaffModalOpen(false)} data={staffFormData} setData={setStaffFormData} onSave={handleSaveStaff} />
+
+      {showFirstLoginChangePasswordModal && currentAdminUser && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+          <div className="relative w-full max-w-md bg-white text-black rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-black uppercase">Altere sua senha</h3>
+              <button type="button" onClick={() => { setShowFirstLoginChangePasswordModal(false); setFirstLoginPasswordData({ new: '', confirm: '' }); }} className="p-2 rounded-xl hover:bg-zinc-100"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-zinc-600 mb-4">Você está usando a senha padrão. Defina uma senha pessoal para acessar o sistema.</p>
+            <div className="space-y-3 mb-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Nova senha</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <input type="password" value={firstLoginPasswordData.new} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, new: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Mín. 6 caracteres" autoComplete="new-password" />
+              </div>
+            </div>
+            <div className="space-y-3 mb-6">
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Confirmar senha</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <input type="password" value={firstLoginPasswordData.confirm} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, confirm: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Repita a senha" autoComplete="new-password" />
+              </div>
+            </div>
+            <button type="button" onClick={handleFirstLoginChangePassword} disabled={firstLoginPasswordData.new.length < 6 || firstLoginPasswordData.new !== firstLoginPasswordData.confirm} className="w-full py-3 bg-black text-white rounded-xl font-bold text-sm uppercase disabled:opacity-50 disabled:cursor-not-allowed">
+              Definir senha
+            </button>
+          </div>
+        </div>
+      )}
 
       <ResidentProfileModal resident={selectedResidentProfile} onClose={() => setSelectedResidentProfile(null)} onEdit={() => { handleOpenResidentModal(selectedResidentProfile); setSelectedResidentProfile(null); }} onDelete={selectedResidentProfile ? () => handleDeleteResident(selectedResidentProfile.id) : undefined} allPackages={allPackages} visitorLogs={visitorLogs} onPackageSelect={setSelectedPackageForDetail} onCheckOutVisitor={handleVisitorCheckOut} />
       <PackageDetailModal 

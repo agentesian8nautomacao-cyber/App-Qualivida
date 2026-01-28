@@ -897,8 +897,33 @@ const generateUsername = (name: string): string => {
   return normalized || 'porteiro';
 };
 
+/** Busca login (usuário e senha) do porteiro para o síndico ver no modal de edição. Senha só é retornada se estiver em plain. */
+export const getPorteiroLoginInfo = async (staff: Staff): Promise<{ username: string; password: string } | null> => {
+  if ((staff.role || '').toLowerCase() !== 'porteiro') return null;
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('username, password_hash')
+      .eq('role', 'PORTEIRO')
+      .eq('name', staff.name.trim())
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    const hash = data.password_hash;
+    const password = hash && hash.startsWith('plain:') ? hash.substring(6) : null;
+    if (password == null) return { username: data.username, password: '123456' };
+    return { username: data.username, password };
+  } catch (e) {
+    console.warn('[getPorteiroLoginInfo]', e);
+    return null;
+  }
+};
+
 // Helper para criar usuário na tabela users quando porteiro é importado
-const createUserFromStaff = async (staff: Staff): Promise<{ success: boolean; error?: string }> => {
+// passwordPlain: senha pessoal do porteiro (obrigatória no cadastro manual; em import usa 123456 se não informada)
+const createUserFromStaff = async (staff: Staff, passwordPlain?: string): Promise<{ success: boolean; error?: string }> => {
   try {
     // Apenas criar usuário se for porteiro
     if (staff.role.toLowerCase() !== 'porteiro') {
@@ -930,16 +955,16 @@ const createUserFromStaff = async (staff: Staff): Promise<{ success: boolean; er
       }
     }
 
-    // Criar hash de senha padrão (senha: 123456)
-    // Usar formato "plain:" para compatibilidade com o sistema atual
-    const defaultPassword = 'plain:123456';
+    // Senha: pessoal se informada, senão padrão 123456 (ex.: import em lote)
+    const plain = (passwordPlain && passwordPlain.trim().length >= 6) ? passwordPlain.trim() : '123456';
+    const passwordHash = `plain:${plain}`;
 
     // Criar usuário na tabela users
     const { error: userError } = await supabase
       .from('users')
       .insert({
         username: finalUsername,
-        password_hash: defaultPassword,
+        password_hash: passwordHash,
         role: 'PORTEIRO',
         name: staff.name,
         email: staff.email || null,
@@ -950,15 +975,19 @@ const createUserFromStaff = async (staff: Staff): Promise<{ success: boolean; er
     if (userError) {
       // Se o erro for de duplicidade, tentar atualizar
       if (userError.code === '23505' || userError.message.includes('duplicate')) {
-        // Usuário já existe, atualizar dados
+        // Usuário já existe, atualizar dados (e senha se informada)
+        const updatePayload: Record<string, unknown> = {
+          name: staff.name,
+          email: staff.email || null,
+          phone: staff.phone || null,
+          is_active: staff.status === 'Ativo'
+        };
+        if (passwordPlain && passwordPlain.trim().length >= 6) {
+          updatePayload.password_hash = `plain:${passwordPlain.trim()}`;
+        }
         const { error: updateError } = await supabase
           .from('users')
-          .update({
-            name: staff.name,
-            email: staff.email || null,
-            phone: staff.phone || null,
-            is_active: staff.status === 'Ativo'
-          })
+          .update(updatePayload)
           .eq('username', finalUsername);
 
         if (updateError) {
@@ -980,7 +1009,7 @@ const createUserFromStaff = async (staff: Staff): Promise<{ success: boolean; er
   }
 };
 
-export const saveStaff = async (staff: Staff): Promise<{ success: boolean; error?: string; id?: string }> => {
+export const saveStaff = async (staff: Staff, options?: { passwordPlain?: string }): Promise<{ success: boolean; error?: string; id?: string }> => {
   try {
     const isNew = !staff.id || staff.id.startsWith('temp-');
     const payload: any = {
@@ -1001,16 +1030,17 @@ export const saveStaff = async (staff: Staff): Promise<{ success: boolean; error
       return { success: false, error: result.error };
     }
 
-    // Se for um porteiro novo, criar usuário na tabela users para permitir login
+    const passwordPlain = options?.passwordPlain?.trim();
+    // Se for um porteiro novo, criar usuário na tabela users com senha pessoal (ou padrão se import)
     if (isNew && staff.role.toLowerCase() === 'porteiro') {
-      const userResult = await createUserFromStaff(staff);
+      const userResult = await createUserFromStaff(staff, passwordPlain);
       if (!userResult.success) {
         console.warn('[saveStaff] Aviso: Funcionário salvo, mas não foi possível criar usuário:', userResult.error);
         // Não falhar o salvamento do staff, apenas avisar
       }
     } else if (!isNew && staff.role.toLowerCase() === 'porteiro') {
-      // Se estiver atualizando um porteiro existente, atualizar também o usuário
-      const userResult = await createUserFromStaff(staff);
+      // Se estiver atualizando um porteiro existente, atualizar também o usuário (senha só se informada)
+      const userResult = await createUserFromStaff(staff, passwordPlain);
       if (!userResult.success) {
         console.warn('[saveStaff] Aviso: Funcionário atualizado, mas não foi possível atualizar usuário:', userResult.error);
       }

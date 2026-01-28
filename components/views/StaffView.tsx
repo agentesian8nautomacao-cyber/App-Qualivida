@@ -73,17 +73,17 @@ const StaffView: React.FC<StaffViewProps> = ({
                 className="w-full pl-10 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold outline-none focus:border-white/30 transition-all placeholder:opacity-20"
              />
          </div>
-         <div className="flex gap-2 justify-end">
+         <div className="flex gap-2 justify-end flex-wrap sm:flex-nowrap w-full md:w-auto">
            <button 
              onClick={onAddStaff} 
-             className="px-6 py-3 bg-white text-black rounded-2xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2"
+             className="px-6 py-3 bg-white text-black rounded-2xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 w-full sm:w-auto"
            >
              <UserPlus className="w-4 h-4" /> Novo Colaborador
            </button>
            {onImportClick && (
              <button
                onClick={onImportClick}
-               className="px-6 py-3 bg-white/5 border border-white/10 text-[10px] font-black uppercase rounded-2xl hover:bg-white/10 transition-transform hover:scale-105 whitespace-nowrap flex items-center gap-2"
+              className="px-6 py-3 bg-white/5 border border-white/10 text-[10px] font-black uppercase rounded-2xl hover:bg-white/10 transition-transform hover:scale-105 whitespace-nowrap flex items-center gap-2 w-full sm:w-auto"
              >
                <Upload className="w-4 h-4" /> Importar Funcionários
              </button>

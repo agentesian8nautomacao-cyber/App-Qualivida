@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Search, ChevronDown, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, Plus, Check, Minus, Edit2, MessageCircle, Bell, Settings2, Clock, Save, Briefcase, User, Phone, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { X, Search, ChevronDown, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, Plus, Check, Minus, Edit2, MessageCircle, Bell, Settings2, Clock, Save, Briefcase, User, Phone, Mail, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { Resident, PackageItem, Staff } from '../../types';
 
 // --- MODAL NOVA RESERVA ---
@@ -671,13 +671,19 @@ export const NewPackageModal = ({
 };
 
 // --- MODAL STAFF (FUNCIONÁRIOS) ---
-export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isOpen: boolean, onClose: () => void, data: Partial<Staff>, setData: (d: Partial<Staff>) => void, onSave: () => void }) => {
+export type StaffFormData = Partial<Staff> & { passwordPlain?: string; passwordConfirm?: string };
+export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isOpen: boolean, onClose: () => void, data: StaffFormData, setData: (d: StaffFormData) => void, onSave: () => void }) => {
   if (!isOpen) return null;
+  const isNewStaff = !data.id || String(data.id).startsWith('temp-');
+  const isPorteiro = (data.role || '').toLowerCase() === 'porteiro';
+  const needsPassword = isPorteiro && isNewStaff;
+  const passwordMatch = !data.passwordPlain || data.passwordPlain === data.passwordConfirm;
+  const passwordOk = !needsPassword || (!!(data.passwordPlain && data.passwordPlain.length >= 6) && passwordMatch);
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white text-black rounded-[48px] shadow-2xl p-8 md:p-12 animate-in zoom-in duration-300">
-         <header className="flex justify-between items-center mb-10">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4 overflow-y-auto min-h-full">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-xl min-h-full" onClick={onClose} />
+      <div className="relative w-full max-w-lg max-h-[min(90vh,820px)] my-auto flex flex-col bg-white text-black rounded-2xl sm:rounded-3xl md:rounded-[48px] shadow-2xl p-5 sm:p-8 md:p-12 animate-in zoom-in duration-300 overflow-y-auto">
+         <header className="flex justify-between items-center mb-6 sm:mb-10 shrink-0">
             <div>
                <h4 className="text-3xl font-black uppercase tracking-tight">{data.id ? 'Editar Cadastro' : 'Novo Colaborador'}</h4>
                <p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">Gestão de Recursos Humanos</p>
@@ -752,6 +758,50 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                </div>
             </div>
 
+            {isPorteiro && (
+              <div className="pt-4 border-t border-zinc-100 space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-60 ml-2">
+                  {isNewStaff ? 'Porteiros acessam o sistema com login próprio — defina uma senha pessoal.' : 'Senha de acesso do porteiro (o síndico pode ver e alterar). Padrão: 123456 até o primeiro acesso.'}
+                </p>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">
+                    {isNewStaff ? 'Senha de acesso' : 'Senha atual / nova senha'}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input
+                      type="text"
+                      value={data.passwordPlain || ''}
+                      onChange={e => setData({ ...data, passwordPlain: e.target.value })}
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10"
+                      placeholder={isNewStaff ? 'Mín. 6 caracteres' : '123456 ou a senha já definida'}
+                      autoComplete={isNewStaff ? 'new-password' : 'off'}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Confirmar senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <input
+                      type="text"
+                      value={data.passwordConfirm || ''}
+                      onChange={e => setData({ ...data, passwordConfirm: e.target.value })}
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10"
+                      placeholder="Repita a senha"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+                {data.passwordConfirm && !passwordMatch && (
+                  <p className="text-xs text-red-600 font-medium ml-2">As senhas não coincidem.</p>
+                )}
+                {data.passwordPlain && data.passwordPlain.length > 0 && data.passwordPlain.length < 6 && (
+                  <p className="text-xs text-amber-600 font-medium ml-2">A senha deve ter no mínimo 6 caracteres.</p>
+                )}
+              </div>
+            )}
+
             <div className="pt-4 border-t border-zinc-100 space-y-4">
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Telefone</label>
@@ -770,7 +820,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
             </div>
 
             <div className="pt-6">
-               <button onClick={onSave} disabled={!data.name || !data.role} className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
+               <button onClick={onSave} disabled={!data.name || !data.role || !passwordOk} className="w-full py-5 bg-black text-white rounded-[24px] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
                   <Save className="w-4 h-4" /> Salvar Colaborador
                </button>
             </div>

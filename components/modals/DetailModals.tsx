@@ -12,14 +12,30 @@ export const ResidentProfileModal = ({
 }: { resident: Resident | null, onClose: () => void, onEdit: () => void, onDelete?: () => void, allPackages: Package[], visitorLogs: VisitorLog[], onPackageSelect: (p: Package) => void, onCheckOutVisitor: (id: string) => void }) => {
   const toast = useToast();
   if (!resident) return null;
+  let residentAvatar: string | null = null;
+  if (typeof window !== 'undefined') {
+    try {
+      residentAvatar = localStorage.getItem(`resident_avatar_${resident.id}`);
+    } catch {
+      residentAvatar = null;
+    }
+  }
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose} />
       <div className="relative w-full max-w-4xl bg-zinc-900 text-white rounded-[32px] sm:rounded-[48px] shadow-2xl p-4 sm:p-6 md:p-8 lg:p-12 animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar border border-white/10">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8 md:mb-12 pb-4 sm:pb-6 md:pb-8 border-b border-white/10">
           <div className="flex items-center gap-3 sm:gap-4 md:gap-6 w-full sm:w-auto">
-             <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-[24px] sm:rounded-[28px] md:rounded-[32px] bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-2xl sm:text-3xl md:text-4xl font-black shadow-lg flex-shrink-0">
-                {resident.name.substring(0, 2).toUpperCase()}
+             <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-[24px] sm:rounded-[28px] md:rounded-[32px] bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-2xl sm:text-3xl md:text-4xl font-black shadow-lg flex-shrink-0 overflow-hidden">
+                {residentAvatar ? (
+                  <img
+                    src={residentAvatar}
+                    alt={`Foto de ${resident.name}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  resident.name.substring(0, 2).toUpperCase()
+                )}
              </div>
              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">

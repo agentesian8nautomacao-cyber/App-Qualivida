@@ -6,7 +6,7 @@ import { loginUser, saveUserSession } from '../services/userAuth';
 import ForgotPassword from './ForgotPassword';
 
 interface LoginProps {
-  onLogin: (role: UserRole) => void;
+  onLogin: (role: UserRole, options?: { mustChangePassword?: boolean }) => void;
   theme?: 'dark' | 'light';
   toggleTheme?: () => void;
 }
@@ -124,10 +124,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
 
       // Salvar sessão
       saveUserSession(result.user);
-      
+
       // Delay para feedback visual
       setTimeout(() => {
-        onLogin(selectedRole);
+        onLogin(selectedRole, { mustChangePassword: !!(result as { mustChangePassword?: boolean }).mustChangePassword });
       }, 500);
     } catch (err) {
       console.error('Erro ao fazer login:', err);
