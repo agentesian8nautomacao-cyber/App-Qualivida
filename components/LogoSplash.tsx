@@ -184,6 +184,18 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
           }}
         />
         <p
+          style={{
+            fontSize: 'clamp(1rem, 3.2vw, 1.3rem)',
+            fontWeight: 800,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--text-primary, #ffffff)',
+            textAlign: 'center',
+          }}
+        >
+          Bem vido ao Gestão QUALIVIDA
+        </p>
+        <p
           className="logoSplash-name"
           style={{
             fontSize: 'clamp(0.75rem, 3vw, 1rem)',

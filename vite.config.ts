@@ -53,12 +53,15 @@ export default defineConfig(({ mode }) => {
         workbox: {
           navigateFallback: '/index.html',
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,mp4}'],
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'supabase-api',
+                cacheName: 'supabase-api-v3',
                 networkTimeoutSeconds: 10
               }
             },
@@ -66,7 +69,7 @@ export default defineConfig(({ mode }) => {
               urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'images',
+                cacheName: 'images-v3',
                 expiration: {
                   maxEntries: 100,
                   maxAgeSeconds: 60 * 60 * 24 * 30 // 30 dias
@@ -77,7 +80,7 @@ export default defineConfig(({ mode }) => {
               urlPattern: /\.(?:js|css|woff|woff2|ttf|eot)$/,
               handler: 'StaleWhileRevalidate',
               options: {
-                cacheName: 'static-resources',
+                cacheName: 'static-resources-v3',
                 expiration: {
                   maxEntries: 200,
                   maxAgeSeconds: 60 * 60 * 24 * 7 // 7 dias
