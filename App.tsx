@@ -2174,6 +2174,8 @@ const App: React.FC = () => {
       >
         <video
           src="/GestaoQualivida.mp4"
+          autoPlay
+          muted
           controls
           className="w-full h-full object-cover"
           onClick={(e) => e.stopPropagation()}
