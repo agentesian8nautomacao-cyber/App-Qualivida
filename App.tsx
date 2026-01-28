@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { AlertCircle } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './components/Login';
-import LogoSplash from './components/LogoSplash';
 import ResidentRegister from './components/ResidentRegister';
 import ScreenSaver from './components/ScreenSaver';
 import { UserRole, Package, Resident, VisitorLog, PackageItem, Occurrence, Notice, ChatMessage, QuickViewCategory, Staff, Boleto, Notification } from './types';
@@ -97,8 +96,7 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  // Mostrar sempre o LogoSplash para usuários não autenticados,
-  // respeitando apenas o tempo configurado em LogoSplash (sem ocultar antecipadamente via localStorage)
+  // Splash de abertura com o vídeo institucional
   const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
@@ -2157,21 +2155,26 @@ const App: React.FC = () => {
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
   } else if (!isAuthenticated && showLogoSplash) {
-    // Mostrar logo splash se for true
-    console.log('[App] Renderizando LogoSplash', { showLogoSplash });
+    // Mostrar vídeo de abertura para usuários não autenticados
+    console.log('[App] Renderizando vídeo de abertura', { showLogoSplash });
     content = (
-      <LogoSplash
-        durationMs={5000}
-        onComplete={() => {
-          console.log('[App] LogoSplash completado');
-          try {
-            localStorage.setItem('hasSeenLogoSplash', 'true');
-          } catch (e) {
-            console.warn('[App] Erro ao salvar no localStorage:', e);
-          }
-          setShowLogoSplash(false);
-        }}
-      />
+      <div className="w-screen h-screen bg-black flex items-center justify-center">
+        <video
+          src="/GestaoQualivida.mp4"
+          autoPlay
+          muted
+          className="w-full h-full object-cover"
+          onEnded={() => {
+            console.log('[App] Vídeo de abertura finalizado');
+            try {
+              localStorage.setItem('hasSeenLogoSplash', 'true');
+            } catch (e) {
+              console.warn('[App] Erro ao salvar no localStorage:', e);
+            }
+            setShowLogoSplash(false);
+          }}
+        />
+      </div>
     );
   } else if (!isAuthenticated && showResidentRegister) {
     content = (
