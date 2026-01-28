@@ -114,7 +114,8 @@ const App: React.FC = () => {
       return;
     }
 
-    // Adicionar um pequeno delay para garantir que o componente tenha tempo de renderizar
+    // Adicionar delay maior para garantir que o componente tenha tempo de renderizar
+    // Especialmente importante em produção (Vercel) onde o hydration pode ser mais rápido
     const checkTimer = setTimeout(() => {
       try {
         const hasSeenSplash = localStorage.getItem('hasSeenLogoSplash');
@@ -128,7 +129,7 @@ const App: React.FC = () => {
         console.warn('[App] Erro ao verificar localStorage:', e);
         // Não alterar o estado, manter como true (já é o padrão)
       }
-    }, 100); // Pequeno delay de 100ms para garantir renderização
+    }, 300); // Delay maior (300ms) para garantir renderização completa, especialmente em produção
 
     return () => clearTimeout(checkTimer);
   }, [isAuthenticated]); // Executar quando autenticação mudar

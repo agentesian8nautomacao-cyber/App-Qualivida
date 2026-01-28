@@ -10,17 +10,44 @@ interface LogoSplashProps {
 const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }) => {
   const { config } = useAppConfig();
   const [hidden, setHidden] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const completedRef = useRef(false);
   const onCompleteRef = useRef(onComplete);
   const durationMsRef = useRef(durationMs);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
+
+  // Verificar se está no cliente (evita problemas de SSR)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsClient(true);
+    }
+  }, []);
 
   // Atualizar refs quando props mudarem
   useEffect(() => {
     onCompleteRef.current = onComplete;
     durationMsRef.current = durationMs;
   }, [onComplete, durationMs]);
+
+  // Marcar como montado após renderização completa
+  useEffect(() => {
+    // Usar requestAnimationFrame para garantir que o componente está totalmente renderizado
+    const rafId = requestAnimationFrame(() => {
+      // Adicionar um pequeno delay adicional para garantir que está no DOM
+      setTimeout(() => {
+        setIsMounted(true);
+        mountedRef.current = true;
+        console.log('[LogoSplash] Componente montado e pronto');
+      }, 50);
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const handleComplete = useCallback(() => {
     if (completedRef.current) {
@@ -47,10 +74,13 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
     }, 100);
   }, []);
 
+  // Iniciar timer apenas após o componente estar montado
   useEffect(() => {
-    // Garantir que o timer só seja iniciado uma vez
-    if (completedRef.current || timerRef.current) {
-      console.log('[LogoSplash] Timer já iniciado ou componente já completo');
+    // Só iniciar se estiver montado e não tiver sido completado
+    if (!isMounted || completedRef.current || timerRef.current) {
+      if (!isMounted) {
+        console.log('[LogoSplash] Aguardando montagem do componente...');
+      }
       return;
     }
     
@@ -60,8 +90,8 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
     console.log('[LogoSplash] Iniciando timer de', duration, 'ms');
     
     timerRef.current = setTimeout(() => {
-      if (completedRef.current) {
-        console.log('[LogoSplash] Timer disparou mas componente já estava completo');
+      if (completedRef.current || !mountedRef.current) {
+        console.log('[LogoSplash] Timer disparou mas componente já estava completo ou desmontado');
         return;
       }
       
@@ -78,7 +108,7 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
         timerRef.current = null;
       }
     };
-  }, [handleComplete]); // handleComplete é estável (sem dependências)
+  }, [isMounted, handleComplete]); // Depender de isMounted
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -93,6 +123,23 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
     console.log('[LogoSplash] Clique detectado após', elapsed, 'ms - pulando splash');
     handleComplete();
   }, [handleComplete]);
+
+  // Não renderizar nada até estar no cliente e montado (evita problemas de SSR/hydration)
+  if (!isClient || (!isMounted && typeof window !== 'undefined')) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'var(--bg-color, #0a0a0a)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      />
+    );
+  }
 
   return (
     <div
@@ -115,6 +162,7 @@ const LogoSplash: React.FC<LogoSplashProps> = ({ onComplete, durationMs = 4000 }
         cursor: 'pointer',
         transition: 'opacity 0.4s ease-out',
         opacity: hidden ? 0 : 1,
+        pointerEvents: hidden ? 'none' : 'auto',
       }}
     >
       <div
