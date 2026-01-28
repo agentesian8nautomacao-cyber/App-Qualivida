@@ -4,7 +4,9 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
+  // Carregar variáveis de ambiente
+  // No Vercel, as variáveis são injetadas automaticamente durante o build
+  const env = loadEnv(mode, process.cwd(), '');
   return {
     test: {
       globals: true,
