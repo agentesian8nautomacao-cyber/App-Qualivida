@@ -168,11 +168,21 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
     };
 
     const handleError = (e: Event) => {
-      console.error('[VideoIntro] Erro ao carregar vídeo:', e);
+      const videoElement = e.target as HTMLVideoElement;
+      const error = videoElement?.error;
+      console.error('[VideoIntro] Erro ao carregar vídeo:', {
+        error,
+        code: error?.code,
+        message: error?.message,
+        networkState: videoElement?.networkState,
+        readyState: videoElement?.readyState,
+        src: videoElement?.src
+      });
       setVideoError(true);
       // Aguardar um pouco antes de completar para dar chance de recuperar
       setTimeout(() => {
         if (!isCleanedUp) {
+          console.log('[VideoIntro] Completando após erro (pulando vídeo)');
           handleComplete();
         }
       }, 1000);
@@ -260,6 +270,19 @@ const VideoIntro: React.FC<VideoIntroProps> = ({ onComplete }) => {
         loop={false}
         muted={false}
         className="video-intro-responsive"
+        crossOrigin="anonymous"
+        onError={(e) => {
+          const video = e.currentTarget;
+          console.error('[VideoIntro] Erro no elemento video:', {
+            error: video.error,
+            code: video.error?.code,
+            message: video.error?.message,
+            networkState: video.networkState,
+            readyState: video.readyState,
+            src: video.src,
+            currentSrc: video.currentSrc
+          });
+        }}
         onLoadStart={() => console.log('[VideoIntro] Vídeo iniciando carregamento...')}
         onLoadedMetadata={() => console.log('[VideoIntro] Metadados carregados')}
         onLoadedData={() => console.log('[VideoIntro] Dados carregados')}

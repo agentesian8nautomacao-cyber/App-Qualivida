@@ -99,42 +99,35 @@ const App: React.FC = () => {
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
   const [showLogoSplash, setShowLogoSplash] = useState(false);
-  const [showVideoIntro, setShowVideoIntro] = useState(() => {
-    // Verificar se já viu o vídeo apenas após o componente estar montado
-    if (typeof window !== 'undefined') {
-      try {
-        const hasSeenIntro = localStorage.getItem('hasSeenVideoIntro');
-        return hasSeenIntro !== 'true';
-      } catch (e) {
-        // Se houver erro ao acessar localStorage, mostrar o vídeo
-        console.warn('Erro ao acessar localStorage:', e);
-        return true;
-      }
-    }
-    return true;
-  });
+  // Estado inicial: sempre começar como null (indeterminado) para evitar problemas de SSR
+  const [showVideoIntro, setShowVideoIntro] = useState<boolean | null>(null);
 
-  // Garantir que o vídeo seja exibido no primeiro acesso
+  // Verificar localStorage apenas uma vez após a montagem do componente
   useEffect(() => {
-    // Verificar novamente após o componente estar montado
-    if (typeof window !== 'undefined') {
+    // Aguardar um pequeno delay para garantir que estamos no cliente
+    const checkVideoIntro = () => {
+      if (typeof window === 'undefined') {
+        // Se não estiver no cliente, mostrar o vídeo por padrão
+        setShowVideoIntro(true);
+        return;
+      }
+
       try {
         const hasSeenIntro = localStorage.getItem('hasSeenVideoIntro');
-        console.log('[App] Verificando vídeo intro:', { hasSeenIntro, showVideoIntro });
-        if (hasSeenIntro !== 'true' && !showVideoIntro) {
-          // Se não viu e não está mostrando, mostrar
-          console.log('[App] Exibindo vídeo intro');
-          setShowVideoIntro(true);
-        }
+        const shouldShow = hasSeenIntro !== 'true';
+        console.log('[App] Verificando vídeo intro:', { hasSeenIntro, shouldShow });
+        setShowVideoIntro(shouldShow);
       } catch (e) {
+        // Se houver erro ao acessar localStorage, mostrar o vídeo por segurança
         console.warn('[App] Erro ao verificar localStorage:', e);
-        // Em caso de erro, mostrar o vídeo por segurança
-        if (!showVideoIntro) {
-          setShowVideoIntro(true);
-        }
+        setShowVideoIntro(true);
       }
-    }
-  }, [showVideoIntro]);
+    };
+
+    // Pequeno delay para garantir que o DOM está pronto
+    const timer = setTimeout(checkVideoIntro, 100);
+    return () => clearTimeout(timer);
+  }, []); // Executar apenas uma vez na montagem
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
@@ -2149,8 +2142,9 @@ const App: React.FC = () => {
   let content: React.ReactNode;
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
-  } else if (showVideoIntro) {
-    console.log('[App] Renderizando VideoIntro');
+  } else if (showVideoIntro === true || showVideoIntro === null) {
+    // Mostrar vídeo se for true ou null (null = ainda não verificou, então mostrar por segurança)
+    console.log('[App] Renderizando VideoIntro', { showVideoIntro });
     content = (
       <VideoIntro
         onComplete={() => {
