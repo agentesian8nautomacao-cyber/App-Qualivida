@@ -2161,8 +2161,7 @@ const App: React.FC = () => {
       <div className="w-screen h-screen bg-black flex items-center justify-center">
         <video
           src="/GestaoQualivida.mp4"
-          autoPlay
-          muted
+          controls
           className="w-full h-full object-cover"
           onEnded={() => {
             console.log('[App] Vídeo de abertura finalizado');
