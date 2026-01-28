@@ -262,7 +262,7 @@ const NoticesView: React.FC<NoticesViewProps> = ({
                      >
                         <div className="flex items-center justify-between mb-1">
                            <span className="text-[9px] font-black uppercase tracking-widest opacity-70">
-                              {isMe ? 'Você' : senderLabel}
+                              {senderLabel}{isMe ? ' (Você)' : ''}
                            </span>
                         </div>
                         <p className="text-xs font-bold leading-relaxed">{msg.text}</p>
