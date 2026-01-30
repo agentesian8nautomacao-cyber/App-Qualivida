@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, Lock, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { requestPasswordReset, getEmailForReset, resetPasswordWithToken } from '../services/userAuth';
+import { getEmailForResetResident } from '../services/residentAuth';
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -87,7 +88,9 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
 
     const successMessage = 'Se o e-mail estiver cadastrado, você receberá um link de recuperação por e-mail. Verifique a caixa de entrada e o spam.';
 
-    const emailToUse = value.includes('@') ? value.trim().toLowerCase() : (await getEmailForReset(value)) || '';
+    const emailToUse = value.includes('@')
+      ? value.trim().toLowerCase()
+      : (isResident ? await getEmailForResetResident(value) : await getEmailForReset(value)) || '';
 
     if (!emailToUse) {
       setLoading(false);
@@ -124,6 +127,9 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
 
     if (recoveryFromAuth) {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (!error) {
+        await supabase.rpc('sync_resident_password_after_reset', { new_password: newPassword }).catch(() => {});
+      }
       setLoading(false);
       if (!error) {
         setMessage({ type: 'success', text: 'Senha redefinida com sucesso! Você já pode fazer login.' });

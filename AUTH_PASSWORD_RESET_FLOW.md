@@ -100,3 +100,29 @@ A mensagem *"Se o e-mail estiver cadastrado, você receberá um link de recupera
    - O usuário deve verificar a caixa de entrada e o spam; provedores podem atrasar ou bloquear e-mails de “password reset”.
 
 **Resumo:** Para saber se o Supabase “disparou” o e-mail, use os **Auth Logs** e confirme o evento `user_recovery_requested` e se o e-mail está em **Authentication → Users**.
+
+---
+
+### 7. Por que o e-mail não chegou? (Morador ou Porteiro/Síndico)
+
+O Supabase **só envia** o link de recuperação para endereços que existem em **Authentication → Users** (`auth.users`). Não basta o e-mail estar em `public.users` (porteiro/síndico) ou em `residents` (morador).
+
+**O que fazer para o e-mail passar a chegar:**
+
+1. **Adicionar o usuário no Supabase Auth**
+   - No **Dashboard do Supabase** → **Authentication** → **Users** → **Add user**.
+   - Informe o **mesmo e-mail** que está no perfil (ex.: `agentesian8nautomacao@gmail.com`).
+   - Defina uma senha inicial (o usuário poderá trocar pelo link de recuperação).
+   - Salve.
+
+2. **Depois disso**
+   - Quando a pessoa solicitar "Esqueci minha senha" com esse e-mail, o Supabase enviará o link.
+   - Verifique **Auth Logs** para ver o evento `user_recovery_requested`.
+
+**Morador (tabela `residents`):**
+
+- O app busca o e-mail do morador por **unidade** ou **e-mail** em `residents` (`getEmailForResetResident`).
+- Para o link ser enviado, o **mesmo e-mail** precisa existir em **Authentication → Users** (passo 1 acima).
+- Após redefinir a senha pelo link, a nova senha fica no Auth e, se você rodou `supabase_sync_resident_password_after_reset.sql`, também em `residents.password_hash`, para o login como morador (unidade + senha) continuar funcionando.
+
+**Resumo:** E-mail só chega se o endereço estiver em **Authentication → Users**. Cadastre o usuário lá com o mesmo e-mail do perfil.

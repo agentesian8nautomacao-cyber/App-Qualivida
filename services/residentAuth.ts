@@ -264,6 +264,43 @@ export const getResidentByUnit = async (unit: string): Promise<Resident | null> 
   }
 };
 
+/**
+ * Obtém o e-mail do morador a partir de unidade ou e-mail (para recuperação de senha).
+ * Usado no "Esqueci a senha" quando o usuário está na aba Morador.
+ */
+export const getEmailForResetResident = async (unitOrEmail: string): Promise<string | null> => {
+  const value = unitOrEmail.trim();
+  const q = value.toLowerCase();
+  const isEmail = q.includes('@');
+  try {
+    if (isEmail) {
+      const { data } = await supabase
+        .from('residents')
+        .select('email')
+        .eq('email', q)
+        .maybeSingle();
+      return data?.email ?? null;
+    }
+    const normalizedUnit = normalizeUnit(value);
+    if (!normalizedUnit) return null;
+    const { data } = await supabase
+      .from('residents')
+      .select('email')
+      .eq('unit', normalizedUnit)
+      .maybeSingle();
+    if (data?.email) return data.email;
+    const { data: byRaw } = await supabase
+      .from('residents')
+      .select('email')
+      .eq('unit', value)
+      .maybeSingle();
+    return byRaw?.email ?? null;
+  } catch (err) {
+    console.warn('getEmailForResetResident:', err);
+    return null;
+  }
+};
+
 // Atualizar senha do morador
 export const updateResidentPassword = async (
   residentId: string,
