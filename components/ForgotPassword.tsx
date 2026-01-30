@@ -56,18 +56,19 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
   }, [step, recoveryFromAuth]);
 
   const validatePasswordStrength = (password: string): { ok: boolean; error?: string } => {
-    if (!password || password.length < 8) {
-      return { ok: false, error: 'A senha deve ter pelo menos 8 caracteres.' };
+    if (!password || password.length < 6) {
+      return { ok: false, error: 'A senha deve ter 6 caracteres.' };
     }
-    const hasUpper = /[A-Z]/.test(password);
-    const hasLower = /[a-z]/.test(password);
+    if (password.length > 32) {
+      return { ok: false, error: 'A senha deve ter no máximo 32 caracteres.' };
+    }
+    if (!/^[A-Za-z0-9]+$/.test(password)) {
+      return { ok: false, error: 'Use apenas letras e números (sem espaços ou símbolos).' };
+    }
+    const hasLetter = /[A-Za-z]/.test(password);
     const hasDigit = /[0-9]/.test(password);
-    const hasSpecial = /[^A-Za-z0-9]/.test(password);
-    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
-      return {
-        ok: false,
-        error: 'A senha deve incluir letras maiúsculas, minúsculas, números e caractere especial.'
-      };
+    if (!hasLetter || !hasDigit) {
+      return { ok: false, error: 'A senha deve ter letras e números.' };
     }
     return { ok: true };
   };
@@ -121,19 +122,21 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (newPassword.trim() !== confirmPassword.trim()) {
       setMessage({ type: 'error', text: 'As senhas não coincidem.' });
       return;
     }
+
+    const normalizedPassword = newPassword.trim().toLowerCase();
 
     setLoading(true);
     setMessage(null);
 
     if (recoveryFromAuth) {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password: normalizedPassword });
       if (!error) {
         try {
-          await supabase.rpc('sync_resident_password_after_reset', { new_password: newPassword });
+          await supabase.rpc('sync_resident_password_after_reset', { new_password: normalizedPassword });
         } catch (_) {}
       }
       setLoading(false);
@@ -154,7 +157,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       return;
     }
 
-    const result = await resetPasswordWithToken(effectiveToken, newPassword);
+    const result = await resetPasswordWithToken(effectiveToken, normalizedPassword);
     setLoading(false);
 
     if (result.success) {
@@ -195,7 +198,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
           }`}>
             {step === 'request' 
               ? (isResident ? 'Informe a unidade ou e-mail cadastrado para receber o link de recuperação por e-mail.' : 'Informe o e-mail ou usuário cadastrado para receber o link de recuperação por e-mail. Se o e-mail existir, você receberá o link em alguns instantes.')
-              : 'Defina uma nova senha forte para sua conta.'}
+              : 'Nova senha: 6 caracteres, letras e números. Maiúsculas e minúsculas são tratadas como iguais.'}
           </p>
 
           {recoveryLinkExpiredMessage && step === 'request' && (
@@ -311,7 +314,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                 }`} />
                 <input 
                   type={showNewPassword ? 'text' : 'password'}
-                  placeholder="Nova Senha (mínimo 8 caracteres, com maiúscula, minúscula, número e símbolo)" 
+                  placeholder="Nova senha (6 caracteres, letras e números)" 
                   value={newPassword}
                   onChange={(e) => {
                     setNewPassword(e.target.value);

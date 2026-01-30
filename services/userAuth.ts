@@ -94,20 +94,15 @@ export const isUserBlocked = (username: string): { blocked: boolean; remainingMi
 };
 
 /**
- * Verifica força mínima da nova senha:
- * - Mínimo 8 caracteres
- * - Pelo menos 1 letra maiúscula
- * - Pelo menos 1 letra minúscula
- * - Pelo menos 1 número
- * - Pelo menos 1 caractere especial
+ * Verifica regra simplificada da senha:
+ * - 6 caracteres, apenas letras e números (maiúsculas e minúsculas tratadas como iguais)
  */
 const isStrongPassword = (password: string): boolean => {
-  if (!password || password.length < 8) return false;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
+  if (!password || password.length < 6 || password.length > 32) return false;
+  if (!/^[A-Za-z0-9]+$/.test(password)) return false;
+  const hasLetter = /[A-Za-z]/.test(password);
   const hasDigit = /[0-9]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  return hasUpper && hasLower && hasDigit && hasSpecial;
+  return hasLetter && hasDigit;
 };
 
 /**
@@ -156,6 +151,7 @@ export const loginUser = async (
   attemptsRemaining?: number;
 }> => {
   const normalizedUsername = username.toLowerCase().trim();
+  const normalizedPassword = password.trim().toLowerCase();
 
   // Verificar se o usuário está bloqueado
   const blockStatus = isUserBlocked(normalizedUsername);
@@ -192,7 +188,7 @@ export const loginUser = async (
     if (data.auth_id && data.email) {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
-        password
+        password: normalizedPassword
       });
       if (!authError && authData?.user?.id) {
         resetLoginAttempts(normalizedUsername);
@@ -212,14 +208,14 @@ export const loginUser = async (
       // Tem password_hash (legado): tentar legado abaixo
     }
 
-    // Login legado (sem auth_id ou Auth falhou e tem password_hash)
-    const hashedPassword = await hashPassword(password);
+    // Login legado (sem auth_id ou Auth falhou e tem password_hash) — senha normalizada para case-insensitive
+    const hashedPassword = await hashPassword(normalizedPassword);
     let isValidPassword = false;
     let usedDefaultPassword = false;
 
     if (data.password_hash && data.password_hash.startsWith('plain:')) {
-      const plainPassword = data.password_hash.substring(6);
-      isValidPassword = plainPassword === password;
+      const plainPassword = data.password_hash.substring(6).toLowerCase();
+      isValidPassword = plainPassword === normalizedPassword;
       if (isValidPassword && data.role === 'PORTEIRO' && plainPassword === '123456') usedDefaultPassword = true;
     } else if (data.password_hash === '$2a$10$placeholder_hash_here') {
       const defaultPasswords: Record<string, string> = {
@@ -227,7 +223,7 @@ export const loginUser = async (
         'admin': 'admin123',
         'desenvolvedor': 'dev'
       };
-      isValidPassword = defaultPasswords[normalizedUsername] === password;
+      isValidPassword = defaultPasswords[normalizedUsername] === normalizedPassword;
     } else {
       isValidPassword = data.password_hash === hashedPassword;
     }
@@ -484,16 +480,18 @@ export const changeUserPassword = async (
       return { success: false, error: 'Senha atual incorreta' };
     }
 
+    const normalizedNew = newPassword.trim().toLowerCase();
+
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user?.id === loginResult.user.id) {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password: normalizedNew });
       if (!error) return { success: true };
       console.warn('Auth updateUser falhou, tentando legado:', error);
     }
 
     const newPasswordHash = options?.storePlain
-      ? `plain:${newPassword}`
-      : await hashPassword(newPassword);
+      ? `plain:${normalizedNew}`
+      : await hashPassword(normalizedNew);
 
     const { error } = await supabase
       .from('users')
@@ -752,11 +750,11 @@ export const resetPasswordWithToken = async (
   message: string;
 }> => {
   try {
-    // Regras de senha fortes também no backend (defesa em profundidade)
-    if (!isStrongPassword(newPassword)) {
+    const normalized = newPassword.trim().toLowerCase();
+    if (!isStrongPassword(normalized)) {
       return {
         success: false,
-        message: 'A nova senha deve ter pelo menos 8 caracteres, incluindo letras maiúsculas, minúsculas, números e caractere especial.'
+        message: 'A nova senha deve ter 6 caracteres, apenas letras e números. Maiúsculas e minúsculas são tratadas como iguais.'
       };
     }
 
@@ -769,8 +767,8 @@ export const resetPasswordWithToken = async (
       };
     }
 
-    // Hash da nova senha
-    const newPasswordHash = await hashPassword(newPassword);
+    // Hash da nova senha (normalizada para login case-insensitive)
+    const newPasswordHash = await hashPassword(normalized);
 
     // Atualizar senha do usuário
     const { error: updateError } = await supabase

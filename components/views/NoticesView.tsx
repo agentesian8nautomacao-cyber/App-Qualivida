@@ -175,7 +175,8 @@ const NoticesView: React.FC<NoticesViewProps> = ({
          </div>
       </div>
 
-      {/* COLUNA DIREITA (DESKTOP) / BOTTOM SHEET (MOBILE): CHAT "LINHA DIRETA" */}
+      {/* COLUNA DIREITA (DESKTOP) / BOTTOM SHEET (MOBILE): CHAT "LINHA DIRETA" — apenas Portaria e Síndico */}
+      {(role === 'PORTEIRO' || role === 'SINDICO') && (
       <div 
          className={`
             flex flex-col flex-shrink-0 backdrop-blur-2xl border-[var(--border-color)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
@@ -370,6 +371,7 @@ const NoticesView: React.FC<NoticesViewProps> = ({
             </div>
          </div>
       </div>
+      )}
 
    </div>
   );

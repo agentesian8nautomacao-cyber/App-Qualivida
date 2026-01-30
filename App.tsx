@@ -239,8 +239,9 @@ const App: React.FC = () => {
       toast.error('As senhas não coincidem');
       return;
     }
-    if (adminPasswordData.new.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+    const pwd = adminPasswordData.new.trim();
+    if (pwd.length < 6 || pwd.length > 32 || !/^[A-Za-z0-9]+$/.test(pwd) || !/[A-Za-z]/.test(pwd) || !/[0-9]/.test(pwd)) {
+      toast.error('A nova senha deve ter 6 caracteres, apenas letras e números. Maiúsculas e minúsculas são iguais.');
       return;
     }
     const result = await changeUserPassword(
@@ -297,14 +298,15 @@ const App: React.FC = () => {
       toast.error('As senhas não coincidem');
       return;
     }
-    if (firstLoginPasswordData.new.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+    const pwdFirst = firstLoginPasswordData.new.trim();
+    if (pwdFirst.length < 6 || pwdFirst.length > 32 || !/^[A-Za-z0-9]+$/.test(pwdFirst) || !/[A-Za-z]/.test(pwdFirst) || !/[0-9]/.test(pwdFirst)) {
+      toast.error('A nova senha deve ter 6 caracteres, apenas letras e números. Maiúsculas e minúsculas são iguais.');
       return;
     }
     const result = await changeUserPassword(
       currentAdminUser.username,
       '123456',
-      firstLoginPasswordData.new,
+      pwdFirst,
       { storePlain: true }
     );
     if (result.success) {
@@ -358,8 +360,9 @@ const App: React.FC = () => {
       toast.error('As senhas não coincidem');
       return;
     }
-    if (residentPasswordData.new.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+    const pwdRes = residentPasswordData.new.trim();
+    if (pwdRes.length < 6 || pwdRes.length > 32 || !/^[A-Za-z0-9]+$/.test(pwdRes) || !/[A-Za-z]/.test(pwdRes) || !/[0-9]/.test(pwdRes)) {
+      toast.error('A nova senha deve ter 6 caracteres, apenas letras e números. Maiúsculas e minúsculas são iguais.');
       return;
     }
     // Validar senha atual
@@ -368,7 +371,7 @@ const App: React.FC = () => {
       toast.error('Senha atual incorreta');
       return;
     }
-    const result = await updateResidentPassword(currentResident.id, residentPasswordData.new);
+    const result = await updateResidentPassword(currentResident.id, pwdRes);
     if (result.success) {
       setIsChangingResidentPassword(false);
       setResidentPasswordData({ current: '', new: '', confirm: '' });

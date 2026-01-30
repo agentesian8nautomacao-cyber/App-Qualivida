@@ -74,8 +74,19 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
       return;
     }
 
-    if (!formData.password || formData.password.length < 3) {
-      setError('Senha deve ter no mínimo 3 caracteres');
+    const pwd = (formData.password || '').trim();
+    if (pwd.length < 6) {
+      setError('Senha deve ter 6 caracteres (letras e números). Maiúsculas e minúsculas são iguais.');
+      return;
+    }
+    if (!/^[A-Za-z0-9]+$/.test(pwd)) {
+      setError('Use apenas letras e números na senha (sem espaços ou símbolos).');
+      return;
+    }
+    const hasLetter = /[A-Za-z]/.test(pwd);
+    const hasDigit = /[0-9]/.test(pwd);
+    if (!hasLetter || !hasDigit) {
+      setError('A senha deve ter letras e números.');
       return;
     }
 
@@ -84,8 +95,7 @@ const ResidentRegister: React.FC<ResidentRegisterProps> = ({
       return;
     }
 
-    // A senha padrão é a unidade, mas pode ser alterada
-    const passwordToUse = formData.password || formData.unit.toUpperCase();
+    const passwordToUse = pwd;
 
     setLoading(true);
 

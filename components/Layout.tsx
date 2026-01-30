@@ -20,7 +20,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
   FileText,
   Receipt
 } from 'lucide-react';
@@ -59,8 +58,6 @@ const Layout: React.FC<LayoutProps> = ({
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
-  const baseUserRole = typeof window !== 'undefined' ? (sessionStorage.getItem('userRole') as UserRole | null) : null;
-  const canSwitchRole = baseUserRole === 'SINDICO';
 
   useEffect(() => {
     if (theme === 'light') {
@@ -101,14 +98,6 @@ const Layout: React.FC<LayoutProps> = ({
 
     touchStartXRef.current = null;
     touchStartYRef.current = null;
-  };
-
-  const handleSwitchRole = () => {
-    // Apenas usuários com papel base de síndico podem alternar o perfil
-    if (!canSwitchRole) return;
-    const nextRole = role === 'PORTEIRO' ? 'SINDICO' : 'PORTEIRO';
-    setRole(nextRole);
-    setActiveTab('dashboard');
   };
 
   const menuItems = [
@@ -216,20 +205,7 @@ const Layout: React.FC<LayoutProps> = ({
               <p className="text-xs font-black truncate uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
                 {role === 'SINDICO' ? 'Admin' : role === 'MORADOR' ? 'Morador' : 'Portaria'}
               </p>
-              {canSwitchRole && (
-                <button 
-                  onClick={handleSwitchRole}
-                  className="text-[9px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 flex items-center gap-1 mt-0.5 transition-all active:scale-95"
-                >
-                  <RefreshCw className="w-2.5 h-2.5" /> Alternar
-                </button>
-              )}
             </div>
-          )}
-          {isDesktopCollapsed && canSwitchRole && (
-            <button onClick={handleSwitchRole} className="p-1 opacity-40 hover:opacity-100" title="Alternar Perfil">
-              <RefreshCw className="w-4 h-4" />
-            </button>
           )}
           <button 
             onClick={onLogout}
