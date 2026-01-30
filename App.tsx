@@ -99,8 +99,14 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  // Splash de abertura com o vídeo institucional
-  const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
+  // Splash de abertura com o vídeo institucional (não repetir se já visto/pulado)
+  const [showLogoSplash, setShowLogoSplash] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hasSeenLogoSplash') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   // Controle de áudio do vídeo (muted por padrão para autoplay funcionar)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
 
