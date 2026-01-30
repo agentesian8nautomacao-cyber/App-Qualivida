@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, Lock, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../services/supabase';
-import { requestPasswordReset, getEmailForReset, resetPasswordWithToken } from '../services/userAuth';
+import { requestPasswordReset, getEmailForReset, resetPasswordWithToken, getOrRestoreRecoverySession, clearRecoveryHashFromUrl } from '../services/userAuth';
 import { getEmailForResetResident } from '../services/residentAuth';
 
 interface ForgotPasswordProps {
@@ -36,12 +36,18 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     }
   }, [initialStep, initialToken]);
 
+  // Detectar link de recuperação no hash e estabelecer sessão assim que a página carregar
+  // (não depender do submit: sessão pronta em navegador limpo, aba anônima, sem login prévio)
   useEffect(() => {
     const isRecoveryHash = typeof window !== 'undefined' && window.location.hash.includes('type=recovery');
-    if (isRecoveryHash) {
-      setStep('reset');
-      setRecoveryFromAuth(true);
-    }
+    if (!isRecoveryHash) return;
+    setStep('reset');
+    setRecoveryFromAuth(true);
+    getOrRestoreRecoverySession().then(({ session }) => {
+      if (session) {
+        clearRecoveryHashFromUrl();
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -144,26 +150,10 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     setMessage(null);
 
     if (recoveryFromAuth) {
-      // Garantir que a sessão de recovery seja estabelecida a partir do hash da URL
-      // (detectSessionInUrl no cliente já ajuda; initialize() processa redirects; fallback manual se necessário)
-      await supabase.auth.initialize();
-      let { data: { session } } = await supabase.auth.getSession();
-      if (!session && typeof window !== 'undefined' && window.location.hash) {
-        const hash = window.location.hash.replace(/^#/, '');
-        const params = new URLSearchParams(hash);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        if (accessToken && refreshToken) {
-          const { error: setErr } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          if (!setErr) {
-            const next = await supabase.auth.getSession();
-            session = next.data.session;
-            // Remover tokens da URL por segurança (evitar exposição no histórico/back)
-            if (session && window.history?.replaceState) {
-              window.history.replaceState({}, '', window.location.pathname + window.location.search || '/');
-            }
-          }
-        }
+      // Nunca assumir sessão ativa: obter ou restaurar a partir do link (access_token/refresh_token no hash)
+      const { session } = await getOrRestoreRecoverySession();
+      if (session) {
+        clearRecoveryHashFromUrl();
       }
       if (!session) {
         setLoading(false);
@@ -183,13 +173,13 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
         setTimeout(() => onBack(), 2000);
       } else {
         const errMsg = error?.message || '';
-        const isSessionMissing = /session missing|auth session/i.test(errMsg);
-        const isPasswordPolicyError = !isSessionMissing && /senha|password|caractere|caracteres|8|maiúscula|minúscula|special|símbolo|symbol/i.test(errMsg);
+        const isSessionMissing = /session missing|auth session|invalid session|session expired|no session/i.test(errMsg);
+        const isPasswordPolicyError = !isSessionMissing && /senha|password|caractere|caracteres|8|maiúscula|minúscula|special|símbolo|symbol|policy/i.test(errMsg);
         const errorText = isSessionMissing
           ? 'O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail).'
           : isPasswordPolicyError
             ? 'Use 6 caracteres, apenas letras e números (maiúsculas e minúsculas são iguais). Não use símbolos.'
-            : errMsg || 'Erro ao redefinir senha.';
+            : errMsg || 'Erro ao redefinir senha. Tente novamente ou solicite um novo link.';
         setMessage({ type: 'error', text: errorText });
       }
       return;

@@ -224,19 +224,25 @@ Se ao solicitar recuperação de senha aparecer **erro 500** na chamada a `/auth
 
 Esse erro aparecia quando o usuário tentava **redefinir a senha** na tela após clicar no link de recuperação e **a sessão não era estabelecida** a partir do hash da URL (`#type=recovery&access_token=...&refresh_token=...`).
 
-**Correção aplicada no app:**
+**Correção estrutural aplicada no app:**
 
-1. **Cliente Supabase** (`services/supabase.ts`): `detectSessionInUrl: true` — o cliente passa a detectar e estabelecer a sessão automaticamente quando a página carrega com o hash de recovery na URL.
-2. **Tela de redefinição** (`components/ForgotPassword.tsx`): antes de chamar `updateUser`, o app:
-   - chama `supabase.auth.initialize()` para garantir que a sessão seja carregada do redirect;
-   - se ainda não houver sessão, tenta restaurar manualmente a partir do hash (extrai `access_token` e `refresh_token` e chama `setSession`);
-   - após estabelecer a sessão a partir do hash, remove os tokens da URL com `history.replaceState` por segurança.
+1. **Cliente Supabase** (`services/supabase.ts`): `detectSessionInUrl: true` — o cliente detecta e estabelece a sessão automaticamente quando a página carrega com o hash de recovery na URL.
 
-**O que o app faz em caso de falha:** Se não existir sessão (link expirado, já usado ou hash inválido), ou se o Supabase retornar "Auth session missing!", é exibida a mensagem: *"O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail)."* O usuário pode voltar ao passo de solicitação e pedir um novo e-mail.
+2. **Serviço de auth** (`services/userAuth.ts`):
+   - **`getOrRestoreRecoverySession()`**: obtém ou restaura a sessão de recuperação a partir da URL (nunca assume sessão ativa). Chama `initialize()`, depois `getSession()`; se não houver sessão, extrai `access_token` e `refresh_token` do hash e chama `setSession()`. Retorna a sessão ou `null`. Funciona em navegador limpo, aba anônima e sem login prévio.
+   - **`clearRecoveryHashFromUrl()`**: remove os tokens da URL após estabelecer a sessão (segurança: evitar exposição no histórico/back).
+
+3. **Tela de redefinição** (`components/ForgotPassword.tsx`):
+   - **No mount**: quando o hash contém `type=recovery`, chama `getOrRestoreRecoverySession()` e, se houver sessão, `clearRecoveryHashFromUrl()` — a sessão fica pronta antes do usuário enviar o formulário.
+   - **Antes de `updateUser`**: chama novamente `getOrRestoreRecoverySession()` (nunca assumir sessão ativa), limpa a URL se sessão estabelecida; se não houver sessão, exibe mensagem clara e não chama `updateUser`. Só depois de validar sessão: executa `updateUser({ password })`.
+
+4. **Tratamento de erros**: o app diferencia erro de **sessão ausente** (link expirado/já usado) de **política de senha** e de outros erros, exibindo mensagens específicas em vez de genéricas.
+
+**O que o app faz em caso de falha:** Se não existir sessão (link expirado, já usado ou hash inválido), ou se o Supabase retornar "Auth session missing!" (ou variantes como "invalid session", "session expired"), é exibida a mensagem: *"O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail)."* O usuário pode voltar ao passo de solicitação e pedir um novo e-mail.
 
 **Causas comuns quando o erro ainda ocorre:** Link de recuperação com validade expirada (ex.: 1 h); link já utilizado para trocar a senha; abrir o link em outro navegador/dispositivo sem a sessão.
 
-**Resumo:** Com `detectSessionInUrl: true` e o fallback manual no ForgotPassword, a sessão de recovery é estabelecida corretamente. Se o link for inválido ou expirado, o usuário deve solicitar um **novo link** (mesmo e-mail) e usar dentro do prazo, na mesma aba/navegador em que vai definir a nova senha.
+**Resumo:** O fluxo não assume sessão ativa: valida ou restaura a sessão explicitamente a partir do link (tokens no hash), usa `setSession()` quando necessário e só então chama `updateUser()`. Comportamento alinhado a boas práticas de autenticação (SaaS/produção).
 
 ---
 

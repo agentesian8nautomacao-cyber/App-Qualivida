@@ -513,6 +513,68 @@ export const changeUserPassword = async (
 };
 
 /**
+ * Obtém ou restaura a sessão de recuperação de senha a partir da URL (hash com access_token/refresh_token).
+ * Deve ser usado antes de updateUser() no fluxo de reset para garantir sessão ativa.
+ * Funciona em navegador limpo, aba anônima e sem login prévio.
+ *
+ * 1. Chama initialize() para processar redirect (detectSessionInUrl).
+ * 2. Se getSession() não retornar sessão, extrai tokens do hash (#type=recovery&access_token=...&refresh_token=...).
+ * 3. Chama setSession() com os tokens e retorna a sessão estabelecida.
+ *
+ * @returns Sessão válida ou null (link expirado, já usado ou sem tokens na URL).
+ */
+export async function getOrRestoreRecoverySession(): Promise<{ session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] }> {
+  try {
+    if (typeof supabase.auth.initialize === 'function') {
+      await supabase.auth.initialize();
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      return { session };
+    }
+    if (typeof window === 'undefined' || !window.location?.hash) {
+      return { session: null };
+    }
+    const hash = window.location.hash.replace(/^#/, '');
+    const params = new URLSearchParams(hash);
+    if (params.get('type') !== 'recovery') {
+      return { session: null };
+    }
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    if (!accessToken || !refreshToken) {
+      return { session: null };
+    }
+    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (error) {
+      return { session: null };
+    }
+    const { data: { session: nextSession } } = await supabase.auth.getSession();
+    return { session: nextSession ?? null };
+  } catch {
+    return { session: null };
+  }
+}
+
+/**
+ * Remove tokens de recuperação da URL por segurança (evitar exposição no histórico/back).
+ * Chamar após estabelecer sessão com sucesso.
+ */
+export function clearRecoveryHashFromUrl(): void {
+  try {
+    if (typeof window !== 'undefined' && window.history?.replaceState && window.location?.hash) {
+      const hash = window.location.hash.replace(/^#/, '');
+      const params = new URLSearchParams(hash);
+      if (params.get('type') === 'recovery') {
+        window.history.replaceState({}, '', window.location.pathname + window.location.search || '/');
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Solicita recuperação de senha via Supabase Auth.
  * O Supabase envia o e-mail com o link (configuração em Dashboard → Authentication → Email).
  * redirectTo deve ser a URL da sua app para onde o usuário será redirecionado (ex: /reset-password).
