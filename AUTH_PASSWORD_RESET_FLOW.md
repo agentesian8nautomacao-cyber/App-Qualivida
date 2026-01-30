@@ -78,6 +78,95 @@ Configuração do e-mail no Supabase: **Dashboard → Authentication → Email T
 
 ---
 
+### 5.1. "Email rate limit exceeded" — aumentar o limite
+
+O Supabase limita quantos e-mails de autenticação (recuperação de senha, confirmação, etc.) podem ser enviados por hora. Com o SMTP padrão do Supabase o limite é **2 e-mails/h** e **não pode ser alterado** na tela de Limites de taxa.
+
+Se você tentar alterar o limite em **Authentication → Limites de taxa** sem ter SMTP personalizado, o Supabase exibe:
+
+> **"É necessário um provedor SMTP personalizado para atualizar esta configuração. O serviço de e-mail integrado possui um limite de taxa fixo. Você precisará configurar seu próprio provedor SMTP personalizado para atualizar seu limite de taxa de e-mail."**
+
+Ou seja: **não é possível** aumentar o limite só pela tela de Limites de taxa. É obrigatório **configurar SMTP personalizado primeiro** (em **Authentication → E-mails → Configurações SMTP**). Depois de ativar o SMTP personalizado, o limite sobe para **30 e-mails/h** e a opção de ajustar em **Authentication → Limites de taxa** passa a funcionar.
+
+**Passo a passo — configurar SMTP personalizado:**
+
+1. **Supabase Dashboard** → **Authentication** → **E-mails** → aba **Configurações SMTP**.
+2. Ative **"Habilitar SMTP personalizado"**.
+3. Preencha todos os campos obrigatórios:
+   - **Detalhes do remetente**
+     - **Endereço de e-mail do remetente:** ex. `noreply@seudominio.com` (o endereço de onde os e-mails são enviados).
+     - **Nome do remetente:** ex. `Condomínio XYZ` (nome exibido na caixa de entrada).
+   - **Configurações do provedor SMTP**
+     - **Hospedar:** host do seu provedor (ex. `smtp.resend.com`, `smtp.brevo.com`, `smtp.sendgrid.net`).
+     - **Número da porta:** `465` ou `587` (evite 25).
+     - **Intervalo mínimo por usuário:** ex. `60` segundos (mínimo entre e-mails para o mesmo usuário).
+     - **Nome de usuário** e **Senha:** credenciais fornecidas pelo provedor de e-mail.
+4. Salve. Após ativar, a mensagem do Supabase confirma: *"O limite de envio de e-mails será aumentado para 30 e poderá ser ajustado após a ativação do SMTP personalizado"*.
+5. Depois disso, em **Authentication → Limites de taxa** você poderá alterar o **Limite de taxa para envio de e-mails** (ex.: 30, 60 e-mails/h).
+
+**O que colocar em cada campo (explicação):**
+
+| Campo no Supabase | O que é | O que colocar |
+|-------------------|---------|----------------|
+| **Endereço de e-mail do remetente** | O endereço que aparece como "De:" nos e-mails (recuperação de senha, confirmação, etc.). | Um e-mail do **domínio que você verificou** no provedor (ex.: `noreply@seudominio.com` ou `auth@meucondominio.com.br`). Não use um e-mail genérico como `gmail.com` a menos que o provedor permita. |
+| **Nome do remetente** | O nome que aparece ao lado do "De:" na caixa de entrada. | Texto livre, ex.: `Condomínio XYZ`, `Sistema Qualivida`, `Suporte`. |
+| **Hospedar** | Servidor SMTP do provedor. | Host exato indicado pelo provedor (ex.: `smtp.resend.com`, `smtp-relay.brevo.com`). |
+| **Número da porta** | Porta de conexão do servidor SMTP. | `465` (SSL) ou `587` (TLS). Use a que o provedor recomendar. |
+| **Intervalo mínimo por usuário** | Tempo mínimo em **segundos** entre dois e-mails para o **mesmo** usuário (evita spam). | Ex.: `60` (1 minuto). Aumente se quiser limitar mais (ex.: 120). |
+| **Nome de usuário** | Login SMTP. | Depende do provedor: às vezes é literalmente `resend`, às vezes é um e-mail ou "SMTP login" (veja exemplos abaixo). |
+| **Senha** | Senha ou chave de autenticação SMTP. | **Não** é a senha da sua conta do provedor. É a **chave SMTP** ou **API key** que o provedor gera na área de SMTP/API (veja exemplos abaixo). |
+
+---
+
+**Exemplo 1 — Resend**
+
+1. Crie conta em [resend.com](https://resend.com) e verifique um domínio (ou use o domínio de teste deles).
+2. Em **Resend** → **API Keys** → crie uma chave e copie (ex.: `re_123abc...`).
+3. Em **Supabase** → **Authentication** → **E-mails** → **Configurações SMTP** preencha:
+
+| Campo | Valor (Resend) |
+|-------|----------------|
+| Endereço de e-mail do remetente | `onboarding@resend.dev` (domínio de teste) ou `noreply@seudominio.com` (se você verificou o domínio no Resend) |
+| Nome do remetente | `Qualivida` (ou o nome do seu app/condomínio) |
+| Hospedar | `smtp.resend.com` |
+| Número da porta | `465` |
+| Intervalo mínimo por usuário | `60` |
+| Nome de usuário | `resend` (literalmente a palavra "resend") |
+| Senha | Sua **API Key** do Resend (ex.: `re_xxxxxxxxxx`) |
+
+4. Ative **Habilitar SMTP personalizado** e salve.
+
+---
+
+**Exemplo 2 — Brevo (ex-Sendinblue)**
+
+1. Crie conta em [brevo.com](https://brevo.com) e verifique um domínio (ou use o remetente padrão).
+2. Em **Brevo** → **Configurações** → **SMTP e API** (ou **SMTP**): anote o **login SMTP** (um e-mail) e crie/visualize a **chave SMTP** (não use a chave de API genérica nem a senha da conta).
+3. Em **Supabase** → **Authentication** → **E-mails** → **Configurações SMTP** preencha:
+
+| Campo | Valor (Brevo) |
+|-------|----------------|
+| Endereço de e-mail do remetente | E-mail do remetente configurado no Brevo (ex.: `noreply@seudominio.com` ou o que você cadastrou no Brevo) |
+| Nome do remetente | `Qualivida` (ou o nome do seu app/condomínio) |
+| Hospedar | `smtp-relay.brevo.com` |
+| Número da porta | `587` ou `465` |
+| Intervalo mínimo por usuário | `60` |
+| Nome de usuário | O **login SMTP** que o Brevo mostra (geralmente um e-mail, ex.: `seuemail@dominio.com`) |
+| Senha | A **chave SMTP** do Brevo (não a senha da sua conta; é a chave gerada na página SMTP) |
+
+4. Ative **Habilitar SMTP personalizado** e salve.
+
+---
+
+**Outros provedores (referência rápida):**
+
+- **SendGrid:** host `smtp.sendgrid.net`, porta `587`, usuário `apikey`, senha = sua API Key do SendGrid.
+- **Postmark**, **ZeptoMail**, **AWS SES:** consulte a documentação do provedor para host, porta e tipo de autenticação (usuário/senha ou API key).
+
+**Resumo:** O remetente deve ser um e-mail que você controla e que o provedor SMTP aceita (domínio verificado). Usuário e senha vêm sempre da **área SMTP/API do provedor**, nunca da senha da sua conta. Depois de salvar e ativar, o limite de e-mails no Supabase sobe para 30/h e pode ser ajustado em **Authentication → Limites de taxa**.
+
+---
+
 ### 6. Como verificar se o Supabase disparou o e-mail
 
 A mensagem *"Se o e-mail estiver cadastrado, você receberá um link de recuperação por e-mail. Verifique a caixa de entrada e o spam"* é exibida após a chamada a `resetPasswordForEmail`. Por segurança, a API **não informa** se o e-mail existe ou se o envio foi feito; portanto a confirmação é feita fora do app.
@@ -100,6 +189,28 @@ A mensagem *"Se o e-mail estiver cadastrado, você receberá um link de recupera
    - O usuário deve verificar a caixa de entrada e o spam; provedores podem atrasar ou bloquear e-mails de “password reset”.
 
 **Resumo:** Para saber se o Supabase “disparou” o e-mail, use os **Auth Logs** e confirme o evento `user_recovery_requested` e se o e-mail está em **Authentication → Users**.
+
+---
+
+### 6.1. Erro 500 ou "Error sending recovery email"
+
+Se ao solicitar recuperação de senha aparecer **erro 500** na chamada a `/auth/v1/recover` ou a mensagem **"Error sending recovery email"**, o Supabase está falhando ao processar o pedido no servidor. As causas mais comuns são:
+
+1. **URL de redirecionamento não permitida**  
+   O app envia `redirect_to=https://app-qualivida.vercel.app/reset-password`. Essa URL **precisa estar na lista de Redirect URLs** do Supabase.  
+   - **Onde:** **Supabase Dashboard** → **Authentication** → **URL Configuration** (ou **Redirect URLs**).  
+   - **O que fazer:** Adicione exatamente `https://app-qualivida.vercel.app/reset-password` na lista (ou um padrão permitido pelo Supabase, ex.: `https://app-qualivida.vercel.app/**`).  
+   - Confirme também que **Site URL** está como `https://app-qualivida.vercel.app` (ou a URL base do seu app).
+
+2. **SMTP personalizado mal configurado**  
+   Se você ativou SMTP personalizado (Resend, Brevo, etc.), credenciais erradas (host, porta, usuário, senha) ou remetente não verificado podem fazer o Supabase retornar 500 ao tentar enviar o e-mail.  
+   - **O que fazer:** Revise **Authentication → E-mails → Configurações SMTP**: host, porta, usuário, senha e **endereço do remetente** (domínio verificado no provedor). Teste enviar um e-mail de teste pelo provedor, se disponível.
+
+3. **Ver o erro exato no Supabase**  
+   - **Authentication → Logs**: veja se há entradas com erro para o evento de recuperação.  
+   - No navegador (DevTools → Network), inspecione a resposta da requisição a `.../auth/v1/recover`; às vezes o corpo da resposta 500 traz mais detalhes (ex.: mensagem do SMTP).
+
+**Resumo:** Corrija **Redirect URLs** (incluir `https://app-qualivida.vercel.app/reset-password`) e, se usar SMTP personalizado, confira as credenciais e o remetente. Use os Auth Logs para confirmar o que o Supabase está retornando.
 
 ---
 

@@ -109,7 +109,18 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     if (authResult.success) {
       setMessage({ type: 'success', text: successMessage });
     } else {
-      setMessage({ type: 'error', text: authResult.error || 'Erro ao solicitar recuperação. Tente novamente mais tarde.' });
+      const err = authResult.error || '';
+      const isRateLimit = /rate limit|rate_limit|too many requests|limite/i.test(err);
+      const isRecoverySendError = /error sending recovery|500|internal server error/i.test(err);
+      let text: string;
+      if (isRateLimit) {
+        text = 'Limite de e-mails por hora atingido. Aguarde alguns minutos e tente novamente. O administrador pode aumentar o limite em Supabase (Authentication → Rate Limits).';
+      } else if (isRecoverySendError) {
+        text = 'Falha ao enviar o e-mail de recuperação (erro no servidor). Verifique no Supabase: Authentication → URL Configuration (adicionar esta URL em Redirect URLs) e, se usar SMTP personalizado, as credenciais em E-mails → Configurações SMTP.';
+      } else {
+        text = err || 'Erro ao solicitar recuperação. Tente novamente mais tarde.';
+      }
+      setMessage({ type: 'error', text });
     }
   };
 
