@@ -44,6 +44,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
       window.history.replaceState({}, '', window.location.pathname || '/');
     }
 
+    // Link válido de recuperação: /reset-password#type=recovery&access_token=... → abrir modal de redefinir senha
+    const isRecoveryLink = hash.includes('type=recovery') && !hashParams.get('error');
+    if ((isResetPath || isRecoveryLink) && !hashParams.get('error')) {
+      setShowForgotPassword(true);
+    }
+
     // Aceita tanto o padrão antigo (?reset=1&token=) quanto o novo (/reset-password?token=)
     if (token && (reset === '1' || isResetPath)) {
       setResetFromLink({ token });
