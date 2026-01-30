@@ -116,7 +116,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       if (isRateLimit) {
         text = 'Limite de e-mails por hora atingido. Aguarde alguns minutos e tente novamente. O administrador pode aumentar o limite em Supabase (Authentication → Rate Limits).';
       } else if (isRecoverySendError) {
-        text = 'Falha ao enviar o e-mail de recuperação (erro no servidor). Verifique no Supabase: Authentication → URL Configuration (adicionar esta URL em Redirect URLs) e, se usar SMTP personalizado, as credenciais em E-mails → Configurações SMTP.';
+        text = 'Falha ao enviar o e-mail de recuperação. O administrador deve verificar no Supabase: URL Configuration (adicionar o app em Redirect URLs) e, se usar SMTP personalizado, as credenciais em E-mails → Configurações SMTP.';
       } else {
         text = err || 'Erro ao solicitar recuperação. Tente novamente mais tarde.';
       }
