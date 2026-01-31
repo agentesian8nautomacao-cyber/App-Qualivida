@@ -94,15 +94,12 @@ export const isUserBlocked = (username: string): { blocked: boolean; remainingMi
 };
 
 /**
- * Verifica regra simplificada da senha:
- * - 6 caracteres, apenas letras e números (maiúsculas e minúsculas tratadas como iguais)
+ * Verifica regra simplificada da senha: mínimo 6, máximo 32 caracteres.
+ * Aceita qualquer caractere digitado (sem exigir letras ou números).
  */
 const isStrongPassword = (password: string): boolean => {
   if (!password || password.length < 6 || password.length > 32) return false;
-  if (!/^[A-Za-z0-9]+$/.test(password)) return false;
-  const hasLetter = /[A-Za-z]/.test(password);
-  const hasDigit = /[0-9]/.test(password);
-  return hasLetter && hasDigit;
+  return true;
 };
 
 /**
@@ -513,18 +510,22 @@ export const changeUserPassword = async (
 };
 
 /**
- * Obtém ou restaura a sessão de recuperação de senha a partir da URL (hash com access_token/refresh_token).
+ * Obtém ou restaura a sessão de recuperação de senha a partir da URL (hash com access_token/refresh_token ou token_hash).
  * Deve ser usado antes de updateUser() no fluxo de reset para garantir sessão ativa.
  * Funciona em navegador limpo, aba anônima e sem login prévio.
  *
- * 1. Chama initialize() para processar redirect (detectSessionInUrl).
- * 2. Se getSession() não retornar sessão, extrai tokens do hash (#type=recovery&access_token=...&refresh_token=...).
- * 3. Chama setSession() com os tokens e retorna a sessão estabelecida.
+ * 1. Chama initialize() e aguarda processamento do redirect (detectSessionInUrl).
+ * 2. Se getSession() não retornar sessão, extrai tokens do hash.
+ * 3. Suporta: access_token+refresh_token (setSession) ou token_hash (verifyOtp type=recovery).
+ * 4. Retorna a sessão estabelecida.
+ *
+ * IMPORTANTE: Não limpe o hash da URL até após o reset bem-sucedido — permite restaurar sessão no submit.
  *
  * @returns Sessão válida ou null (link expirado, já usado ou sem tokens na URL).
  */
 export async function getOrRestoreRecoverySession(): Promise<{ session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] }> {
   try {
+    // Obrigatório: aguardar initialize() processar a URL (OAuth, magiclink, recovery)
     if (typeof supabase.auth.initialize === 'function') {
       await supabase.auth.initialize();
     }
@@ -540,17 +541,27 @@ export async function getOrRestoreRecoverySession(): Promise<{ session: Awaited<
     if (params.get('type') !== 'recovery') {
       return { session: null };
     }
+    // Fluxo 1: access_token + refresh_token (padrão)
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
-    if (!accessToken || !refreshToken) {
-      return { session: null };
+    if (accessToken && refreshToken) {
+      const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      if (error) {
+        return { session: null };
+      }
+      const { data: { session: nextSession } } = await supabase.auth.getSession();
+      return { session: nextSession ?? null };
     }
-    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-    if (error) {
-      return { session: null };
+    // Fluxo 2: token_hash (PKCE)
+    const tokenHash = params.get('token_hash');
+    if (tokenHash) {
+      const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+      if (error) {
+        return { session: null };
+      }
+      return { session: data?.session ?? null };
     }
-    const { data: { session: nextSession } } = await supabase.auth.getSession();
-    return { session: nextSession ?? null };
+    return { session: null };
   } catch {
     return { session: null };
   }
@@ -816,7 +827,7 @@ export const resetPasswordWithToken = async (
     if (!isStrongPassword(normalized)) {
       return {
         success: false,
-        message: 'A nova senha deve ter 6 caracteres, apenas letras e números. Maiúsculas e minúsculas são tratadas como iguais.'
+        message: 'A nova senha deve ter entre 6 e 32 caracteres.'
       };
     }
 

@@ -36,17 +36,15 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     }
   }, [initialStep, initialToken]);
 
-  // Detectar link de recuperação no hash e estabelecer sessão assim que a página carregar
-  // (não depender do submit: sessão pronta em navegador limpo, aba anônima, sem login prévio)
+  // Detectar link de recuperação no hash e estabelecer sessão assim que a página carregar.
+  // NÃO limpar o hash aqui — manter até após reset bem-sucedido para poder restaurar sessão no submit.
   useEffect(() => {
     const isRecoveryHash = typeof window !== 'undefined' && window.location.hash.includes('type=recovery');
     if (!isRecoveryHash) return;
     setStep('reset');
     setRecoveryFromAuth(true);
-    getOrRestoreRecoverySession().then(({ session }) => {
-      if (session) {
-        clearRecoveryHashFromUrl();
-      }
+    getOrRestoreRecoverySession().then(() => {
+      // Sessão estabelecida ou será restaurada no submit a partir do hash ainda presente
     });
   }, []);
 
@@ -63,18 +61,10 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
 
   const validatePasswordStrength = (password: string): { ok: boolean; error?: string } => {
     if (!password || password.length < 6) {
-      return { ok: false, error: 'A senha deve ter 6 caracteres.' };
+      return { ok: false, error: 'A senha deve ter pelo menos 6 caracteres.' };
     }
     if (password.length > 32) {
       return { ok: false, error: 'A senha deve ter no máximo 32 caracteres.' };
-    }
-    if (!/^[A-Za-z0-9]+$/.test(password)) {
-      return { ok: false, error: 'Use apenas letras e números (sem espaços ou símbolos).' };
-    }
-    const hasLetter = /[A-Za-z]/.test(password);
-    const hasDigit = /[0-9]/.test(password);
-    if (!hasLetter || !hasDigit) {
-      return { ok: false, error: 'A senha deve ter letras e números.' };
     }
     return { ok: true };
   };
@@ -150,11 +140,8 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     setMessage(null);
 
     if (recoveryFromAuth) {
-      // Nunca assumir sessão ativa: obter ou restaurar a partir do link (access_token/refresh_token no hash)
+      // Nunca assumir sessão ativa: obter ou restaurar a partir do link (hash ainda na URL)
       const { session } = await getOrRestoreRecoverySession();
-      if (session) {
-        clearRecoveryHashFromUrl();
-      }
       if (!session) {
         setLoading(false);
         setMessage({ type: 'error', text: 'O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail).' });
@@ -162,6 +149,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       }
       const { error } = await supabase.auth.updateUser({ password: normalizedPassword });
       if (!error) {
+        clearRecoveryHashFromUrl(); // Só limpar após sucesso — evita "Auth session missing!" em retries
         try {
           await supabase.rpc('sync_resident_password_after_reset', { new_password: normalizedPassword });
         } catch (_) {}
@@ -178,7 +166,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
         const errorText = isSessionMissing
           ? 'O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail).'
           : isPasswordPolicyError
-            ? 'Use 6 caracteres, apenas letras e números (maiúsculas e minúsculas são iguais). Não use símbolos.'
+            ? 'Use pelo menos 6 caracteres (máximo 32).'
             : errMsg || 'Erro ao redefinir senha. Tente novamente ou solicite um novo link.';
         setMessage({ type: 'error', text: errorText });
       }
@@ -233,7 +221,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
           }`}>
             {step === 'request' 
               ? (isResident ? 'Informe a unidade ou e-mail cadastrado para receber o link de recuperação por e-mail.' : 'Informe o e-mail ou usuário cadastrado para receber o link de recuperação por e-mail. Se o e-mail existir, você receberá o link em alguns instantes.')
-              : 'Defina sua nova senha: 6 caracteres, apenas letras e números (maiúsculas e minúsculas são iguais). Não use símbolos.'}
+              : 'Defina sua nova senha (mínimo 6 caracteres).'}
           </p>
 
           {recoveryLinkExpiredMessage && step === 'request' && (
@@ -349,7 +337,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                 }`} />
                 <input 
                   type={showNewPassword ? 'text' : 'password'}
-                  placeholder="Nova senha (6 caracteres, letras e números)" 
+                  placeholder="Nova senha (mínimo 6 caracteres)" 
                   value={newPassword}
                   onChange={(e) => {
                     setNewPassword(e.target.value);
