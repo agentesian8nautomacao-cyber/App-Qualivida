@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, Lock, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { requestPasswordReset, getEmailForReset, resetPasswordWithToken, getOrRestoreRecoverySession, clearRecoveryHashFromUrl } from '../services/userAuth';
-import { getEmailForResetResident } from '../services/residentAuth';
+import { getEmailForResetResident, computeResidentPasswordHash } from '../services/residentAuth';
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -93,7 +93,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
     setLoading(true);
     setMessage(null);
 
-    const successMessage = 'Se o e-mail estiver cadastrado, você receberá um link de recuperação por e-mail. Verifique a caixa de entrada e o spam.';
+    const successMessage = 'Se o e-mail estiver cadastrado, você receberá um link de recuperação por e-mail. Verifique a caixa de entrada e o spam. No Gmail, confira também a pasta Spam e a aba Promoções.';
 
     const emailToUse = value.includes('@')
       ? value.trim().toLowerCase()
@@ -158,7 +158,9 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       if (!error) {
         clearRecoveryHashFromUrl(); // Só limpar após sucesso — evita "Auth session missing!" em retries
         try {
-          const { error: rpcError } = await supabase.rpc('sync_resident_password_after_reset', { new_password: pwdTrim });
+          // Usar o mesmo hash do login morador (frontend) para garantir que a senha funcione na aba Morador
+          const residentHash = await computeResidentPasswordHash(pwdTrim);
+          const { error: rpcError } = await supabase.rpc('sync_resident_password_after_reset', { new_hash: residentHash });
           syncResidentOk = !rpcError;
         } catch (_) {}
       }

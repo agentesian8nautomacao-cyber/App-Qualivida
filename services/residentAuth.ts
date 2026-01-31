@@ -24,9 +24,14 @@ const hashPassword = async (password: string): Promise<string> => {
 };
 
 const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
-  const passwordHash = await hashPassword(password); // hashPassword já normaliza para minúsculas
+  const passwordHash = await hashPassword(password);
   return passwordHash === hash;
 };
+
+/** Mesmo hash usado no login do morador; use na sync após recuperação de senha (frontend → RPC). */
+export async function computeResidentPasswordHash(password: string): Promise<string> {
+  return hashPassword(password);
+}
 
 // Registrar novo morador
 export const registerResident = async (

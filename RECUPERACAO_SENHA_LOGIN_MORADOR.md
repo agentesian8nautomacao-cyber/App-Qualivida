@@ -63,4 +63,4 @@ Se a pessoa é morador e vai redefinir a senha pelo link, depois do sucesso ela 
 | Login na aba errada | Morador: aba **Morador** (unidade + senha). Admin/Porteiro: aba **Admin/Porteiro** (e-mail/usuário + senha). |
 | Já redefiniu antes de criar a função | Criar a função e pedir para **redefinir a senha de novo** pelo link, ou alterar a senha do morador manualmente. |
 
-A função no SQL foi ajustada para comparar e-mail **sem diferenciar maiúsculas e minúsculas**; se você já tinha criado a função antes, execute o script de novo no SQL Editor para atualizar.
+**Importante:** A função no SQL foi ajustada para receber o **hash** já calculado pelo frontend (mesmo algoritmo do login morador e da alteração no perfil). Assim o hash em **residents** fica idêntico ao que o app usa — evita diferença entre PostgreSQL e JavaScript. Se você já tinha criado a função antes, **execute o script de novo** no SQL Editor para atualizar (o parâmetro passou de `new_password` para `new_hash`).
