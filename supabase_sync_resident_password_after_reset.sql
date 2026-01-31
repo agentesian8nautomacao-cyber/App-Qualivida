@@ -18,13 +18,14 @@ AS $$
 DECLARE
   user_email text;
 BEGIN
-  SELECT email INTO user_email FROM auth.users WHERE id = auth.uid();
-  IF user_email IS NULL THEN
+  SELECT LOWER(TRIM(email)) INTO user_email FROM auth.users WHERE id = auth.uid();
+  IF user_email IS NULL OR user_email = '' THEN
     RETURN;
   END IF;
+  -- Comparação case-insensitive para encontrar o morador (email no Auth pode diferir em maiúsculas/minúsculas)
   UPDATE residents
-  SET password_hash = encode(digest(new_password, 'sha256'), 'hex')
-  WHERE email = user_email;
+  SET password_hash = encode(digest(TRIM(new_password), 'sha256'), 'hex')
+  WHERE LOWER(TRIM(email)) = user_email AND email IS NOT NULL;
 END;
 $$;
 

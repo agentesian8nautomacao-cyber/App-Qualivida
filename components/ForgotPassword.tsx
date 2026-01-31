@@ -154,25 +154,32 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
         return;
       }
       const { error } = await supabase.auth.updateUser({ password: pwdTrim });
+      let syncResidentOk = false;
       if (!error) {
         clearRecoveryHashFromUrl(); // Só limpar após sucesso — evita "Auth session missing!" em retries
         try {
-          await supabase.rpc('sync_resident_password_after_reset', { new_password: pwdTrim });
+          const { error: rpcError } = await supabase.rpc('sync_resident_password_after_reset', { new_password: pwdTrim });
+          syncResidentOk = !rpcError;
         } catch (_) {}
       }
       setLoading(false);
       if (!error) {
-        setMessage({ type: 'success', text: 'Senha redefinida com sucesso! Você já pode fazer login.' });
+        const successText = syncResidentOk
+          ? 'Senha redefinida com sucesso! Você já pode fazer login (aba Morador: unidade + senha; aba Admin/Porteiro: e-mail ou usuário + senha).'
+          : 'Senha redefinida com sucesso! Para login como morador (unidade + senha): o administrador deve executar no Supabase o script supabase_sync_resident_password_after_reset.sql e o e-mail do morador deve ser o mesmo que recebeu este link. Depois, faça login na aba Morador. Veja RECUPERACAO_SENHA_LOGIN_MORADOR.md.';
+        setMessage({ type: 'success', text: successText });
         await supabase.auth.signOut();
         setTimeout(() => onBack(), 2000);
       } else {
-        const errMsg = error?.message || '';
+        const errMsg = (error as { message?: string; status?: number })?.message || '';
+        const status = (error as { status?: number })?.status;
         const isSessionMissing = /session missing|auth session|invalid session|session expired|no session/i.test(errMsg);
-        const isPasswordPolicyError = !isSessionMissing && /senha|password|caractere|caracteres|8|maiúscula|minúscula|special|símbolo|symbol|policy/i.test(errMsg);
+        // 422 = servidor recusou a senha (política do Supabase). Não repetir a instrução; explicar que o servidor recusou.
+        const isServerRejected = status === 422 || /validation|invalid|password|policy|minimum|length/i.test(errMsg);
         const errorText = isSessionMissing
           ? 'O link expirou ou já foi usado. Solicite um novo link de recuperação abaixo (use o mesmo e-mail).'
-          : isPasswordPolicyError
-            ? 'Use 6 caracteres, apenas letras e números. O sistema diferencia maiúsculas de minúsculas.'
+          : isServerRejected
+            ? 'O servidor não aceitou esta senha. Use apenas letras e números (6 a 32 caracteres). Se o erro continuar, tente 8 ou mais caracteres ou peça ao administrador para ajustar em Supabase: Auth → Providers → Email → Password (mín. 6, sem exigência de caractere especial).'
             : errMsg || 'Erro ao redefinir senha. Tente novamente ou solicite um novo link.';
         setMessage({ type: 'error', text: errorText });
       }
@@ -227,7 +234,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
           }`}>
             {step === 'request' 
               ? (isResident ? 'Informe a unidade ou e-mail cadastrado para receber o link de recuperação por e-mail.' : 'Informe o e-mail ou usuário cadastrado para receber o link de recuperação por e-mail. Se o e-mail existir, você receberá o link em alguns instantes.')
-              : 'Defina sua nova senha: 6 caracteres, letras e números. O sistema diferencia maiúsculas de minúsculas.'}
+              : 'Use apenas letras e números (6 a 32 caracteres). Maiúsculas e minúsculas são diferenciadas.'}
           </p>
 
           {recoveryLinkExpiredMessage && step === 'request' && (
@@ -343,7 +350,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
                 }`} />
                 <input 
                   type={showNewPassword ? 'text' : 'password'}
-                  placeholder="Nova senha (mínimo 6 caracteres)" 
+                  placeholder="Nova senha (6 a 32 caracteres, só letras e números)" 
                   value={newPassword}
                   onChange={(e) => {
                     setNewPassword(e.target.value);
