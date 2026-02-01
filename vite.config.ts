@@ -46,6 +46,7 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/$/],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,mp4}'],
           cleanupOutdatedCaches: true,
           skipWaiting: true,
