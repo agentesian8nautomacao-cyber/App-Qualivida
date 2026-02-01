@@ -157,7 +157,7 @@ ${voiceSettings.style === 'serious'
       const persona = getSystemPersona();
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: [
           { role: 'user', parts: [{ text: `${persona}\n\nCONTEXTO EM TEMPO REAL:\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${currentInput}` }] }
         ],
@@ -176,13 +176,21 @@ ${voiceSettings.style === 'serious'
       setMessages(prev => [...prev, modelMsg]);
     } catch (error: any) {
       console.error('Erro ao enviar mensagem:', error);
-      
+
+      let userMessage = 'Erro ao processar sua solicitação. Por favor, tente novamente.';
+      const apiMsg = (error?.error?.message ?? error?.message ?? '') as string;
+      if (apiMsg.includes('expired') || apiMsg.includes('API key expired') || apiMsg.includes('API_KEY_INVALID') || apiMsg.includes('API key not valid')) {
+        userMessage = 'Erro na chave da API. Se a chave é nova: (1) Verifique restrições em aistudio.google.com/apikey — a chave deve permitir uso em apps externos. (2) O tier gratuito pode não estar disponível no seu país — habilite billing no projeto. (3) Aguarde alguns minutos após criar a chave.';
+      } else if (error.message?.includes('API') && !apiMsg) {
+        userMessage = 'Erro de configuração: Verifique se a chave da API está configurada corretamente.';
+      } else if (apiMsg) {
+        userMessage = apiMsg;
+      }
+
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: error.message?.includes('API') 
-          ? 'Erro de configuração: Verifique se a chave da API está configurada corretamente.'
-          : 'Erro ao processar sua solicitação. Por favor, tente novamente.',
+        text: userMessage,
         timestamp: new Date()
       };
 
