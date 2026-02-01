@@ -24,6 +24,7 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
   const [previewData, setPreviewData] = useState<Boleto[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -451,7 +452,6 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     setPreviewData(boletos);
   };
 
-  const [isImporting, setIsImporting] = useState(false);
   const handleImport = async () => {
     if (previewData.length === 0) {
       setErrors(['Nenhum boleto válido para importar.']);
