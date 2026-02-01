@@ -2660,7 +2660,7 @@ const App: React.FC = () => {
   } else if (!isAuthenticated && showLogoSplash) {
     // Mostrar vídeo de abertura para usuários não autenticados
     content = (
-      <div className="w-screen h-screen bg-black flex items-center justify-center relative">
+      <div className="w-screen h-screen min-w-full min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
         <video
           ref={videoRef}
           src="/GestaoQualivida.mp4"
@@ -2668,7 +2668,7 @@ const App: React.FC = () => {
           autoPlay
           muted={isVideoMuted}
           playsInline
-          className="w-full h-full object-cover"
+          className="w-full h-full min-w-full min-h-full object-cover md:object-contain"
           onEnded={handleSkipSplash}
           onError={() => {
             console.warn('[App] Vídeo de abertura não carregou; exibindo apresentação com poster.');
