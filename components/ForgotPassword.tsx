@@ -118,7 +118,11 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
       if (isRateLimit) {
         text = 'Limite de e-mails por hora atingido. Aguarde alguns minutos e tente novamente. O administrador pode aumentar o limite em Supabase (Authentication → Rate Limits).';
       } else if (isRecoverySendError) {
-        text = 'Falha ao enviar o e-mail de recuperação. O administrador deve verificar no Supabase: Authentication → URL Configuration (adicionar o app em Redirect URLs) e, se usar SMTP personalizado, Authentication → E-mails → Configurações SMTP (credenciais).';
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const redirectHint = origin
+          ? ` Adicione em Redirect URLs: ${origin} e ${origin}/reset-password`
+          : ' Adicione a URL do app em Redirect URLs (ex.: https://seu-dominio.vercel.app e .../reset-password)';
+        text = `Falha ao enviar o e-mail de recuperação. No Supabase: Authentication → URL Configuration → Redirect URLs.${redirectHint}. Se usar SMTP personalizado, verifique Authentication → E-mails → Configurações SMTP (credenciais).`;
       } else {
         text = err || 'Erro ao solicitar recuperação. Tente novamente mais tarde.';
       }

@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/)(?!.*\\.(mp4|webm|ogg|png|jpg|jpeg|gif|ico|svg|webp|js|css|woff2?|ttf|eot|json|pdf|xml|txt)$).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {

@@ -2665,17 +2665,20 @@ const App: React.FC = () => {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
   } else if (!isAuthenticated && showLogoSplash) {
     // Mostrar vídeo de abertura para usuários não autenticados
-    console.log('[App] Renderizando vídeo de abertura', { showLogoSplash });
     content = (
       <div className="w-screen h-screen bg-black flex items-center justify-center relative">
         <video
           ref={videoRef}
           src="/GestaoQualivida.mp4"
+          poster="/logo-qualivida.jpg"
           autoPlay
           muted={isVideoMuted}
           playsInline
           className="w-full h-full object-cover"
           onEnded={handleSkipSplash}
+          onError={() => {
+            console.warn('[App] Vídeo de abertura não carregou; exibindo apresentação com poster.');
+          }}
         />
         {/* Indicador de áudio mudo com instrução para clicar */}
         {isVideoMuted && (
