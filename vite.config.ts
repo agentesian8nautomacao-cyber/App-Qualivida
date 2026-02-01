@@ -12,6 +12,12 @@ export default defineConfig(({ mode }) => {
   for (const [k, v] of Object.entries(process.env)) {
     if (v != null && String(v).trim() !== '') env[k] = v;
   }
+  // No Vercel: GEMINI_API_KEY existe mas VITE_* não. Vite só expõe VITE_* ao cliente.
+  // Garantir VITE_GEMINI_API_KEY em process.env para o build expor ao bundle.
+  const geminiKey = env.GEMINI_API_KEY ?? env.VITE_GEMINI_API_KEY ?? env.API_KEY ?? '';
+  if (geminiKey && !process.env.VITE_GEMINI_API_KEY) {
+    process.env.VITE_GEMINI_API_KEY = geminiKey;
+  }
   return {
     test: {
       globals: true,
@@ -97,9 +103,9 @@ export default defineConfig(({ mode }) => {
       entries: ['index.html']
     },
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY ?? env.VITE_GEMINI_API_KEY ?? env.API_KEY ?? ''),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY ?? env.VITE_GEMINI_API_KEY ?? env.API_KEY ?? ''),
-      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY ?? env.VITE_GEMINI_API_KEY ?? env.API_KEY ?? '')
+      'process.env.API_KEY': JSON.stringify(geminiKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
+      'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(geminiKey)
     },
     resolve: {
       alias: {
