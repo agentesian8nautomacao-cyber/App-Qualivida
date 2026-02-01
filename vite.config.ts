@@ -5,8 +5,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   // Carregar variáveis de ambiente
-  // No Vercel, as variáveis são injetadas automaticamente durante o build
-  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  // loadEnv: .env, .env.local (local). process.env: Vercel e variáveis do sistema.
+  // Usar process.env só quando o valor for não vazio, senão manter loadEnv.
+  const loaded = loadEnv(mode, process.cwd(), '');
+  const env: Record<string, string | undefined> = { ...loaded };
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v != null && String(v).trim() !== '') env[k] = v;
+  }
   return {
     test: {
       globals: true,
