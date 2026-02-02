@@ -19,12 +19,9 @@ import {
   Target,
   Clock
 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import { useToast } from '../../contexts/ToastContext';
-import { extractGeminiText } from '../../utils/geminiHelpers';
 import { logger } from '../../utils/logger';
-import { getGeminiApiKey } from '../../utils/geminiApiKey';
 
 interface AiReportsViewProps {
   allPackages: any[];
@@ -71,61 +68,49 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
     };
   }, [visitorLogs, allPackages, allOccurrences, dayReservations]);
 
-  const hasGeminiKey = !!getGeminiApiKey();
-
   const handleGenerateReport = async () => {
-    const apiKey = getGeminiApiKey();
-    if (!hasGeminiKey || !apiKey) {
-      setReportContent('Configure GEMINI_API_KEY (ou VITE_GEMINI_API_KEY) no arquivo .env ou .env.local para gerar relatórios com IA.');
-      return;
-    }
     setIsGenerating(true);
     setReportContent(null);
 
+    const dataContext = `
+DADOS DO PERÍODO:
+- Total Visitantes: ${metrics.totalVisitors} (Ativos agora: ${metrics.activeVisitors})
+- Total Encomendas: ${metrics.totalPackages} (Pendentes: ${metrics.pendingPackages}, Entregues: ${metrics.deliveredPackages})
+- Ocorrências: ${metrics.totalOccurrences} (Abertas: ${metrics.openOccurrences}, Resolvidas: ${metrics.resolvedOccurrences})
+- Taxa de Resolução: ${metrics.resolutionRate}%
+- Reservas de Área Comum: ${metrics.totalReservations}
+
+DETALHES OCORRÊNCIAS:
+${allOccurrences.map(o => `- ${o.description} (Status: ${o.status}, Unidade: ${o.unit})`).join('\n')}
+    `.trim();
+
+    const reportPrompt = `Atue como um Especialista em Gestão Condominial Sênior (Síndico Profissional).
+Analise os dados brutos abaixo coletados pelo sistema de portaria e gere um RELATÓRIO EXECUTIVO PARA ASSEMBLEIA.
+
+Estrutura Obrigatória do Relatório (Use Markdown):
+1. **Resumo Executivo**: Um parágrafo sobre a "saúde" operacional do prédio.
+2. **Destaques de Segurança**: Analise as ocorrências e visitantes. Identifique riscos.
+3. **Eficiência Logística**: Analise o fluxo de encomendas. Sugira melhorias se houver muitos pendentes.
+4. **Manutenção & Zeladoria**: Baseado nas notas e ocorrências.
+5. **Sugestão de Pauta**: 3 tópicos prioritários para discutir na próxima assembleia baseados nestes dados.
+
+Tom de voz: Formal, Objetivo, Imparcial e Focado em Soluções.
+
+DADOS:
+\${dataContext}`;
+
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const dataContext = `
-        DADOS DO PERÍODO:
-        - Total Visitantes: ${metrics.totalVisitors} (Ativos agora: ${metrics.activeVisitors})
-        - Total Encomendas: ${metrics.totalPackages} (Pendentes: ${metrics.pendingPackages}, Entregues: ${metrics.deliveredPackages})
-        - Ocorrências: ${metrics.totalOccurrences} (Abertas: ${metrics.openOccurrences}, Resolvidas: ${metrics.resolvedOccurrences})
-        - Taxa de Resolução: ${metrics.resolutionRate}%
-        - Reservas de Área Comum: ${metrics.totalReservations}
-        
-        DETALHES OCORRÊNCIAS:
-        ${allOccurrences.map(o => `- ${o.description} (Status: ${o.status}, Unidade: ${o.unit})`).join('\n')}
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `
-          Atue como um Especialista em Gestão Condominial Sênior (Síndico Profissional).
-          Analise os dados brutos abaixo coletados pelo sistema de portaria e gere um RELATÓRIO EXECUTIVO PARA ASSEMBLEIA.
-          
-          Estrutura Obrigatória do Relatório (Use Markdown):
-          1. **Resumo Executivo**: Um parágrafo sobre a "saúde" operacional do prédio.
-          2. **Destaques de Segurança**: Analise as ocorrências e visitantes. Identifique riscos.
-          3. **Eficiência Logística**: Analise o fluxo de encomendas. Sugira melhorias se houver muitos pendentes.
-          4. **Manutenção & Zeladoria**: Baseado nas notas e ocorrências.
-          5. **Sugestão de Pauta**: 3 tópicos prioritários para discutir na próxima assembleia baseados nestes dados.
-
-          Tom de voz: Formal, Objetivo, Imparcial e Focado em Soluções.
-
-          DADOS:
-          ${dataContext}
-        `,
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'report', dataContext, reportPrompt }),
       });
-
-      const text = extractGeminiText(response);
-      setReportContent(text || "Não foi possível gerar o relatório.");
+      const data = await res.json().catch(() => ({}));
+      const text = res.ok ? (data.text ?? '') : (data.error ?? 'Erro ao gerar relatório.');
+      setReportContent(text || 'Não foi possível gerar o relatório.');
     } catch (error: unknown) {
       logger.error(error);
-      const err = error as { message?: string };
-      const msg = (typeof err?.message === 'string' && err.message.toLowerCase().includes('api')) || !hasGeminiKey
-        ? 'Configure GEMINI_API_KEY no .env ou nas variáveis do Vercel para gerar relatórios com IA.'
-        : 'Erro ao conectar com a Inteligência Artificial. Verifique sua conexão e tente novamente.';
-      setReportContent(msg);
+      setReportContent('Erro de conexão. Verifique a rede e se o servidor está disponível.');
     } finally {
       setIsGenerating(false);
     }
@@ -165,14 +150,6 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
-      {!hasGeminiKey && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-2xl">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-          <p className="text-xs font-bold text-amber-200">
-            Configure <code className="bg-black/20 px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> no <code className="bg-black/20 px-1.5 py-0.5 rounded">.env</code> ou nas variáveis do Vercel para gerar relatórios com IA.
-          </p>
-        </div>
-      )}
       {/* HEADER MODERNO */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
@@ -335,15 +312,15 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
               {!isGenerating && !reportContent && (
                 <button
                   onClick={handleGenerateReport}
-                  disabled={!hasGeminiKey}
+                  disabled={isGenerating}
                   className={`group px-6 py-3 rounded-xl font-black uppercase text-[11px] tracking-widest transition-all shadow-lg flex items-center gap-2 ${
-                    hasGeminiKey
+                    !isGenerating
                       ? 'bg-[var(--text-primary)] text-[var(--bg-color)] hover:scale-105'
                       : 'bg-zinc-600 text-zinc-400 cursor-not-allowed opacity-70'
                   }`}
                 >
-                  <Sparkles className={`w-4 h-4 ${hasGeminiKey ? 'group-hover:animate-spin' : ''}`} />
-                  {hasGeminiKey ? 'Gerar com IA' : 'Configure GEMINI_API_KEY'}
+                  <Sparkles className="w-4 h-4 group-hover:animate-spin" />
+                  Gerar com IA
                 </button>
               )}
             </div>
@@ -397,10 +374,10 @@ const AiReportsView: React.FC<AiReportsViewProps> = ({
               <div className="py-12 border-2 border-dashed border-[var(--border-color)] rounded-[24px] flex flex-col items-center justify-center text-center opacity-40">
                 <PieChart className="w-12 h-12 mb-4 text-[var(--text-secondary)]" />
                 <p className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)]">
-                  {hasGeminiKey ? 'Nenhum relatório gerado ainda' : 'Configure GEMINI_API_KEY para gerar relatórios'}
+                  Nenhum relatório gerado ainda
                 </p>
                 <p className="text-xs text-[var(--text-secondary)] mt-2">
-                  {hasGeminiKey ? 'Clique em "Gerar com IA" para criar um relatório executivo' : 'Adicione a chave no .env ou nas variáveis do Vercel.'}
+                  Clique em "Gerar com IA" para criar um relatório executivo
                 </p>
               </div>
             )}

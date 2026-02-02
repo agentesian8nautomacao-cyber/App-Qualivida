@@ -1,11 +1,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { BrainCircuit, Mic, SendHorizontal, X, Activity, Radio, Cpu, Sparkles, MessageSquare, History, Volume2, ShieldAlert, Settings, User, AlertTriangle } from 'lucide-react';
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import { encode, decode, decodeAudioData } from '../../services/audioHelper';
+import { BrainCircuit, Mic, SendHorizontal, X, Activity, Radio, Cpu, Sparkles, MessageSquare, History, Settings, User } from 'lucide-react';
 import { getInternalInstructions } from '../../services/ai/internalInstructions';
 import { useAppConfig } from '../../contexts/AppConfigContext';
-import { getGeminiApiKey } from '../../utils/geminiApiKey';
 
 interface AiViewProps {
   allPackages: any[];
@@ -130,7 +127,7 @@ ${voiceSettings.style === 'serious'
     `;
   }, [allPackages, visitorLogs, allOccurrences, chatMessages, allNotices]);
 
-  // --- FUNÇÕES DE CHAT (GEMINI 3 PRO) ---
+  // --- CHAT via API (chave Gemini só no backend) ---
   const handleSendMessage = async () => {
     if (!input.trim() || isProcessing) return;
 
@@ -147,170 +144,51 @@ ${voiceSettings.style === 'serious'
     setIsProcessing(true);
 
     try {
-      const apiKey = getGeminiApiKey();
-      if (!apiKey) {
-        throw new Error('Chave da API não configurada. Verifique as variáveis de ambiente.');
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
       const context = getSystemContext();
       const persona = getSystemPersona();
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          { role: 'user', parts: [{ text: `${persona}\n\nCONTEXTO EM TEMPO REAL:\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${currentInput}` }] }
-        ],
-        config: { temperature: 0.7 }
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          prompt: currentInput,
+          context,
+          persona,
+        }),
       });
 
-      const responseText = response.text || response.response?.text() || '';
-      
+      const data = await res.json().catch(() => ({}));
+      const text = res.ok ? (data.text ?? '') : (data.error ?? 'Erro ao processar sua solicitação.');
       const modelMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'model',
-        text: responseText || "Desculpe, não consegui gerar uma resposta. Tente novamente.",
+        text: text || 'Desculpe, não consegui gerar uma resposta. Tente novamente.',
         timestamp: new Date()
       };
-
       setMessages(prev => [...prev, modelMsg]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
-
-      let userMessage = 'Erro ao processar sua solicitação. Por favor, tente novamente.';
-      const apiMsg = (error?.error?.message ?? error?.message ?? '') as string;
-      if (apiMsg.includes('expired') || apiMsg.includes('API key expired') || apiMsg.includes('API_KEY_INVALID') || apiMsg.includes('API key not valid')) {
-        userMessage = 'Erro na chave da API. Se a chave é nova: (1) Verifique restrições em aistudio.google.com/apikey — a chave deve permitir uso em apps externos. (2) O tier gratuito pode não estar disponível no seu país — habilite billing no projeto. (3) Aguarde alguns minutos após criar a chave.';
-      } else if (error.message?.includes('API') && !apiMsg) {
-        userMessage = 'Erro de configuração: Verifique se a chave da API está configurada corretamente.';
-      } else if (apiMsg) {
-        userMessage = apiMsg;
-      }
-
-      const errorMsg: ChatMessage = {
+      const userMessage = 'Erro de conexão. Verifique a rede e se o servidor está disponível.';
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'model',
         text: userMessage,
         timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, errorMsg]);
+      }]);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // --- FUNÇÕES DE VOZ (GEMINI LIVE API) ---
+  // --- VOZ (Gemini Live): indisponível quando IA roda no backend; chave não fica no client ---
   const startLiveMode = async () => {
-    setIsLiveConnecting(true);
-    try {
-      // Verificar HTTPS
-      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-        throw new Error('Acesso ao microfone requer HTTPS. Por favor, use uma conexão segura.');
-      }
-
-      // Verificar API Key
-      const apiKey = getGeminiApiKey();
-      if (!apiKey) {
-        throw new Error('Chave da API não configurada. Verifique as variáveis de ambiente.');
-      }
-
-      // Verificar permissões de microfone antes de iniciar
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        if (permissionStatus.state === 'denied') {
-          throw new Error('Permissão de microfone negada. Por favor, permita o acesso nas configurações do navegador.');
-        }
-      } catch (permError) {
-        // Alguns navegadores não suportam navigator.permissions.query, continuar normalmente
-        console.warn('Não foi possível verificar permissões:', permError);
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-      const context = getSystemContext();
-      const voiceName = getVoiceConfig();
-      const persona = getSystemPersona();
-
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = outputCtx;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let nextStartTime = 0;
-
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-        callbacks: {
-          onopen: () => {
-            setIsLiveConnecting(false);
-            setIsLiveActive(true);
-            const source = inputCtx.createMediaStreamSource(stream);
-            const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-            processor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const int16 = new Int16Array(inputData.length);
-              for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
-              sessionPromise.then(session => session.sendRealtimeInput({ media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } }));
-            };
-            source.connect(processor);
-            processor.connect(inputCtx.destination);
-          },
-          onmessage: async (message: LiveServerMessage) => {
-            const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-            if (audioData) {
-              nextStartTime = Math.max(nextStartTime, outputCtx.currentTime);
-              const buffer = await decodeAudioData(decode(audioData), outputCtx, 24000, 1);
-              const source = outputCtx.createBufferSource();
-              source.buffer = buffer;
-              source.connect(outputCtx.destination);
-              source.start(nextStartTime);
-              nextStartTime += buffer.duration;
-              liveAudioSources.current.add(source);
-              source.onended = () => liveAudioSources.current.delete(source);
-            }
-            if (message.serverContent?.interrupted) {
-              liveAudioSources.current.forEach(s => s.stop());
-              liveAudioSources.current.clear();
-              nextStartTime = 0;
-            }
-          },
-          onerror: () => stopLiveMode(),
-          onclose: () => stopLiveMode()
-        },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          systemInstruction: `${persona}. Use estes dados: ${context}.`,
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } } }
-        }
-      });
-      liveSessionRef.current = await sessionPromise;
-    } catch (error: any) {
-      console.error('Erro ao iniciar modo Live:', error);
-      
-      let errorMessage = 'Erro ao conectar com o serviço de voz.';
-      
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMessage = 'Permissão de microfone negada. Por favor, permita o acesso nas configurações do navegador.';
-      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        errorMessage = 'Nenhum microfone encontrado. Verifique se há um microfone conectado.';
-      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        errorMessage = 'O microfone está sendo usado por outro aplicativo.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      // Mostrar erro ao usuário
-      const errorMsg: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'model',
-        text: `❌ ${errorMessage}`,
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, errorMsg]);
-      setIsLiveConnecting(false);
-      setIsLiveActive(false);
-    }
+    setMessages(prev => [...prev, {
+      id: String(Date.now()),
+      role: 'model',
+      text: 'Modo voz em desenvolvimento. Use o chat por texto para interagir com o assistente.',
+      timestamp: new Date()
+    }]);
+    return;
   };
 
   const stopLiveMode = () => {
@@ -320,19 +198,8 @@ ${voiceSettings.style === 'serious'
     setIsLiveConnecting(false);
   };
 
-  const hasGeminiKey = !!getGeminiApiKey();
-
   return (
     <div className="h-[calc(100vh-140px)] min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 animate-in fade-in duration-500 overflow-hidden relative">
-      {!hasGeminiKey && (
-        <div className="absolute top-0 left-0 right-0 z-50 flex items-center gap-3 px-4 py-3 bg-amber-500/20 border-b border-amber-500/30 rounded-b-2xl">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-          <p className="text-xs font-bold text-amber-200">
-            Configure <code className="bg-black/20 px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> no <code className="bg-black/20 px-1.5 py-0.5 rounded">.env</code> ou nas variáveis do Vercel para usar o assistente IA.
-          </p>
-        </div>
-      )}
-      
       {/* SELETOR DE VOZ (MODAL INTERNO) */}
       {isVoiceSettingsOpen && (
         <div className="fixed md:absolute top-4 right-4 md:top-20 md:right-8 z-50 bg-black/90 backdrop-blur-xl p-4 md:p-6 rounded-[32px] border border-white/10 w-[calc(100vw-2rem)] md:w-72 max-w-sm shadow-2xl animate-in fade-in slide-in-from-top-4">
@@ -472,8 +339,9 @@ ${voiceSettings.style === 'serious'
                </button>
                <button 
                   onClick={startLiveMode}
-                  disabled={!hasGeminiKey || isLiveConnecting}
-                  className={`group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 ${!hasGeminiKey ? 'opacity-50 cursor-not-allowed bg-zinc-600' : voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
+                  disabled
+                  title="Modo voz em desenvolvimento"
+                  className="group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 opacity-50 cursor-not-allowed bg-zinc-600"
                >
                   <Mic className="w-4 h-4 md:w-5 md:h-5 group-hover:animate-bounce" />
                   <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">Live Voice</span>
@@ -529,15 +397,15 @@ ${voiceSettings.style === 'serious'
                   type="text" 
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && hasGeminiKey && handleSendMessage()}
-                  placeholder={hasGeminiKey ? 'Pergunte sobre notas, chat ou operações...' : 'Configure GEMINI_API_KEY para usar o assistente'}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Pergunte sobre notas, chat ou operações..."
                   className="w-full relative bg-zinc-900/50 border border-white/10 rounded-[24px] md:rounded-[32px] pl-4 md:pl-8 pr-16 md:pr-20 py-4 md:py-6 lg:py-7 text-xs md:text-sm font-bold text-white outline-none focus:border-white/20 transition-all placeholder:text-zinc-600 shadow-inner"
                />
                <button 
                   onClick={handleSendMessage}
-                  disabled={!hasGeminiKey || !input.trim() || isProcessing}
+                  disabled={!input.trim() || isProcessing}
                   className={`absolute right-2 md:right-3 top-1/2 -translate-y-1/2 p-3 md:p-4 lg:p-5 rounded-xl md:rounded-2xl transition-all ${
-                     hasGeminiKey && input.trim() && !isProcessing
+                     input.trim() && !isProcessing
                         ? 'bg-white text-black shadow-2xl hover:scale-105 active:scale-95' 
                         : 'bg-zinc-800 text-zinc-600 cursor-not-allowed opacity-50'
                   }`}

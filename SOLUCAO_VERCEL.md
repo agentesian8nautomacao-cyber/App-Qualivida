@@ -9,19 +9,14 @@ Você já tem as variáveis configuradas no Vercel:
 
 ---
 
-## 🟡 Se o banner "Configure GEMINI_API_KEY" continuar após adicionar a variável
+## 🟡 Assistente IA: GEMINI_API_KEY só no servidor
 
-A chave é injetada **no momento do build**. Se você adicionou ou alterou `GEMINI_API_KEY` no Vercel e o banner ainda aparece:
+A IA roda no **backend** (`/api/ai`). A chave **não** é exposta no frontend. Se o assistente retornar erro de "chave não configurada" ou "assistente indisponível":
 
-1. **Confirme o nome:** exatamente `GEMINI_API_KEY` (sem `VITE_` na frente).
-2. **Ambiente:** marque **Production** (e Preview se usar). O deploy de produção só enxerga variáveis de Production.
-3. **Redeploy sem cache:**
-   - **Deployments** → três pontos (**...**) no último deploy → **Redeploy**
-   - **Desmarque** "Use existing Build Cache"
-   - Clique em **Redeploy**
-4. Opcional: **Settings** → **General** → **Build Cache** → **Clear Build Cache**, depois faça o Redeploy acima.
-
-Sem redeploy (e sem limpar cache), o build antigo continua sendo usado e a chave não entra no bundle.
+1. **Confirme no Vercel:** **Settings** → **Environment Variables** → variável **`GEMINI_API_KEY`** (valor da chave).
+2. **Ambiente:** marque **Production** (e Preview se usar).
+3. **Redeploy** (opcional: desmarque "Use existing Build Cache") para a função serverless enxergar a variável.
+4. Para testar localmente com a API: use `vercel dev` (a API `/api/ai` só existe em produção na Vercel ou ao rodar `vercel dev`).
 
 ---
 
