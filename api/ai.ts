@@ -1,9 +1,12 @@
 /**
  * API serverless Vercel: integração Gemini no backend.
  * A chave GEMINI_API_KEY é lida apenas aqui (process.env); nunca exposta ao client.
+ * Runtime Node.js obrigatório para compatibilidade com o SDK do Gemini.
  */
 
 import { GoogleGenAI } from '@google/genai';
+
+export const runtime = 'nodejs';
 
 export const config = {
   runtime: 'nodejs',
@@ -52,16 +55,23 @@ export default {
         );
       }
 
+      // Validar variável ANTES de usar (evita 503 genérico)
+      if (!process.env.GEMINI_API_KEY) {
+        return Response.json(
+          { error: 'GEMINI_API_KEY não definida no ambiente', code: 'GEMINI_API_KEY_MISSING' },
+          { status: 500, headers: corsHeaders }
+        );
+      }
+
+      // REMOVER depois do debug
+      console.log('GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
+
       const apiKey =
         typeof process.env.GEMINI_API_KEY === 'string' ? process.env.GEMINI_API_KEY.trim() : '';
       if (!apiKey) {
         return Response.json(
-          {
-            error:
-              'Assistente IA indisponível. Configure GEMINI_API_KEY nas variáveis de ambiente do servidor (ex.: Vercel).',
-            code: 'GEMINI_API_KEY_MISSING',
-          },
-          { status: 503, headers: corsHeaders }
+          { error: 'GEMINI_API_KEY não definida no ambiente', code: 'GEMINI_API_KEY_MISSING' },
+          { status: 500, headers: corsHeaders }
         );
       }
 
@@ -124,6 +134,7 @@ export default {
           );
         }
       } catch (err: unknown) {
+        console.error('Erro Gemini:', err);
         const message = err instanceof Error ? err.message : String(err);
         const apiMsg = (err as { error?: { message?: string } })?.error?.message ?? message;
         const fullMsg = apiMsg || message;
@@ -136,11 +147,11 @@ export default {
                 'Erro na chave da API no servidor. Verifique GEMINI_API_KEY nas variáveis do Vercel e restrições em aistudio.google.com/apikey.',
               code: 'GEMINI_API_ERROR',
             },
-            { status: 503, headers: corsHeaders }
+            { status: 500, headers: corsHeaders }
           );
         }
         return Response.json(
-          { error: fullMsg || 'Erro ao processar solicitação.', code: 'INTERNAL_ERROR' },
+          { error: 'Falha ao processar IA', code: 'INTERNAL_ERROR' },
           { status: 500, headers: corsHeaders }
         );
       }
