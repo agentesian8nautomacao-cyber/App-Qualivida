@@ -27,6 +27,7 @@ import SettingsView from './components/views/SettingsView';
 import BoletosView from './components/views/BoletosView';
 import MoradorDashboardView from './components/views/MoradorDashboardView';
 import NotificationsView from './components/views/NotificationsView';
+import LiveConversation from './components/views/LiveConversation';
 
 // Contexts
 import { useAppConfig } from './contexts/AppConfigContext';
@@ -591,6 +592,7 @@ const App: React.FC = () => {
   const [noticeFilter, setNoticeFilter] = useState<'all' | 'urgent' | 'unread'>('all');
   const [activeNoticeTab, setActiveNoticeTab] = useState<'wall' | 'chat'>('wall');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isLiveOpen, setIsLiveOpen] = useState(false);
 
   // === LINHA DIRETA (CHAT GLOBAL) ===
   // Registra o início da sessão de chat para que o histórico
@@ -1843,7 +1845,7 @@ const App: React.FC = () => {
     }
 
     switch (activeTab) {
-      case 'notices': const filteredNotices = allNotices.filter(n => { if (noticeFilter === 'urgent') return n.category === 'Urgente'; if (noticeFilter === 'unread') return !n.read; return true; }).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); return <NoticesView filteredNotices={filteredNotices} setNoticeFilter={setNoticeFilter} noticeFilter={noticeFilter} activeNoticeTab={activeNoticeTab} setActiveNoticeTab={setActiveNoticeTab} isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} chatMessages={chatMessages} role={role} chatInput={chatInput} setChatInput={setChatInput} handleSendChatMessage={handleSendChatMessage} chatEndRef={chatEndRef} handleAcknowledgeNotice={handleAcknowledgeNotice} onRefreshChat={handleRefreshChatMessages} onClearChat={handleClearChatMessages} onAddNotice={role === 'PORTEIRO' || role === 'SINDICO' ? () => setSelectedNoticeForEdit(createDraftNotice()) : undefined} onEditNotice={role === 'PORTEIRO' || role === 'SINDICO' ? (n) => setSelectedNoticeForEdit(n) : undefined} onDeleteNotice={role === 'PORTEIRO' || role === 'SINDICO' ? handleDeleteNoticeById : undefined} />;
+      case 'notices': const filteredNotices = allNotices.filter(n => { if (noticeFilter === 'urgent') return n.category === 'Urgente'; if (noticeFilter === 'unread') return !n.read; return true; }).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); return <NoticesView filteredNotices={filteredNotices} setNoticeFilter={setNoticeFilter} noticeFilter={noticeFilter} activeNoticeTab={activeNoticeTab} setActiveNoticeTab={setActiveNoticeTab} isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} chatMessages={chatMessages} role={role} chatInput={chatInput} setChatInput={setChatInput} handleSendChatMessage={handleSendChatMessage} chatEndRef={chatEndRef} handleAcknowledgeNotice={handleAcknowledgeNotice} onRefreshChat={handleRefreshChatMessages} onClearChat={handleClearChatMessages} onAddNotice={role === 'PORTEIRO' || role === 'SINDICO' ? () => setSelectedNoticeForEdit(createDraftNotice()) : undefined} onEditNotice={role === 'PORTEIRO' || role === 'SINDICO' ? (n) => setSelectedNoticeForEdit(n) : undefined} onDeleteNotice={role === 'PORTEIRO' || role === 'SINDICO' ? handleDeleteNoticeById : undefined} onLiveCall={() => { setIsChatOpen(false); setIsLiveOpen(true); }} />;
       case 'reservations': return <ReservationsView dayReservations={dayReservations} reservationFilter={reservationFilter} setReservationFilter={setReservationFilter} setIsReservationModalOpen={setIsReservationModalOpen} areasStatus={areasStatus} handleReservationAction={handleReservationAction} />;
       case 'residents': 
         if (role === 'MORADOR') {
@@ -2997,6 +2999,9 @@ const App: React.FC = () => {
           </div>
         )}
         {content}
+        {isLiveOpen && (
+          <LiveConversation onClose={() => setIsLiveOpen(false)} />
+        )}
       </>
     </ConnectivityProvider>
   );
