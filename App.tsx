@@ -2668,13 +2668,15 @@ const App: React.FC = () => {
     const base = (typeof import.meta !== 'undefined' && (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL) || '/';
     const basePath = base.replace(/\/$/, '');
     const videoSrc = `${basePath}/GestaoQualivida.mp4?v=2`;
+    // Poster: usar ícone existente (1024.png) para exibir algo enquanto o vídeo carrega ou se falhar
+    const posterSrc = `${basePath}/1024.png`;
     // Mostrar vídeo de abertura para usuários não autenticados
     content = (
       <div className="w-screen h-screen min-w-full min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
         <video
           ref={videoRef}
           src={videoSrc}
-          poster={`${basePath}/logo-qualivida.jpg`}
+          poster={posterSrc}
           autoPlay
           muted={isVideoMuted}
           playsInline
