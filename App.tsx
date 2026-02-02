@@ -99,24 +99,13 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  // Splash de abertura: vídeo de apresentação apenas uma vez (respeita hasSeenLogoSplash)
-  const [showLogoSplash, setShowLogoSplash] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('hasSeenLogoSplash') !== 'true';
-    } catch {
-      return true;
-    }
-  });
+  // Splash de abertura: vídeo de apresentação ao abrir (não persiste "já visto" para o vídeo voltar a ser exibido)
+  const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
   // Controle de áudio do vídeo (muted por padrão para autoplay funcionar)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
 
   const handleSkipSplash = useCallback(() => {
     console.log('[App] Pulando vídeo de abertura');
-    try {
-      localStorage.setItem('hasSeenLogoSplash', 'true');
-    } catch (e) {
-      console.warn('[App] Erro ao salvar no localStorage ao pular splash:', e);
-    }
     setShowLogoSplash(false);
   }, []);
 
