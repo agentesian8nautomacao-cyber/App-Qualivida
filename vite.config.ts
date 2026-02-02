@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => {
     process.env.VITE_GEMINI_API_KEY = geminiKey;
   }
   return {
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true
+    },
     test: {
       globals: true,
       environment: 'jsdom',
@@ -99,7 +103,6 @@ export default defineConfig(({ mode }) => {
     ],
     publicDir: 'public',
     optimizeDeps: {
-      disabled: false,
       entries: ['index.html']
     },
     define: {

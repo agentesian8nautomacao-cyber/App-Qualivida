@@ -1,5 +1,24 @@
 # 🚀 Guia de Deploy no Vercel
 
+## ✅ Configuração de Build (vercel.json)
+
+O projeto está configurado para Vite + React com:
+
+- **Build Command:** `npm run build`
+- **Output Directory:** `dist`
+- **Framework:** Vite (detectado automaticamente)
+
+Não use **now.json**; use apenas **vercel.json**. Se aparecer erro "Missing public directory", confira no dashboard da Vercel: **Settings > General > Build & Output** deve ter **Output Directory:** `dist`.
+
+### Relink do projeto (CLI)
+
+Se precisar religar o projeto à Vercel:
+
+1. Remova a pasta `.vercel` (se existir): `Remove-Item -Recurse -Force .vercel`
+2. Execute: `vercel` (ou `npx vercel`) e siga o fluxo para linkar ao projeto existente ou criar um novo.
+
+---
+
 ## ⚠️ Problema Comum: ERR_NAME_NOT_RESOLVED
 
 Se você está vendo o erro `ERR_NAME_NOT_RESOLVED` após o deploy no Vercel, significa que as **variáveis de ambiente não estão configuradas**.
