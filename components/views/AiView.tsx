@@ -180,15 +180,13 @@ ${voiceSettings.style === 'serious'
     }
   };
 
-  // --- VOZ (Gemini Live): indisponível quando IA roda no backend; chave não fica no client ---
+  // --- Live Voice: abre overlay de Interface Neural (canal de voz) ---
   const startLiveMode = async () => {
-    setMessages(prev => [...prev, {
-      id: String(Date.now()),
-      role: 'model',
-      text: 'Modo voz em desenvolvimento. Use o chat por texto para interagir com o assistente.',
-      timestamp: new Date()
-    }]);
-    return;
+    setIsLiveConnecting(true);
+    // Simula handshake de conexão; quando houver backend de voz real, conectar aqui
+    await new Promise(r => setTimeout(r, 1200));
+    setIsLiveConnecting(false);
+    setIsLiveActive(true);
   };
 
   const stopLiveMode = () => {
@@ -339,9 +337,8 @@ ${voiceSettings.style === 'serious'
                </button>
                <button 
                   onClick={startLiveMode}
-                  disabled
-                  title="Modo voz em desenvolvimento"
-                  className="group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 opacity-50 cursor-not-allowed bg-zinc-600"
+                  title="Ativar canal de voz ao vivo"
+                  className={`group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 ${voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
                >
                   <Mic className="w-4 h-4 md:w-5 md:h-5 group-hover:animate-bounce" />
                   <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">Live Voice</span>
