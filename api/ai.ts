@@ -134,10 +134,11 @@ export default {
           );
         }
       } catch (err: unknown) {
-        console.error('Erro Gemini:', err);
         const message = err instanceof Error ? err.message : String(err);
         const apiMsg = (err as { error?: { message?: string } })?.error?.message ?? message;
         const fullMsg = apiMsg || message;
+        // Log seguro: só a mensagem (nunca a chave); ver em Vercel → Project → Logs
+        console.error('Erro Gemini:', fullMsg);
         if (
           /API key|PERMISSION_DENIED|invalid|expired|quota|403|401/i.test(fullMsg)
         ) {
