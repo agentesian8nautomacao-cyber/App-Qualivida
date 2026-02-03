@@ -109,22 +109,30 @@ const AiView: React.FC<AiViewProps> = ({
     }
   };
 
-  // Seleciona voz da Web Speech API por gênero (pt-BR). Nomes de vozes variam por SO/navegador.
+  // Seleciona voz da Web Speech API por gênero (pt-BR), priorizando vozes mais naturais (Google, Microsoft, neural).
   const getSpeechVoiceByGender = (gender: 'male' | 'female'): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
-    const ptVoices = voices.filter(v => v.lang.startsWith('pt'));
+    const ptVoices = voices
+      .filter(v => v.lang.startsWith('pt'))
+      .sort((a, b) => (a.lang === 'pt-BR' ? -1 : 0) - (b.lang === 'pt-BR' ? -1 : 0)); // pt-BR primeiro
     if (ptVoices.length === 0) return null;
     const wantMale = gender === 'male';
-    // Padrões comuns: Daniel, Ricardo, Luciano = masculino; Maria, Francisca, Luciana = feminino
-    const maleNames = /daniel|ricardo|luciano|antonio|male|david|paulo|tiago/i;
-    const femaleNames = /maria|francisca|luciana|helena|female|ana|fernanda|camila/i;
-    const match = ptVoices.find(v => {
-      const n = (v.name || '').toLowerCase();
+    const name = (v: SpeechSynthesisVoice) => (v.name || '').toLowerCase();
+    // 1) Priorizar vozes de melhor qualidade (Google, Microsoft, Natural, Premium) — soam mais humanas
+    const premiumHint = /google|microsoft|natural|premium|neural|online|enhanced/i;
+    const premiumPt = ptVoices.filter(v => premiumHint.test(name(v)));
+    const maleNames = /daniel|ricardo|luciano|antonio|male|david|paulo|tiago|google.*homem|male/i;
+    const femaleNames = /maria|francisca|luciana|helena|female|ana|fernanda|camila|google.*mulher|female/i;
+    const pickFrom = premiumPt.length > 0 ? premiumPt : ptVoices;
+    const match = pickFrom.find(v => {
+      const n = name(v);
       return wantMale ? maleNames.test(n) : femaleNames.test(n);
     });
     if (match) return match;
-    // Fallback: alguns navegadores ordenam [feminino, masculino] ou vice-versa; tenta por índice
+    // 2) Fallback: voz padrão pt-BR (geralmente a mais fluida)
+    const defaultPt = ptVoices.find(v => v.default) || ptVoices[0];
+    if (defaultPt) return defaultPt;
     if (ptVoices.length >= 2 && wantMale) return ptVoices[1];
     if (ptVoices.length >= 2 && !wantMale) return ptVoices[0];
     return ptVoices[0];
@@ -248,12 +256,14 @@ ${voiceSettings.style === 'serious'
       const reply = res.ok ? (data.text ?? '') : (data.error ?? 'Erro ao processar.');
       const replyText = reply || 'Desculpe, não consegui gerar uma resposta.';
       setLiveResponse(replyText);
-      // Falar a resposta (Web Speech API) — respeita gênero da voz (Masculino/Feminino)
+      // Falar a resposta (Web Speech API) — voz mais natural: pt-BR, ritmo e tom suaves
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(replyText);
         u.lang = 'pt-BR';
-        u.rate = 0.95;
+        u.rate = 0.92;   // Ritmo um pouco mais lento = mais natural e claro
+        u.pitch = 1;     // Tom neutro (evita robótico)
+        u.volume = 1;
         const chosenVoice = getSpeechVoiceByGender(voiceSettings.gender);
         if (chosenVoice) u.voice = chosenVoice;
         u.onend = () => {
