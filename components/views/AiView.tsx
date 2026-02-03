@@ -19,6 +19,8 @@ interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: Date;
+  isStreaming?: boolean;
+  isError?: boolean;
 }
 
 interface VoiceSettings {
@@ -183,7 +185,7 @@ ${voiceSettings.style === 'serious'
     `;
   }, [allPackages, visitorLogs, allOccurrences, chatMessages, allNotices]);
 
-  // --- CHAT via API (chave Gemini só no backend) ---
+  // --- CHAT via API com streaming (Sentinela condomínio Qualivida) ---
   const handleSendMessage = async () => {
     if (!input.trim() || isProcessing) return;
 
@@ -199,6 +201,16 @@ ${voiceSettings.style === 'serious'
     setInput('');
     setIsProcessing(true);
 
+    const modelMsgId = (Date.now() + 1).toString();
+    const modelMsgPlaceholder: ChatMessage = {
+      id: modelMsgId,
+      role: 'model',
+      text: '',
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages(prev => [...prev, modelMsgPlaceholder]);
+
     try {
       const context = getSystemContext();
       const persona = getSystemPersona();
@@ -206,31 +218,75 @@ ${voiceSettings.style === 'serious'
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'chat',
+          action: 'chat-stream',
           prompt: currentInput,
           context,
           persona,
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
-      const text = res.ok ? (data.text ?? '') : (data.error ?? 'Erro ao processar sua solicitação.');
-      const modelMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: text || 'Desculpe, não consegui gerar uma resposta. Tente novamente.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, modelMsg]);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const errText = data?.error ?? 'Erro ao processar sua solicitação.';
+        setMessages(prev =>
+          prev.map(m => m.id === modelMsgId ? { ...m, text: errText, isStreaming: false, isError: true } : m)
+        );
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setMessages(prev =>
+          prev.map(m => m.id === modelMsgId ? { ...m, text: 'Erro: resposta sem stream.', isStreaming: false, isError: true } : m)
+        );
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let accumulated = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const payload = line.slice(6);
+            if (payload === '[DONE]') continue;
+            try {
+              const data = JSON.parse(payload);
+              if (data.error) {
+                setMessages(prev =>
+                  prev.map(m => m.id === modelMsgId ? { ...m, text: data.error, isStreaming: false, isError: true } : m)
+                );
+                return;
+              }
+              if (data.text) {
+                accumulated += data.text;
+                setMessages(prev =>
+                  prev.map(m => m.id === modelMsgId ? { ...m, text: accumulated, isStreaming: true } : m)
+                );
+              }
+            } catch {
+              // ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      const finalText = accumulated.trim() || 'Desculpe, não consegui gerar uma resposta. Tente novamente.';
+      setMessages(prev =>
+        prev.map(m => m.id === modelMsgId ? { ...m, text: finalText, isStreaming: false } : m)
+      );
     } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
-      const userMessage = 'Erro de conexão. Verifique a rede e se o servidor está disponível.';
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'model',
-        text: userMessage,
-        timestamp: new Date()
-      }]);
+      const errMsg = 'Erro de conexão. Verifique a rede e se o servidor está disponível.';
+      setMessages(prev =>
+        prev.map(m => m.id === modelMsgId ? { ...m, text: errMsg, isStreaming: false, isError: true } : m)
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -577,15 +633,19 @@ ${voiceSettings.style === 'serious'
             </div>
          </div>
 
-         {/* Messages Area */}
+         {/* Messages Area - Interface Neural Sentinela (Condomínio Qualivida) */}
          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 lg:space-y-10 relative min-h-0">
             {messages.map((msg) => {
                const isModel = msg.role === 'model';
+               const isStreaming = isModel && msg.isStreaming;
+               const isError = isModel && msg.isError;
                return (
                   <div key={msg.id} className={`flex ${isModel ? 'justify-start' : 'justify-end'} animate-in slide-in-from-bottom-4 duration-500`}>
                      <div className={`max-w-[90%] sm:max-w-[85%] md:max-w-[75%] p-4 md:p-6 lg:p-7 rounded-[24px] md:rounded-[32px] relative group ${
                         isModel 
-                           ? 'bg-zinc-900/80 border border-white/5 text-zinc-300 rounded-tl-sm shadow-xl' 
+                           ? isError 
+                              ? 'bg-red-950/40 border border-red-500/30 text-red-200 rounded-tl-sm shadow-xl'
+                              : 'bg-zinc-900/80 border border-white/5 text-zinc-300 rounded-tl-sm shadow-xl' 
                            : 'bg-white text-black rounded-tr-sm shadow-2xl'
                      }`}>
                         {isModel && (
@@ -594,7 +654,12 @@ ${voiceSettings.style === 'serious'
                               <span className="text-[9px] font-black uppercase tracking-widest">Sentinela ({voiceSettings.gender === 'male' ? 'M' : 'F'})</span>
                            </div>
                         )}
-                        <p className="text-xs md:text-sm font-bold leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>
+                        <p className="text-xs md:text-sm font-bold leading-relaxed whitespace-pre-wrap break-words">
+                           {msg.text}
+                           {isStreaming && (
+                              <span className="inline-block w-2 h-4 ml-0.5 bg-cyan-400 animate-pulse align-middle" />
+                           )}
+                        </p>
                         <div className={`flex items-center gap-2 mt-4 ${isModel ? 'justify-end' : 'justify-start'} opacity-20`}>
                            <span className="text-[8px] font-black uppercase">
                               {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -605,7 +670,7 @@ ${voiceSettings.style === 'serious'
                );
             })}
             
-            {isProcessing && (
+            {isProcessing && !messages.some(m => m.role === 'model' && m.isStreaming) && (
                <div className="flex justify-start animate-pulse">
                   <div className="bg-zinc-900 border border-white/5 p-6 rounded-[24px] flex gap-3">
                      <div className={`w-2 h-2 rounded-full animate-bounce ${voiceSettings.gender === 'male' ? 'bg-cyan-500' : 'bg-purple-500'}`} />

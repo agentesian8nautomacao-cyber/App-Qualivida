@@ -63,9 +63,6 @@ export default {
         );
       }
 
-      // REMOVER depois do debug
-      console.log('GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
-
       const apiKey =
         typeof process.env.GEMINI_API_KEY === 'string' ? process.env.GEMINI_API_KEY.trim() : '';
       if (!apiKey) {
@@ -87,9 +84,9 @@ export default {
       }
 
       const { action } = body;
-      if (action !== 'chat' && action !== 'report') {
+      if (action !== 'chat' && action !== 'chat-stream' && action !== 'report') {
         return Response.json(
-          { error: 'action deve ser "chat" ou "report"', code: 'BAD_REQUEST' },
+          { error: 'action deve ser "chat", "chat-stream" ou "report"', code: 'BAD_REQUEST' },
           { status: 400, headers: corsHeaders }
         );
       }
@@ -98,7 +95,7 @@ export default {
       try {
         const ai = new GoogleGenAI({ apiKey });
 
-        if (action === 'chat') {
+        if (action === 'chat' || action === 'chat-stream') {
           const { prompt, context = '', persona = '' } = body;
           if (!prompt || typeof prompt !== 'string') {
             return Response.json(
@@ -106,7 +103,43 @@ export default {
               { status: 400, headers: corsHeaders }
             );
           }
-          const fullContent = `${persona}\n\nCONTEXTO EM TEMPO REAL:\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${prompt}`;
+          const fullContent = `${persona}\n\nCONTEXTO EM TEMPO REAL (CONDOMÍNIO QUALIVIDA):\n${context}\n\nSOLICITAÇÃO DO USUÁRIO:\n${prompt}`;
+
+          if (action === 'chat-stream') {
+            const stream = await ai.models.generateContentStream({
+              model,
+              contents: fullContent,
+            });
+            const encoder = new TextEncoder();
+            const readable = new ReadableStream({
+              async start(controller) {
+                try {
+                  for await (const chunk of stream) {
+                    const text = (chunk as { text?: string }).text ?? extractGeminiText(chunk);
+                    if (text) {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+                    }
+                  }
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
+                } finally {
+                  controller.close();
+                }
+              },
+            });
+            return new Response(readable, {
+              status: 200,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                Connection: 'keep-alive',
+              },
+            });
+          }
+
           const response = await ai.models.generateContent({
             model,
             contents: fullContent,
