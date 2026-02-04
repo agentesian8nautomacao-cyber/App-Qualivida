@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, CheckCircle2, AlertCircle, Download, Copy, FileSpreadsheet, FileJson, File } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, X, CheckCircle2, AlertCircle, Download, File as FileIcon } from 'lucide-react';
 import { Boleto, Resident } from '../../types';
 import { uploadBoletoPdf } from '../../services/dataService';
 import { useToast } from '../../contexts/ToastContext';
@@ -20,18 +20,27 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
   allResidents
 }) => {
   const toast = useToast();
-  const [importMethod, setImportMethod] = useState<'file' | 'paste'>('file');
   const [file, setFile] = useState<File | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
-  const [pastedData, setPastedData] = useState('');
   const [previewData, setPreviewData] = useState<Boleto[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  /** Designação manual: boleto.id -> File (PDF escolhido para aquele morador). */
+  const [assignedPdfByBoletoId, setAssignedPdfByBoletoId] = useState<Record<string, File | null>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
-  /** Mapeia boleto.id (preview) -> File do PDF para upload antes de salvar. */
   const pdfAssignmentsRef = useRef<Map<string, File>>(new Map());
+
+  // Sincronizar designações do ref para estado quando o preview é preenchido (ex.: auto-assign por nome)
+  useEffect(() => {
+    if (previewData.length === 0) return;
+    setAssignedPdfByBoletoId(prev => {
+      const next = { ...prev };
+      pdfAssignmentsRef.current.forEach((f, id) => { next[id] = f; });
+      return next;
+    });
+  }, [previewData.length]);
 
   if (!isOpen) return null;
 
@@ -54,15 +63,27 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     setPreviewData([]);
 
     try {
-      const fileType = fileToProcess.name.split('.').pop()?.toLowerCase();
-      
-      if (fileType === 'csv') {
-        await processCSV(fileToProcess);
-      } else if (fileType === 'json') {
-        await processJSON(fileToProcess);
-      } else {
-        setErrors(['Formato de arquivo não suportado. Use CSV ou JSON.']);
+      const text = await fileToProcess.text();
+
+      // Tenta interpretar como JSON (array de boletos)
+      const trimmed = text.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          const data = JSON.parse(text);
+          if (Array.isArray(data)) {
+            processJSONData(data);
+            return;
+          }
+          setErrors(['JSON deve ser um array de objetos.']);
+          return;
+        } catch {
+          // Não é JSON válido; tenta CSV abaixo
+        }
       }
+
+      // Tenta interpretar como CSV (qualquer extensão)
+      const csvFile = new File([text], fileToProcess.name || 'data.csv', { type: 'text/csv' });
+      await processCSV(csvFile);
     } catch (error) {
       setErrors([`Erro ao processar arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`]);
     } finally {
@@ -352,28 +373,6 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     setPreviewData(boletos);
   };
 
-  const handlePasteProcess = () => {
-    setIsProcessing(true);
-    setErrors([]);
-    setPreviewData([]);
-
-    try {
-      try {
-        const data = JSON.parse(pastedData);
-        if (Array.isArray(data)) {
-          processJSONData(data);
-          return;
-        }
-      } catch {
-        setErrors(['Por favor, forneça dados no formato JSON válido.']);
-      }
-    } catch (error) {
-      setErrors([`Erro ao processar dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const processJSONData = (data: any[]) => {
     pdfAssignmentsRef.current.clear();
     const boletos: Boleto[] = [];
@@ -443,8 +442,21 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         }
       }
 
+      const boletoId = Date.now().toString() + index;
+      let pdfUrl = '';
+      if (pdfFiles.length > 0) {
+        const matchingPdf = pdfFiles.find(pdf => {
+          const pdfName = pdf.name.toLowerCase();
+          return pdfName.includes(unit.toLowerCase()) || pdfName.includes(referenceMonth.toLowerCase());
+        });
+        if (matchingPdf) {
+          pdfUrl = URL.createObjectURL(matchingPdf);
+          pdfAssignmentsRef.current.set(boletoId, matchingPdf);
+        }
+      }
+
       boletos.push({
-        id: Date.now().toString() + index,
+        id: boletoId,
         residentName: resident.name,
         unit: unit,
         referenceMonth: referenceMonth,
@@ -453,6 +465,7 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         status: status,
         barcode: item.codigo || item.cod || item.barcode,
         description: item.descricao || item.description,
+        pdfUrl: pdfUrl || undefined,
         paidDate: item.pagamento || item.paidDate
       });
     });
@@ -471,12 +484,13 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     setIsImporting(true);
     setErrors([]);
     try {
-      // Upload PDFs para o storage e substituir blob URLs por URLs permanentes
-      const fileToUrl = new Map<File, string>();
-      const uploadWarnings: string[] = [];
-      for (const b of previewData) {
-        const pdfFile = pdfAssignmentsRef.current.get(b.id);
-        if (!pdfFile) continue;
+      // Aplicar designações da UI ao ref antes do upload
+      pdfAssignmentsRef.current.clear();
+      Object.entries(assignedPdfByBoletoId).forEach(([id, f]) => {
+        if (f) pdfAssignmentsRef.current.set(id, f);
+      });
+      // Revogar blob URLs do preview (não mutar estado)
+      previewData.forEach(b => {
         if (b.pdfUrl?.startsWith('blob:')) {
           try {
             URL.revokeObjectURL(b.pdfUrl);
@@ -484,26 +498,46 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
             /* ignore */
           }
         }
+      });
+      // Upload PDFs e montar mapa id -> url final
+      const fileToUrl = new Map<File, string>();
+      const boletoIdToPdfUrl = new Map<string, string>();
+      const uploadWarnings: string[] = [];
+      for (const b of previewData) {
+        const pdfFile = pdfAssignmentsRef.current.get(b.id);
+        if (!pdfFile) continue;
         let url = fileToUrl.get(pdfFile);
         if (url === undefined) {
           const result = await uploadBoletoPdf(pdfFile, b.id);
           if (result.error || !result.url) {
             uploadWarnings.push(`${b.unit} ${b.referenceMonth}: ${result.error || 'Falha no envio do PDF'}`);
-            b.pdfUrl = undefined;
           } else {
             url = result.url;
             fileToUrl.set(pdfFile, url);
+            boletoIdToPdfUrl.set(b.id, url);
           }
+        } else {
+          boletoIdToPdfUrl.set(b.id, url);
         }
-        if (url) b.pdfUrl = url;
       }
-      await onImport(previewData);
+      // Construir lista para importação sem mutar previewData (sem blob URLs)
+      const boletosToImport: Boleto[] = previewData.map(b => ({
+        ...b,
+        pdfUrl: boletoIdToPdfUrl.get(b.id) ?? undefined,
+      }));
+      await onImport(boletosToImport);
       if (uploadWarnings.length > 0) {
         toast.error(`Boletos importados, mas alguns PDFs não foram enviados (verifique o bucket "boletos" no Supabase).`);
       }
       handleClose();
     } catch (e) {
-      setErrors([e instanceof Error ? e.message : 'Erro ao importar.']);
+      const message = (e instanceof Error ? e.message : String(e ?? '')).trim() || 'Erro ao importar.';
+      setErrors([message]);
+      try {
+        toast.error(message);
+      } catch {
+        /* ignore toast */
+      }
     } finally {
       setIsImporting(false);
     }
@@ -521,10 +555,9 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     });
     setFile(null);
     setPdfFiles([]);
-    setPastedData('');
     setPreviewData([]);
     setErrors([]);
-    setImportMethod('file');
+    setAssignedPdfByBoletoId({});
     pdfAssignmentsRef.current.clear();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -562,7 +595,7 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-2xl font-black uppercase tracking-tighter">Importar Boletos</h3>
-            <p className="text-xs opacity-40 mt-1">Importe boletos de arquivo CSV ou JSON. Associe PDFs opcionalmente.</p>
+            <p className="text-xs opacity-40 mt-1">Selecione qualquer arquivo. O sistema detecta automaticamente CSV ou JSON. O arquivo ficará disponível para designar cada PDF ao morador correspondente.</p>
           </div>
           <button
             onClick={handleClose}
@@ -572,105 +605,61 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
           </button>
         </div>
 
-        {/* Método de Importação */}
-        <div className="mb-6">
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setImportMethod('file')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
-                importMethod === 'file'
-                  ? 'bg-[var(--text-primary)] text-[var(--bg-color)]'
-                  : 'bg-white/5 hover:bg-white/10'
-              }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Arquivo
-            </button>
-            <button
-              onClick={() => setImportMethod('paste')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${
-                importMethod === 'paste'
-                  ? 'bg-[var(--text-primary)] text-[var(--bg-color)]'
-                  : 'bg-white/5 hover:bg-white/10'
-              }`}
-            >
-              <Copy className="w-4 h-4 inline mr-2" />
-              Colar Dados
-            </button>
+        {/* Importar: selecionar arquivo CSV ou JSON */}
+        <div className="mb-6 space-y-4">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-[var(--border-color)] rounded-2xl p-8 text-center cursor-pointer hover:border-[var(--text-primary)]/30 transition-all"
+          >
+            <Upload className="w-12 h-12 mx-auto mb-4 opacity-40" />
+            <p className="text-sm font-bold mb-2">
+              {file ? file.name : 'Clique para selecionar arquivo (qualquer tipo)'}
+            </p>
+            <p className="text-xs opacity-40">CSV e JSON são detectados automaticamente. O arquivo ficará disponível para designar PDFs a cada morador.</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="*/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
 
-          {importMethod === 'file' ? (
-            <div className="space-y-4">
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-[var(--border-color)] rounded-2xl p-8 text-center cursor-pointer hover:border-[var(--text-primary)]/30 transition-all"
-              >
-                <Upload className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                <p className="text-sm font-bold mb-2">
-                  {file ? file.name : 'Clique para selecionar arquivo CSV ou JSON'}
-                </p>
-                <p className="text-xs opacity-40">CSV ou JSON</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.json"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </div>
-              
-              {/* Upload de PDFs */}
-              <div
-                onClick={() => pdfInputRef.current?.click()}
-                className="border-2 border-dashed border-[var(--border-color)] rounded-2xl p-6 text-center cursor-pointer hover:border-[var(--text-primary)]/30 transition-all"
-              >
-                <File className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-sm font-bold mb-2">
-                  {pdfFiles.length > 0 ? `${pdfFiles.length} PDF(s) selecionado(s)` : 'Selecionar PDFs dos boletos (opcional)'}
-                </p>
-                <p className="text-xs opacity-40">Os PDFs serão associados automaticamente pela unidade ou mês</p>
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept=".pdf"
-                  multiple
-                  onChange={handlePdfSelect}
-                  className="hidden"
-                />
-                {pdfFiles.length > 0 && (
-                  <div className="mt-3 text-xs opacity-60">
-                    {pdfFiles.map((pdf, idx) => (
-                      <div key={idx} className="truncate">{pdf.name}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={downloadTemplate}
-                className="text-xs opacity-60 hover:opacity-100 flex items-center gap-2 transition-opacity"
-              >
-                <Download className="w-3 h-3" />
-                Baixar template CSV
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <textarea
-                value={pastedData}
-                onChange={(e) => setPastedData(e.target.value)}
-                placeholder='Cole aqui os dados em formato JSON...\n\nExemplo:\n[\n  {\n    "unidade": "102A",\n    "mes": "01/2025",\n    "vencimento": "10/01/2025",\n    "valor": 450.00,\n    "status": "Pendente",\n    "descricao": "Taxa de condomínio"\n  }\n]'
-                className="w-full h-48 p-4 bg-white/5 border border-[var(--border-color)] rounded-xl text-xs font-mono outline-none focus:border-[var(--text-primary)]/30 transition-all resize-none"
+          {previewData.length > 0 && (
+            <div
+              onClick={() => pdfInputRef.current?.click()}
+              className="border-2 border-dashed border-[var(--border-color)] rounded-2xl p-6 text-center cursor-pointer hover:border-[var(--text-primary)]/30 transition-all"
+            >
+              <FileIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm font-bold mb-2">
+                {pdfFiles.length > 0 ? `${pdfFiles.length} PDF(s) disponível(eis) para designar` : 'Selecionar PDFs dos boletos (opcional)'}
+              </p>
+              <p className="text-xs opacity-40">Designe cada PDF ao morador na tabela abaixo.</p>
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept=".pdf"
+                multiple
+                onChange={handlePdfSelect}
+                className="hidden"
               />
-              <button
-                onClick={handlePasteProcess}
-                disabled={!pastedData.trim() || isProcessing}
-                className="px-6 py-3 bg-[var(--text-primary)] text-[var(--bg-color)] rounded-xl text-xs font-black uppercase hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isProcessing ? 'Processando...' : 'Processar Dados'}
-              </button>
+              {pdfFiles.length > 0 && (
+                <div className="mt-3 text-xs opacity-60 text-left max-h-24 overflow-y-auto">
+                  {pdfFiles.map((pdf, idx) => (
+                    <div key={idx} className="truncate">{pdf.name}</div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
+          <button
+            onClick={downloadTemplate}
+            className="text-xs opacity-60 hover:opacity-100 flex items-center gap-2 transition-opacity"
+          >
+            <Download className="w-3 h-3" />
+            Baixar template CSV
+          </button>
         </div>
 
         {/* Erros */}
@@ -682,7 +671,7 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
             </div>
             <ul className="text-xs opacity-80 space-y-1 max-h-32 overflow-y-auto">
               {errors.map((error, index) => (
-                <li key={index}>• {error}</li>
+                <li key={index}>• {typeof error === 'string' ? error : String(error ?? '')}</li>
               ))}
             </ul>
           </div>
@@ -699,7 +688,7 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
                 </p>
               </div>
             </div>
-            <div className="max-h-64 overflow-y-auto border border-[var(--border-color)] rounded-xl">
+            <div className="max-h-72 overflow-y-auto border border-[var(--border-color)] rounded-xl">
               <table className="w-full text-xs">
                 <thead className="bg-white/5 sticky top-0">
                   <tr>
@@ -709,11 +698,12 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
                     <th className="p-3 text-left font-black uppercase">Vencimento</th>
                     <th className="p-3 text-left font-black uppercase">Valor</th>
                     <th className="p-3 text-left font-black uppercase">Status</th>
+                    <th className="p-3 text-left font-black uppercase">Designar PDF</th>
                   </tr>
                 </thead>
                 <tbody>
                   {previewData.map((boleto, index) => (
-                    <tr key={index} className="border-t border-[var(--border-color)]">
+                    <tr key={boleto.id} className="border-t border-[var(--border-color)]">
                       <td className="p-3">{boleto.unit}</td>
                       <td className="p-3">{boleto.residentName}</td>
                       <td className="p-3">{boleto.referenceMonth}</td>
@@ -727,6 +717,24 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
                         }`}>
                           {boleto.status}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={assignedPdfByBoletoId[boleto.id]?.name ?? ''}
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const chosen = name ? pdfFiles.find(f => f.name === name) ?? null : null;
+                            setAssignedPdfByBoletoId(prev => ({ ...prev, [boleto.id]: chosen }));
+                            if (chosen) pdfAssignmentsRef.current.set(boleto.id, chosen);
+                            else pdfAssignmentsRef.current.delete(boleto.id);
+                          }}
+                          className="w-full max-w-[180px] px-2 py-1.5 bg-white/5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] outline-none focus:border-[var(--text-primary)]/50 text-[10px]"
+                        >
+                          <option value="">Nenhum</option>
+                          {pdfFiles.map((pdf, idx) => (
+                            <option key={idx} value={pdf.name}>{pdf.name}</option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   ))}
