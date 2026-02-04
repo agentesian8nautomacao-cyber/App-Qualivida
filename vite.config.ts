@@ -49,7 +49,27 @@ export default defineConfig(({ mode }) => {
     base: '/',
     build: {
       outDir: 'dist',
-      emptyOutDir: true
+      emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@google/genai')) return 'vendor-genai';
+              if (id.includes('react-dom') || id.includes('react/')) return 'vendor-react';
+              if (id.includes('@supabase/supabase-js')) return 'vendor-supabase';
+              if (id.includes('recharts')) return 'vendor-recharts';
+              if (id.includes('lucide-react')) return 'vendor-lucide';
+              if (id.includes('html2canvas') || id.includes('jspdf') || id.includes('jsqr')) return 'vendor-assets';
+              if (id.includes('dexie')) return 'vendor-dexie';
+              return 'vendor';
+            }
+          },
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+      chunkSizeWarningLimit: 600,
     },
     test: {
       globals: true,
