@@ -26,8 +26,6 @@ interface NoticesViewProps {
   onEditNotice?: (notice: Notice) => void;
   /** Portaria e Síndico: excluir aviso por id */
   onDeleteNotice?: (id: string) => void;
-  /** Abre a tela de chamada de voz ao vivo (LiveConversation). O componente não processa áudio. */
-  onLiveCall?: () => void;
 }
 
 const NoticesView: React.FC<NoticesViewProps> = ({
@@ -49,8 +47,7 @@ const NoticesView: React.FC<NoticesViewProps> = ({
   onClearChat,
   onAddNotice,
   onEditNotice,
-  onDeleteNotice,
-  onLiveCall
+  onDeleteNotice
 }) => {
   const canManageNotices = (role === 'PORTEIRO' || role === 'SINDICO') && (onAddNotice != null || onEditNotice != null || onDeleteNotice != null);
   const lastMessage = chatMessages[chatMessages.length - 1];
@@ -294,18 +291,6 @@ const NoticesView: React.FC<NoticesViewProps> = ({
                </div>
             </div>
             <div className="flex items-center gap-1">
-               {onLiveCall && (
-                  <button
-                     type="button"
-                     className="flex items-center gap-2 px-3 py-2 rounded-full transition-colors hover:bg-[var(--border-color)] font-bold text-xs uppercase tracking-wider"
-                     style={{ color: 'var(--text-primary)' }}
-                     onClick={(e) => { e.stopPropagation(); onLiveCall(); }}
-                     title="Iniciar chamada de voz"
-                  >
-                     <Phone className="w-5 h-5" />
-                     Iniciar chamada de voz
-                  </button>
-               )}
                <button
                   type="button"
                   className="p-2.5 rounded-full transition-colors hover:bg-[var(--border-color)]"

@@ -3,7 +3,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BrainCircuit, Mic, SendHorizontal, X, Activity, Radio, Cpu, Sparkles, MessageSquare, History, Settings, User } from 'lucide-react';
 import { getInternalInstructions } from '../../services/ai/internalInstructions';
 import { useAppConfig } from '../../contexts/AppConfigContext';
-import { splitIntoSpeakableChunks, humanizeTextForSpeech } from '../../utils/speechHumanize';
+import { getGeminiVoiceName } from '../../utils/voiceConfig';
+import { useLiveVoiceConversation } from '../../hooks/useLiveVoiceConversation';
 
 interface AiViewProps {
   allPackages: any[];
@@ -28,6 +29,21 @@ interface VoiceSettings {
   gender: 'male' | 'female';
   style: 'serious' | 'animated';
 }
+
+// Helper para montar URL da API de IA.
+// Em produção: chama `/api/ai` normalmente (Vercel).
+// Em desenvolvimento: se VITE_API_BASE_URL estiver definida, usa `${VITE_API_BASE_URL}/api/ai`,
+// evitando 404 do Vite dev server.
+const getAiApiUrl = () => {
+  // Vite injeta import.meta.env em tempo de build; para evitar erro de tipo em TS,
+  // fazemos um cast explícito.
+  const env = (import.meta as any).env || {};
+  const base = env.VITE_API_BASE_URL as string | undefined;
+  if (env.DEV && base) {
+    return `${base.replace(/\/+$/, '')}/api/ai`;
+  }
+  return '/api/ai';
+};
 
 const AiView: React.FC<AiViewProps> = ({ 
   allPackages, 
@@ -60,17 +76,9 @@ const AiView: React.FC<AiViewProps> = ({
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLiveConnecting, setIsLiveConnecting] = useState(false);
-  const [liveTranscript, setLiveTranscript] = useState<string>('');
-  const [liveResponse, setLiveResponse] = useState<string>('');
-  const [liveListening, setLiveListening] = useState(false);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const liveSessionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const liveAudioSources = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const recognitionRef = useRef<any>(null);
-  const isLiveProcessingRef = useRef(false);
-  const isLiveActiveRef = useRef(false);
 
   // Salvar histórico
   useEffect(() => {
@@ -78,68 +86,8 @@ const AiView: React.FC<AiViewProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Carregar lista de vozes (Chrome/Edge populam getVoices() de forma assíncrona)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.getVoices();
-    const onVoicesChanged = () => window.speechSynthesis.getVoices();
-    window.speechSynthesis.addEventListener?.('voiceschanged', onVoicesChanged);
-    return () => window.speechSynthesis.removeEventListener?.('voiceschanged', onVoicesChanged);
-  }, []);
-
-  // Cleanup Live Voice ao desmontar
-  useEffect(() => {
-    return () => {
-      isLiveActiveRef.current = false;
-      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch { /* */ }
-        recognitionRef.current = null;
-      }
-    };
-  }, []);
-
-  // Mapa de Vozes do Gemini Live API (exibição)
-  const getVoiceConfig = () => {
-    // Fenrir: Deep/Authoritative (Male Serious)
-    // Puck: Playful/Mid (Male Animated)
-    // Kore: Calm/Professional (Female Serious)
-    // Aoede: Expressive (Female Animated)
-    if (voiceSettings.gender === 'male') {
-      return voiceSettings.style === 'serious' ? 'Fenrir' : 'Puck';
-    } else {
-      return voiceSettings.style === 'serious' ? 'Kore' : 'Aoede';
-    }
-  };
-
-  // Seleciona voz da Web Speech API por gênero (pt-BR), priorizando vozes mais naturais (Google, Microsoft, neural).
-  const getSpeechVoiceByGender = (gender: 'male' | 'female'): SpeechSynthesisVoice | null => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoices = voices
-      .filter(v => v.lang.startsWith('pt'))
-      .sort((a, b) => (a.lang === 'pt-BR' ? -1 : 0) - (b.lang === 'pt-BR' ? -1 : 0)); // pt-BR primeiro
-    if (ptVoices.length === 0) return null;
-    const wantMale = gender === 'male';
-    const name = (v: SpeechSynthesisVoice) => (v.name || '').toLowerCase();
-    // 1) Priorizar vozes de melhor qualidade (Google, Microsoft, Natural, Premium) — soam mais humanas
-    const premiumHint = /google|microsoft|natural|premium|neural|online|enhanced/i;
-    const premiumPt = ptVoices.filter(v => premiumHint.test(name(v)));
-    const maleNames = /daniel|ricardo|luciano|antonio|male|david|paulo|tiago|google.*homem|male/i;
-    const femaleNames = /maria|francisca|luciana|helena|female|ana|fernanda|camila|google.*mulher|female/i;
-    const pickFrom = premiumPt.length > 0 ? premiumPt : ptVoices;
-    const match = pickFrom.find(v => {
-      const n = name(v);
-      return wantMale ? maleNames.test(n) : femaleNames.test(n);
-    });
-    if (match) return match;
-    // 2) Fallback: voz padrão pt-BR (geralmente a mais fluida)
-    const defaultPt = ptVoices.find(v => v.default) || ptVoices[0];
-    if (defaultPt) return defaultPt;
-    if (ptVoices.length >= 2 && wantMale) return ptVoices[1];
-    if (ptVoices.length >= 2 && !wantMale) return ptVoices[0];
-    return ptVoices[0];
-  };
+  // Nome da voz Gemini Live (usado para exibição / paridade com Nutri.IA)
+  const activeGeminiVoiceName = getGeminiVoiceName(voiceSettings.gender, voiceSettings.style);
 
   const getSystemPersona = () => {
     const internalInstructions = getInternalInstructions();
@@ -190,6 +138,35 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
     `;
   }, [allPackages, visitorLogs, allOccurrences, chatMessages, allNotices]);
 
+  // --- Live Voice (Sentinela) via Gemini Live (mesma engine do Nutri.ai) ---
+  // Em vez de usar Web Speech para TTS, usamos o modelo de áudio nativo do Gemini,
+  // reaproveitando o hook genérico de conversa em tempo real.
+  const liveSystemInstruction = getSystemPersona();
+  const liveContextData = getSystemContext();
+
+  const {
+    isConnected: liveIsConnected,
+    isMicOn: liveIsMicOn,
+    volume: liveVolume,
+    status: liveStatus,
+    secondsActive: liveSecondsActive,
+    isLimitReached: liveIsLimitReached,
+    loggedItem: liveLoggedItem,
+    start: liveStart,
+    stop: liveStop,
+    toggleMic: liveToggleMic,
+  } = useLiveVoiceConversation({
+    // Chave exclusiva para Gemini Live no front (não é a mesma do backend /api/ai).
+    // Configure VITE_GEMINI_LIVE_KEY no .env.local e no Vercel com as restrições de domínio corretas.
+    apiKey: ((import.meta as any).env?.VITE_GEMINI_LIVE_KEY as string) || '',
+    model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+    voiceName: activeGeminiVoiceName,
+    systemInstruction: liveSystemInstruction,
+    timeLimitSeconds: 15 * 60,
+    contextData: liveContextData,
+    enableLogMealTool: false,
+  });
+
   // --- CHAT via API com streaming (Sentinela condomínio Qualivida) ---
   const handleSendMessage = async () => {
     if (!input.trim() || isProcessing) return;
@@ -219,7 +196,7 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
     try {
       const context = getSystemContext();
       const persona = getSystemPersona();
-      const res = await fetch('/api/ai', {
+      const res = await fetch(getAiApiUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -297,167 +274,18 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
     }
   };
 
-  // --- Enviar transcrição de voz para a IA e falar a resposta (Live Voice) — só voz, sem escrever no chat ---
-  const sendVoiceToAI = useCallback(async (transcript: string) => {
-    const text = (transcript || '').trim();
-    if (!text || isLiveProcessingRef.current) return;
-    isLiveProcessingRef.current = true;
-    setLiveTranscript(text);
-    setLiveResponse('');
-    setLiveListening(false);
-    try {
-      const context = getSystemContext();
-      const persona = getSystemPersona();
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'chat', prompt: text, context, persona }),
-      });
-      const data = await res.json().catch(() => ({}));
-      const reply = res.ok ? (data.text ?? '') : (data.error ?? 'Erro ao processar.');
-      const replyText = reply || 'Desculpe, não consegui gerar uma resposta.';
-      setLiveResponse(replyText);
-
-      const onSpeechDone = () => {
-        isLiveProcessingRef.current = false;
-        setLiveResponse('');
-        if (recognitionRef.current && isLiveActiveRef.current) {
-          try { recognitionRef.current.start(); } catch { /* já iniciado ou fechado */ }
-          setLiveListening(true);
-        }
-      };
-
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        const humanized = humanizeTextForSpeech(replyText);
-        const chunks = splitIntoSpeakableChunks(humanized);
-        const chosenVoice = getSpeechVoiceByGender(voiceSettings.gender);
-
-        const PAUSE_BETWEEN_PHRASES_MS = 280;
-        const RATE = 0.88;
-        const PITCH = 1;
-        const VOLUME = 1;
-
-        const speakNext = (index: number) => {
-          if (index >= chunks.length) {
-            onSpeechDone();
-            return;
-          }
-          const u = new SpeechSynthesisUtterance(chunks[index]);
-          u.lang = 'pt-BR';
-          u.rate = RATE;
-          u.pitch = PITCH;
-          u.volume = VOLUME;
-          if (chosenVoice) u.voice = chosenVoice;
-          u.onend = () => {
-            if (index + 1 < chunks.length) {
-              setTimeout(() => speakNext(index + 1), PAUSE_BETWEEN_PHRASES_MS);
-            } else {
-              onSpeechDone();
-            }
-          };
-          u.onerror = () => {
-            if (index + 1 < chunks.length) setTimeout(() => speakNext(index + 1), PAUSE_BETWEEN_PHRASES_MS);
-            else onSpeechDone();
-          };
-          window.speechSynthesis.speak(u);
-        };
-
-        if (chunks.length > 0) {
-          speakNext(0);
-        } else {
-          const u = new SpeechSynthesisUtterance(replyText);
-          u.lang = 'pt-BR';
-          u.rate = RATE;
-          u.pitch = PITCH;
-          u.volume = VOLUME;
-          if (chosenVoice) u.voice = chosenVoice;
-          u.onend = onSpeechDone;
-          u.onerror = onSpeechDone;
-          window.speechSynthesis.speak(u);
-        }
-      } else {
-        onSpeechDone();
-      }
-    } catch (err) {
-      console.error('Erro Live Voice:', err);
-      const errMsg = 'Erro de conexão. Tente novamente.';
-      setLiveResponse(errMsg);
-      isLiveProcessingRef.current = false;
-      if (recognitionRef.current && isLiveActiveRef.current) {
-        try { recognitionRef.current.start(); } catch { /* */ }
-        setLiveListening(true);
-      }
-    }
-  }, [getSystemContext, getSystemPersona, voiceSettings.gender]);
-
-  // --- Live Voice: inicia overlay e reconhecimento de voz ---
+  // --- Live Voice (overlay Sentinela) controlado pelo Gemini Live ---
   const startLiveMode = async () => {
     setIsLiveConnecting(true);
-    setLiveTranscript('');
-    setLiveResponse('');
-    const SpeechRecognitionAPI = typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-    if (!SpeechRecognitionAPI) {
-      setIsLiveConnecting(false);
-      setIsLiveActive(true);
-      setLiveResponse('Seu navegador não suporta reconhecimento de voz. Use Chrome ou Edge.');
-      return;
-    }
-    await new Promise(r => setTimeout(r, 800));
-    setIsLiveConnecting(false);
     setIsLiveActive(true);
-    isLiveActiveRef.current = true;
-    try {
-      const recognition = new SpeechRecognitionAPI();
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = 'pt-BR';
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event: any) => {
-        const result = event.results[event.resultIndex];
-        if (result?.isFinal) {
-          const transcript = result[0]?.transcript?.trim();
-          if (transcript) {
-            recognition.stop();
-            sendVoiceToAI(transcript);
-          }
-        }
-      };
-      recognition.onend = () => {
-        if (!isLiveActiveRef.current) return;
-        if (!isLiveProcessingRef.current && recognitionRef.current) {
-          try { recognition.start(); } catch { /* */ }
-        }
-      };
-      recognition.onerror = (event: any) => {
-        if (event?.error === 'no-speech' || event?.error === 'aborted') return;
-        console.warn('[Live Voice] Reconhecimento:', event?.error);
-      };
-      recognitionRef.current = recognition;
-      recognition.start();
-      setLiveListening(true);
-    } catch (e) {
-      console.error('Erro ao iniciar reconhecimento de voz:', e);
-      setLiveResponse('Não foi possível ativar o microfone. Verifique as permissões.');
-    }
+    liveStart();
   };
 
   const stopLiveMode = useCallback(() => {
-    isLiveActiveRef.current = false;
-    if (liveSessionRef.current) liveSessionRef.current.close();
-    liveAudioSources.current.forEach(s => s.stop());
-    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* */ }
-      recognitionRef.current = null;
-    }
-    isLiveProcessingRef.current = false;
+    liveStop();
     setIsLiveActive(false);
     setIsLiveConnecting(false);
-    setLiveTranscript('');
-    setLiveResponse('');
-    setLiveListening(false);
-  }, []);
+  }, [liveStop]);
 
   return (
     <div className="h-[calc(100vh-140px)] min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 animate-in fade-in duration-500 overflow-hidden relative">
@@ -487,8 +315,8 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
               </div>
            </div>
            
-           <div className="mt-6 pt-4 border-t border-white/10 text-[10px] text-zinc-500 text-center">
-              Voz Ativa: <span className="text-white font-bold">{getVoiceConfig()}</span>
+                      <div className="mt-6 pt-4 border-t border-white/10 text-[10px] text-zinc-500 text-center">
+                      Voz Ativa: <span className="text-white font-bold">{activeGeminiVoiceName}</span>
            </div>
         </div>
       )}
@@ -509,7 +337,7 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
            >
               {/* Base do radar: círculo 200–280px, borda gradiente ciano → verde, glow; vibração energética quando OUVINDO */}
               <div 
-                className={`relative w-[240px] h-[240px] md:w-[260px] md:h-[260px] rounded-full p-[1px] ${liveListening ? 'radar-energy-vibration' : ''}`}
+                className={`relative w-[240px] h-[240px] md:w-[260px] md:h-[260px] rounded-full p-[1px] ${liveIsConnected && liveIsMicOn ? 'radar-energy-vibration' : ''}`}
                 style={{
                   background: 'conic-gradient(from 0deg, rgba(6,182,212,0.9), rgba(34,197,94,0.85), rgba(6,182,212,0.9))',
                   boxShadow: '0 0 40px rgba(6,182,212,0.15), 0 0 80px rgba(34,197,94,0.08), inset 0 0 60px rgba(0,0,0,0.4)',
@@ -579,13 +407,17 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
            {/* Status fixo abaixo do radar: OUVINDO — FALE AGORA */}
            <div className="mt-8 md:mt-12 text-center space-y-4 md:space-y-6 px-4 max-w-xl flex-shrink-0">
               <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap">
-                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isLiveConnecting ? 'bg-amber-500' : liveListening ? 'bg-green-500' : 'bg-cyan-500'} animate-pulse`} />
+                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isLiveConnecting ? 'bg-amber-500' : liveIsConnected ? 'bg-green-500' : 'bg-cyan-500'} animate-pulse`} />
                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-wider md:tracking-[0.5em] text-cyan-400/90">
-                    {isLiveConnecting ? 'Sincronizando...' : liveListening ? 'OUVINDO — FALE AGORA' : liveTranscript ? 'Processando...' : `Voz: ${getVoiceConfig()} (${voiceSettings.style})`}
+                    {isLiveConnecting
+                      ? 'Sincronizando...'
+                      : liveIsConnected
+                        ? (liveIsMicOn ? 'Canal ativo — Fale agora' : 'Canal ativo — Microfone em pausa')
+                        : `Voz: ${activeGeminiVoiceName} (${voiceSettings.style})`}
                  </span>
               </div>
               <h2 className="text-xl md:text-3xl font-black text-white/95 uppercase tracking-tighter">
-                 {isLiveConnecting ? 'Conectando...' : liveListening ? 'Sentinela operacional' : liveTranscript ? 'Respondendo...' : 'Sentinela operacional'}
+                 {isLiveConnecting ? 'Conectando...' : 'Sentinela operacional'}
               </h2>
            </div>
 
@@ -664,11 +496,13 @@ INSTRUÇÕES PARA FALA (quando a resposta for reproduzida por voz):
                </button>
                <button 
                   onClick={startLiveMode}
-                  title="Ativar canal de voz ao vivo"
+                  title="Iniciar chamada de voz"
                   className={`group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 ${voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
                >
                   <Mic className="w-4 h-4 md:w-5 md:h-5 group-hover:animate-bounce" />
-                  <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">Live Voice</span>
+                  <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">
+                    Iniciar chamada de voz
+                  </span>
                </button>
             </div>
          </div>

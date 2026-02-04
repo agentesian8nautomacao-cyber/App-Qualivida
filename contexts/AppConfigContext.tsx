@@ -45,7 +45,8 @@ const defaultConfig: AppConfig = {
   ],
   aiConfig: {
     name: 'Sentinela',
-    voiceGender: 'male',
+    // Padrão alinhado com a voz Kore (Nutri.IA) para paridade inicial.
+    voiceGender: 'female',
     voiceStyle: 'serious',
     externalInstructions: 'Você é um assistente operacional profissional. Seja objetivo, prestativo e eficiente.'
   },

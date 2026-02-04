@@ -38,6 +38,12 @@ export default defineConfig(({ mode }) => {
   for (const [k, v] of Object.entries(process.env)) {
     if (v != null && String(v).trim() !== '') env[k] = v;
   }
+
+  // Base da API para desenvolvimento:
+  // - Preferir VITE_API_BASE_URL (usada pelo frontend)
+  // - Fallback para APP_URL (domínio público configurado no .env.local)
+  const rawApiBase = (env.VITE_API_BASE_URL || env.APP_URL || '')?.toString().trim();
+  const apiBase = rawApiBase ? rawApiBase.replace(/\/+$/, '') : '';
   // GEMINI_API_KEY não é exposta ao client; a IA roda no backend (/api/ai).
   return {
     base: '/',
@@ -56,6 +62,17 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       strictPort: true,
       open: false,
+      // Durante o desenvolvimento, proxia /api → backend real (Vercel ou outro host),
+      // evitando 404 do Vite dev server em http://localhost:3007/api/*.
+      proxy: apiBase
+        ? {
+            '/api': {
+              target: apiBase,
+              changeOrigin: true,
+              secure: apiBase.startsWith('https://'),
+            },
+          }
+        : undefined,
       watch: {
         ignored: ['**/.env*', '**/node_modules/**']
       }

@@ -1854,7 +1854,39 @@ const App: React.FC = () => {
     }
 
     switch (activeTab) {
-      case 'notices': const filteredNotices = allNotices.filter(n => { if (noticeFilter === 'urgent') return n.category === 'Urgente'; if (noticeFilter === 'unread') return !n.read; return true; }).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); return <NoticesView filteredNotices={filteredNotices} setNoticeFilter={setNoticeFilter} noticeFilter={noticeFilter} activeNoticeTab={activeNoticeTab} setActiveNoticeTab={setActiveNoticeTab} isChatOpen={isChatOpen} setIsChatOpen={setIsChatOpen} chatMessages={chatMessages} role={role} chatInput={chatInput} setChatInput={setChatInput} handleSendChatMessage={handleSendChatMessage} chatEndRef={chatEndRef} handleAcknowledgeNotice={handleAcknowledgeNotice} onRefreshChat={handleRefreshChatMessages} onClearChat={handleClearChatMessages} onAddNotice={role === 'PORTEIRO' || role === 'SINDICO' ? () => setSelectedNoticeForEdit(createDraftNotice()) : undefined} onEditNotice={role === 'PORTEIRO' || role === 'SINDICO' ? (n) => setSelectedNoticeForEdit(n) : undefined} onDeleteNotice={role === 'PORTEIRO' || role === 'SINDICO' ? handleDeleteNoticeById : undefined} onLiveCall={() => { setIsChatOpen(false); setIsLiveOpen(true); }} />;
+      case 'notices': {
+        const filteredNotices = allNotices
+          .filter(n => {
+            if (noticeFilter === 'urgent') return n.category === 'Urgente';
+            if (noticeFilter === 'unread') return !n.read;
+            return true;
+          })
+          .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+        return (
+          <NoticesView
+            filteredNotices={filteredNotices}
+            setNoticeFilter={setNoticeFilter}
+            noticeFilter={noticeFilter}
+            activeNoticeTab={activeNoticeTab}
+            setActiveNoticeTab={setActiveNoticeTab}
+            isChatOpen={isChatOpen}
+            setIsChatOpen={setIsChatOpen}
+            chatMessages={chatMessages}
+            role={role}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            handleSendChatMessage={handleSendChatMessage}
+            chatEndRef={chatEndRef}
+            handleAcknowledgeNotice={handleAcknowledgeNotice}
+            onRefreshChat={handleRefreshChatMessages}
+            onClearChat={handleClearChatMessages}
+            onAddNotice={role === 'PORTEIRO' || role === 'SINDICO' ? () => setSelectedNoticeForEdit(createDraftNotice()) : undefined}
+            onEditNotice={role === 'PORTEIRO' || role === 'SINDICO' ? (n) => setSelectedNoticeForEdit(n) : undefined}
+            onDeleteNotice={role === 'PORTEIRO' || role === 'SINDICO' ? handleDeleteNoticeById : undefined}
+          />
+        );
+      }
       case 'reservations': return <ReservationsView dayReservations={dayReservations} reservationFilter={reservationFilter} setReservationFilter={setReservationFilter} setIsReservationModalOpen={setIsReservationModalOpen} areasStatus={areasStatus} handleReservationAction={handleReservationAction} />;
       case 'residents': 
         if (role === 'MORADOR') {
