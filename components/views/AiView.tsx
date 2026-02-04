@@ -327,44 +327,47 @@ INSTRUÇÕES PARA FALA:
     <div className="h-[calc(100vh-140px)] min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 animate-in fade-in duration-500 overflow-hidden relative">
       {/* SELETOR DE VOZ (MODAL INTERNO) */}
       {isVoiceSettingsOpen && (
-        <div className="fixed md:absolute top-4 right-4 md:top-20 md:right-8 z-50 bg-black/90 backdrop-blur-xl p-4 md:p-6 rounded-[32px] border border-white/10 w-[calc(100vw-2rem)] md:w-72 max-w-sm shadow-2xl animate-in fade-in slide-in-from-top-4">
-           <div className="flex justify-between items-center mb-6">
+        <div className="fixed md:absolute top-4 right-4 md:top-20 md:right-8 z-50 flex flex-col max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] md:w-72 max-w-sm bg-black/90 backdrop-blur-xl rounded-[32px] border border-white/10 shadow-2xl animate-in fade-in slide-in-from-top-4">
+           <div className="flex justify-between items-center p-4 md:p-6 pb-0 shrink-0">
               <h5 className="text-white font-black uppercase text-sm">Configuração Neural</h5>
               <button type="button" onClick={() => setIsVoiceSettingsOpen(false)} aria-label="Fechar"><X className="w-5 h-5 text-zinc-500 hover:text-white" /></button>
            </div>
            
-           <div className="space-y-6">
-              <div>
-                 <label className="text-[10px] font-black uppercase text-zinc-500 mb-3 block">Gênero da Voz</label>
-                 <div className="flex gap-2">
-                    <button type="button" onClick={() => setPendingGender('male')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${pendingGender === 'male' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10'}`}>Masculino</button>
-                    <button type="button" onClick={() => setPendingGender('female')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${pendingGender === 'female' ? 'bg-purple-500 text-white' : 'bg-white/5 text-zinc-400 hover:bg-white/10'}`}>Feminino</button>
+           <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pt-4">
+              <div className="space-y-6">
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-zinc-500 mb-3 block">Gênero da Voz</label>
+                    <div className="flex gap-2">
+                       <button type="button" onClick={() => setPendingGender('male')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${pendingGender === 'male' ? 'bg-cyan-500 text-black' : 'bg-white/5 text-zinc-400 hover:bg-white/10'}`}>Masculino</button>
+                       <button type="button" onClick={() => setPendingGender('female')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${pendingGender === 'female' ? 'bg-purple-500 text-white' : 'bg-white/5 text-zinc-400 hover:bg-white/10'}`}>Feminino</button>
+                    </div>
+                 </div>
+                 
+                 <div>
+                    <label className="text-[10px] font-black uppercase text-zinc-500 mb-3 block">Estilo Operacional</label>
+                    <div className="flex gap-2">
+                       <button type="button" onClick={() => setPendingStyle('serious')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border ${pendingStyle === 'serious' ? 'border-white text-white bg-white/10' : 'border-transparent text-zinc-500 hover:text-white'}`}>Sério</button>
+                       <button type="button" onClick={() => setPendingStyle('animated')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border ${pendingStyle === 'animated' ? 'border-green-400 text-green-400 bg-green-400/10' : 'border-transparent text-zinc-500 hover:text-white'}`}>Animado</button>
+                    </div>
                  </div>
               </div>
-              
-              <div>
-                 <label className="text-[10px] font-black uppercase text-zinc-500 mb-3 block">Estilo Operacional</label>
-                 <div className="flex gap-2">
-                    <button type="button" onClick={() => setPendingStyle('serious')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border ${pendingStyle === 'serious' ? 'border-white text-white bg-white/10' : 'border-transparent text-zinc-500 hover:text-white'}`}>Sério</button>
-                    <button type="button" onClick={() => setPendingStyle('animated')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border ${pendingStyle === 'animated' ? 'border-green-400 text-green-400 bg-green-400/10' : 'border-transparent text-zinc-500 hover:text-white'}`}>Animado</button>
-                 </div>
+              <div className="mt-6 pt-4 border-t border-white/10 text-[10px] text-zinc-500 text-center">
+                 Voz Ativa: <span className="text-white font-bold">{getGeminiVoiceName(pendingGender, pendingStyle)}</span>
               </div>
-           </div>
-           
-           <div className="mt-6 pt-4 border-t border-white/10 text-[10px] text-zinc-500 text-center">
-              Voz Ativa: <span className="text-white font-bold">{getGeminiVoiceName(pendingGender, pendingStyle)}</span>
            </div>
 
-           <button
-             type="button"
-             onClick={() => {
-               updateAIConfig({ voiceGender: pendingGender, voiceStyle: pendingStyle });
-               setIsVoiceSettingsOpen(false);
-             }}
-             className="mt-4 w-full py-3 rounded-xl text-xs font-black uppercase bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg"
-           >
-             Salvar e aplicar
-           </button>
+           <div className="p-4 md:p-6 pt-2 shrink-0">
+             <button
+               type="button"
+               onClick={() => {
+                 updateAIConfig({ voiceGender: pendingGender, voiceStyle: pendingStyle });
+                 setIsVoiceSettingsOpen(false);
+               }}
+               className="w-full py-3 rounded-xl text-xs font-black uppercase bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg"
+             >
+               Salvar e aplicar
+             </button>
+           </div>
         </div>
       )}
 
