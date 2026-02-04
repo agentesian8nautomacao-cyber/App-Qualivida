@@ -238,11 +238,13 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
         setStatus("Conectando...");
         const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
 
-        // Log de prova: engine, modelo e voz (paridade Nutri.ai)
+        // Log de prova: engine, modelo, voz e idioma (voz mais humana)
         console.info('[LiveVoice/TTS] Engine=GeminiLive', {
           engine: 'Gemini Live (native audio)',
           model,
           voiceName,
+          languageCode: 'pt-BR',
+          enableAffectiveDialog: true,
           sampleRateIn: 16000,
           sampleRateOut: 24000,
           noBrowserTTS: true,
@@ -384,13 +386,19 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
           config: {
             responseModalities: [Modality.AUDIO],
             tools: logMealTool ? tools : undefined,
+            // Idioma e voz para saída mais natural (pt-BR + prebuilt HD)
             speechConfig: {
+              languageCode: "pt-BR",
               voiceConfig: {
                 prebuiltVoiceConfig: {
                   voiceName,
                 },
               },
             },
+            // Adapta entonação ao contexto (mais humana)
+            enableAffectiveDialog: true,
+            // Leve variação para soar menos mecânico
+            temperature: 0.85,
             systemInstruction: fullSystemInstruction,
           },
         });

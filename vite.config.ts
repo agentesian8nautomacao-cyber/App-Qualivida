@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: DEV_PORT,
       host: '0.0.0.0',
-      strictPort: true,
+      strictPort: false, // se 3007 estiver ocupada, usa a próxima (3008, 3009...)
       open: false,
       // Durante o desenvolvimento, proxia /api → backend real (Vercel ou outro host),
       // evitando 404 do Vite dev server em http://localhost:3007/api/*.
