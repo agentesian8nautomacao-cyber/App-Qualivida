@@ -39,6 +39,12 @@ interface SentinelaProfile {
   condoName?: string;
   doormanConfig?: { assistantName?: string; instructions?: string };
   managerConfig?: { assistantName?: string; instructions?: string };
+  /** Base de conhecimento opcional (ex.: Regimento/Convenção em PDF) */
+  knowledgeBase?: {
+    name: string;
+    mimeType: string;
+    data: string; // Base64
+  } | null;
 }
 interface SentinelaChatMessage {
   id: string;
@@ -206,72 +212,200 @@ export default {
               { status: 400, headers: corsHeaders }
             );
           }
+
           const isManager = profile?.role === 'Síndico';
           const assistantName = isManager
             ? (profile?.managerConfig?.assistantName ?? 'Conselheiro')
             : (profile?.doormanConfig?.assistantName ?? 'Sentinela');
           const specificInstructions = isManager
-            ? (profile?.managerConfig?.instructions ?? 'Atue como assessor administrativo do Síndico.')
-            : (profile?.doormanConfig?.instructions ?? 'Foco em segurança e controle de acesso.');
-          const systemInstruction = `Você é o **${assistantName}**, assistente para Condomínios.
-CONTEXTO: Usuário ${profile?.name ?? 'Operador'}, Cargo ${profile?.role ?? 'Porteiro'}, Condomínio ${profile?.condoName ?? 'Não informado'}.
-ÚLTIMOS REGISTROS: ${JSON.stringify(recentLogs)}
-INSTRUÇÕES: ${specificInstructions}
-Use **negrito** para dados críticos. Se o usuário confirmar criação de registro/ocorrência, chame a função logEvent.`;
+            ? (profile?.managerConfig?.instructions ?? 'Nenhuma instrução específica para o Síndico definida.')
+            : (profile?.doormanConfig?.instructions ?? 'Nenhuma instrução específica para o Porteiro definida.');
+
+          // --- System Instruction espelhando o app "chat sentinela" (AI Studio) ---
+          let systemInstruction = `
+      Você é o **${assistantName || 'Portaria.ai'}**, o assistente inteligente para Condomínios.
+      
+      CONTEXTO DO USUÁRIO E DO APP:
+      - Nome do Usuário Local: ${profile?.name}
+      - Cargo Ativo: **${profile?.role || 'Porteiro'}**
+      - Condomínio: ${profile?.condoName || 'Não informado'}
+      
+      [CONSCIÊNCIA SISTÊMICA E DO APLICATIVO]:
+      Você deve entender e agir como parte integrante deste software. Você tem consciência de todo o ecossistema do aplicativo "Portaria.ai".
+
+      [PROTOCOLO DE COMUNICAÇÃO HÍBRIDA - IMPORTANTE]:
+      Este chat pode conter mensagens de terceiros (Moradores ou Sistemas Externos).
+      Você receberá as mensagens formatadas com tags como:
+      - [Usuário Local]: O porteiro ou síndico usando este app.
+      - [Mensagem Externa de NOME]: Um morador ou visitante falando de outro app.
+      
+      SUA FUNÇÃO COMO MEDIADOR:
+      Se um [Morador] mandar uma mensagem, ajude o [Usuário Local] a responder ou registre a solicitação.
+      Não finja ser o morador. Você é o assistente do condomínio.
+
+      SUA MISSÃO ESPECÍFICA (${isManager ? 'MODO SÍNDICO' : 'MODO PORTEIRO'}):
+      ${
+        isManager
+          ? `1. Atuar como um ASSESSOR ADMINISTRATIVO e JURÍDICO do Síndico.
+       2. Redigir **Comunicados, Circulares e Advertências** com linguagem formal, culta e impessoal.
+       3. Analisar o Regimento Interno (se disponível) para dar pareceres sobre regras.
+       4. Sugerir soluções diplomáticas para conflitos entre vizinhos.`
+          : `1. Auxiliar no controle de acesso, encomendas e ocorrências do dia a dia.
+       2. Ser direto, breve e focado na segurança.
+       3. Registrar eventos com rapidez.`
+      }
+
+      ESTILIZAÇÃO DE RESPOSTAS (Markdown):
+      - Use **Negrito** para dados críticos.
+      - Para documentos (Circulares/Multas), use blocos de citação (>) ou code blocks para facilitar a cópia.
+    `;
+
+          // Anexar contexto de logs + instruções personalizadas (quando existirem)
+          if (profile || recentLogs.length > 0) {
+            systemInstruction += `
+        ÚLTIMOS REGISTROS DO SISTEMA (Logs/Ocorrências):
+        ${JSON.stringify(recentLogs || [])}
+      `;
+
+            systemInstruction += `\n\n[INSTRUÇÕES PERSONALIZADAS]:
+      ${specificInstructions}
+      `;
+
+            if (profile?.knowledgeBase) {
+              systemInstruction += `\n\n[BASE DE CONHECIMENTO]: O usuário carregou o REGIMENTO INTERNO ou CONVENÇÃO. Cite artigos ou cláusulas se possível ao tirar dúvidas.`;
+            }
+          }
+
+          // Deixe explícito para o modelo que deve usar a ferramenta de log quando necessário
+          systemInstruction += `\nSE o usuário confirmar a criação de um registro, multa ou circular, chame a função 'logEvent'.`;
+
+          // Tool "logEvent" com mesma definição do app AI Studio
           const logEventTool = {
             name: 'logEvent',
-            description: 'Registra evento oficial no condomínio (visitante, encomenda, ocorrência, aviso, multa, circular).',
+            description:
+              'Registra um evento oficial, ocorrência, multa ou circular no sistema do condomínio.',
             parameters: {
               type: Type.OBJECT,
               properties: {
-                type: { type: Type.STRING, description: 'Categoria: Visitante, Encomenda, Serviço, Ocorrência, Aviso, Multa, Circular' },
-                title: { type: Type.STRING, description: 'Título curto' },
-                description: { type: Type.STRING, description: 'Detalhes' },
-                involvedParties: { type: Type.STRING, description: 'Unidade ou pessoas envolvidas' },
+                type: {
+                  type: Type.STRING,
+                  enum: [
+                    'Visitante',
+                    'Encomenda',
+                    'Serviço',
+                    'Ocorrência',
+                    'Aviso',
+                    'Multa',
+                    'Circular',
+                  ],
+                  description: 'Categoria do evento.',
+                },
+                title: {
+                  type: Type.STRING,
+                  description:
+                    'Título curto (Ex: Entrega Sedex, Multa Apto 102, Circular sobre Obras).',
+                },
+                description: {
+                  type: Type.STRING,
+                  description:
+                    'Detalhes completos ou texto do documento gerado.',
+                },
+                involvedParties: {
+                  type: Type.STRING,
+                  description: 'Unidade ou pessoas envolvidas (Ex: Apto 504, Bloco B, Todos).',
+                },
               },
               required: ['type', 'title', 'description'],
             },
           };
-          const historyContent: { role: string; parts: { text: string }[] }[] = messages.map((m) => {
-            const text = m.isExternal
-              ? `[Mensagem Externa de ${m.senderName ?? 'Morador'}]: ${m.text}`
-              : m.role === 'user'
-                ? `[Usuário Local]: ${m.text}`
-                : m.text;
-            return { role: m.role, parts: [{ text }] };
-          });
-          const chat = ai.chats.create({
-            model,
-            history: historyContent as any,
-            config: {
-              systemInstruction,
-              tools: [{ functionDeclarations: [logEventTool] }],
-            },
-          });
-          let result = await chat.sendMessage({ message: `[Usuário Local]: ${newMessage}` });
-          const parts = (result as any).candidates?.[0]?.content?.parts ?? [];
-          const functionCall = parts.find((p: any) => p.functionCall);
-          let logEvent: OccurrenceItemSentinela | undefined;
-          if (functionCall?.functionCall?.name === 'logEvent') {
-            const args = functionCall.functionCall.args as any;
-            logEvent = {
-              id: String(Date.now()),
-              type: args.type ?? 'Ocorrência',
-              title: args.title ?? '',
-              description: args.description ?? '',
-              timestamp: Date.now(),
-              involvedParties: args.involvedParties,
-              status: 'Logged',
-            };
-            const functionResponseParts = [{
-              functionResponse: {
-                id: functionCall.functionCall.id,
-                name: 'logEvent',
-                response: { result: `Evento ${args.type} registrado: ${args.title}` },
+
+          // History formatado para distinguir [Usuário Local] x [Mensagem Externa]
+          const formattedHistory: { role: string; parts: { text: string }[] }[] = messages.map(
+            (m) => {
+              let textContent = m.text;
+              if (m.isExternal) {
+                textContent = `[Mensagem Externa de ${m.senderName ?? 'Morador'}]: ${m.text}`;
+              } else if (m.role === 'user') {
+                textContent = `[Usuário Local - ${profile?.role || 'Operador'}]: ${m.text}`;
+              }
+              return {
+                role: m.role,
+                parts: [{ text: textContent }],
+              };
+            }
+          );
+
+          // Mensagem atual (pode anexar knowledgeBase, se existir)
+          let messageContent: any = [{ text: `[Usuário Local]: ${newMessage}` }];
+          if (profile?.knowledgeBase) {
+            messageContent = [
+              { text: '**[CONTEXTO DO ARQUIVO ANEXADO - REGIMENTO/CONVENÇÃO]**' },
+              {
+                inlineData: {
+                  mimeType: profile.knowledgeBase.mimeType,
+                  data: profile.knowledgeBase.data,
+                },
               },
-            }];
-            result = await chat.sendMessage({ message: functionResponseParts as any });
+              { text: '\n\n**MENSAGEM DO USUÁRIO:**\n' + newMessage },
+            ];
           }
+
+          // Modelo e config alinhados ao app "chat sentinela"
+          let conciergeModel: string = 'gemini-2.5-flash';
+          const conciergeConfig: any = { systemInstruction };
+          if (isManager) {
+            conciergeModel = 'gemini-3-pro-preview';
+            conciergeConfig.thinkingConfig = { thinkingBudget: 32768 };
+          }
+          conciergeConfig.tools = [{ functionDeclarations: [logEventTool] }];
+
+          const chat = ai.chats.create({
+            model: conciergeModel,
+            history: formattedHistory as any,
+            config: conciergeConfig,
+          });
+
+          let result: unknown = await chat.sendMessage({ message: messageContent });
+
+          // Tratamento de toolCalls (logEvent) – pode haver múltiplas chamadas
+          let logEvent: OccurrenceItemSentinela | undefined;
+          const toolCalls =
+            (result as any).candidates?.[0]?.content?.parts?.filter(
+              (p: any) => p.functionCall
+            ) ?? [];
+
+          if (toolCalls.length > 0) {
+            const functionResponseParts: any[] = [];
+            for (const part of toolCalls) {
+              const fc = part.functionCall;
+              if (fc?.name === 'logEvent') {
+                const args = fc.args as any;
+                const newItem: OccurrenceItemSentinela = {
+                  id: String(Date.now()),
+                  type: args.type ?? 'Ocorrência',
+                  title: args.title ?? '',
+                  description: args.description ?? '',
+                  timestamp: Date.now(),
+                  involvedParties: args.involvedParties,
+                  status: 'Logged',
+                };
+                logEvent = newItem;
+                functionResponseParts.push({
+                  functionResponse: {
+                    id: fc.id,
+                    name: fc.name,
+                    response: {
+                      result: `Evento do tipo ${args.type} registrado com sucesso: ${args.title}`,
+                    },
+                  },
+                });
+              }
+            }
+            if (functionResponseParts.length > 0) {
+              result = await chat.sendMessage({ message: functionResponseParts as any });
+            }
+          }
+
           const text = extractGeminiText(result);
           return Response.json(
             { text: (text && String(text).trim()) || 'Sem resposta.', ...(logEvent && { logEvent }) },
