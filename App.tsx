@@ -2900,23 +2900,33 @@ const App: React.FC = () => {
               <button type="button" onClick={() => { setShowFirstLoginChangePasswordModal(false); setFirstLoginPasswordData({ new: '', confirm: '' }); }} className="p-2 rounded-xl hover:bg-zinc-100"><X className="w-5 h-5" /></button>
             </div>
             <p className="text-sm text-zinc-600 mb-4">Você está usando a senha padrão. Defina uma senha pessoal para acessar o sistema.</p>
-            <div className="space-y-3 mb-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Nova senha</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input type="password" value={firstLoginPasswordData.new} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, new: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Mín. 6 caracteres" autoComplete="new-password" />
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (firstLoginPasswordData.new.length >= 6 && firstLoginPasswordData.new === firstLoginPasswordData.confirm) {
+                  handleFirstLoginChangePassword();
+                }
+              }}
+              className="space-y-0"
+            >
+              <div className="space-y-3 mb-4">
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500" htmlFor="first-login-new-password">Nova senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input id="first-login-new-password" type="password" value={firstLoginPasswordData.new} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, new: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Mín. 6 caracteres" autoComplete="new-password" />
+                </div>
               </div>
-            </div>
-            <div className="space-y-3 mb-6">
-              <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Confirmar senha</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input type="password" value={firstLoginPasswordData.confirm} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, confirm: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Repita a senha" autoComplete="new-password" />
+              <div className="space-y-3 mb-6">
+                <label className="text-xs font-bold uppercase tracking-wider text-zinc-500" htmlFor="first-login-confirm-password">Confirmar senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input id="first-login-confirm-password" type="password" value={firstLoginPasswordData.confirm} onChange={e => setFirstLoginPasswordData(prev => ({ ...prev, confirm: e.target.value }))} className="w-full pl-10 pr-4 py-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none focus:border-black" placeholder="Repita a senha" autoComplete="new-password" />
+                </div>
               </div>
-            </div>
-            <button type="button" onClick={handleFirstLoginChangePassword} disabled={firstLoginPasswordData.new.length < 6 || firstLoginPasswordData.new !== firstLoginPasswordData.confirm} className="w-full py-3 bg-black text-white rounded-xl font-bold text-sm uppercase disabled:opacity-50 disabled:cursor-not-allowed">
-              Definir senha
-            </button>
+              <button type="submit" disabled={firstLoginPasswordData.new.length < 6 || firstLoginPasswordData.new !== firstLoginPasswordData.confirm} className="w-full py-3 bg-black text-white rounded-xl font-bold text-sm uppercase disabled:opacity-50 disabled:cursor-not-allowed">
+                Definir senha
+              </button>
+            </form>
           </div>
         </div>
       )}

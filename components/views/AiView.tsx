@@ -225,7 +225,7 @@ INSTRUÇÕES PARA FALA:
     // Chave exclusiva para Gemini Live no front (não é a mesma do backend /api/ai).
     // Configure VITE_GEMINI_LIVE_KEY no .env.local e no Vercel com as restrições de domínio corretas.
     apiKey: ((import.meta as any).env?.VITE_GEMINI_LIVE_KEY as string) || '',
-    model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+    model: 'gemini-2.5-flash-native-audio-preview-12-2025',
     voiceName: activeGeminiVoiceName,
     systemInstruction: liveSystemInstruction,
     timeLimitSeconds: 15 * 60,
@@ -360,6 +360,19 @@ INSTRUÇÕES PARA FALA:
     setIsLiveActive(false);
     setIsLiveConnecting(false);
   }, [liveStop]);
+
+  // Quando o canal de voz conectar de fato, sair do estado "Sincronizando..." para "Canal ativo"
+  useEffect(() => {
+    if (liveIsConnected) setIsLiveConnecting(false);
+  }, [liveIsConnected]);
+
+  // Se a conexão falhar (erro, chave ausente, etc.), sair de "Conectando..." para mostrar a mensagem real
+  useEffect(() => {
+    if (!liveIsConnected && isLiveConnecting) {
+      const isConnecting = liveStatus === 'Conectando...' || liveStatus === 'Aguardando servidor...';
+      if (!isConnecting) setIsLiveConnecting(false);
+    }
+  }, [liveIsConnected, isLiveConnecting, liveStatus]);
 
   return (
     <div className="h-[calc(100vh-140px)] min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6 animate-in fade-in duration-500 overflow-hidden relative">

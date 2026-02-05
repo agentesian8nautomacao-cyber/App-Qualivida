@@ -8,8 +8,20 @@ import {
   FunctionDeclaration,
 } from "@google/genai";
 
-/** Estado explícito do canal de voz (WebSocket interno do Gemini Live). Evita send() em CLOSING/CLOSED. */
-export type SessionState = "idle" | "connecting" | "open" | "closing" | "closed";
+/**
+ * Estado explícito do canal de voz (WebSocket interno do Gemini Live).
+ * Evita send() em CLOSING/CLOSED e garante que nenhum PCM seja enviado antes da sessão estar READY.
+ *
+ * Ciclo de vida:
+ *   idle → connecting (initSession inicia) →
+ *   handshaking (onopen: WebSocket aberto, aguardando confirmação do servidor) →
+ *   open (primeiro onmessage ou timeout: sessão pronta para sendRealtimeInput) →
+ *   closing (cleanup) → closed
+ */
+export type SessionState = "idle" | "connecting" | "handshaking" | "open" | "closing" | "closed";
+
+/** Delay em ms após onopen para marcar sessão pronta (Gemini Live pode não enviar mensagem primeiro; evita travar em "Aguardando servidor"). */
+const HANDSHAKE_READY_DELAY_MS = 500;
 
 type LogMealArgs = {
   foodName: string;
@@ -42,24 +54,36 @@ interface UseLiveVoiceConversationOptions {
 /**
  * Hook para conversa de voz em tempo real com Gemini (Gemini Live / WebSocket interno).
  *
- * - Captura microfone via AudioWorklet (live-voice-processor.js), envia áudio PCM16, reproduz resposta neural.
- * - (Opcional) trata a ferramenta logMeal.
+ * Captura microfone via AudioWorklet (live-voice-processor.js), envia áudio PCM16, reproduz resposta neural.
+ * (Opcional) trata a ferramenta logMeal.
  *
- * CAUSA RAIZ do erro "WebSocket is already in CLOSING or CLOSED state":
- * O effect que inicia a sessão tem deps [voiceName, systemInstruction, ...]. Ao trocar gênero ou
- * re-render com nova ref, o effect re-executa → cleanup() fecha o socket → o worklet/onmessage
- * da sessão antiga (closure) ainda pode disparar e chamar send() no socket já fechando/fechado.
+ * FLUXO DE INICIALIZAÇÃO (evita "WebSocket is already in CLOSING or CLOSED state"):
  *
- * FLUXO CORRETO (como este hook evita o problema):
- * 1. cleanup() marca sessionStateRef = "closing" e isSessionOpenRef = false ANTES de session.close().
- * 2. Todos os envios (sendRealtimeInput, sendToolResponse) usam sessionPromiseRef.current (nunca
- *    a promise da closure) e só enviam quando sessionStateRef.current === "open".
- * 3. Ao trocar gênero, o effect re-roda: cleanup → initSession; apenas uma sessão ativa por vez.
+ * 1. Criação da sessão
+ *    - initSession() chama ai.live.connect(); sessionState = "connecting".
+ *
+ * 2. Confirmação de prontidão (sincronização AudioWorklet ↔ Gemini Live)
+ *    - onopen: WebSocket abriu → sessionState = "handshaking".
+ *    - AudioWorklet é registrado e começa a receber frames; nenhum sendRealtimeInput() é chamado
+ *      até sessionState === "open" (frames são descartados durante handshaking).
+ *    - Sessão só passa a "open" (isSessionReady) quando:
+ *      a) o servidor envia a primeira mensagem (onmessage), ou
+ *      b) delay após onopen (HANDSHAKE_READY_DELAY_MS) expira.
+ *    - Assim o SDK não recebe PCM antes do handshake estar concluído, evitando fechamento por violação de protocolo.
+ *
+ * 3. Início do streaming de áudio
+ *    - worklet.port.onmessage só chama sendRealtimeInput() quando sessionStateRef.current === "open".
+ *
+ * 4. Recepção da resposta de voz
+ *    - onmessage trata serverContent.modelTurn (áudio) e reproduz via AudioContext.
+ *
+ * 5. Cleanup
+ *    - sessionState = "closing" e sendFailedRef = true antes de session.close(); worklet para de enviar imediatamente.
  */
 export function useLiveVoiceConversation(options: UseLiveVoiceConversationOptions) {
   const {
     apiKey,
-    model = "gemini-2.5-flash-native-audio-preview-09-2025",
+    model = "gemini-2.5-flash-native-audio-preview-12-2025",
     voiceName = "Kore",
     systemInstruction,
     timeLimitSeconds = 15 * 60,
@@ -90,10 +114,22 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
   const isSessionOpenRef = useRef(false);
   /** Controle explícito: só enviar dados quando === "open". Evita "WebSocket is already in CLOSING or CLOSED state". */
   const sessionStateRef = useRef<SessionState>("idle");
+  /** Geração da sessão: onopen só configura worklet se for da sessão atual (evita onopen atrasado da sessão anterior reabrindo estado). */
+  const sessionGenerationRef = useRef(0);
+  /** Após o primeiro send() falhar (socket fechado), bloquear todos os envios até nova sessão (evita enxurrada de erros). */
+  const sendFailedRef = useRef(false);
+  /** Sessão só aceita sendRealtimeInput quando true (após primeiro onmessage ou timeout de handshake). */
+  const isSessionReadyRef = useRef(false);
+  /** Primeira mensagem do servidor já recebida (marca handshake concluído). */
+  const hasReceivedFirstMessageRef = useRef(false);
+  /** Timeout de fallback para marcar sessão pronta se o servidor não enviar mensagem primeiro. */
+  const handshakeTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMicOnRef = useRef(isMicOn);
   const onLogMealRef = useRef(onLogMeal);
+  const contextDataRef = useRef(contextData);
   isMicOnRef.current = isMicOn;
   onLogMealRef.current = onLogMeal;
+  contextDataRef.current = contextData;
 
   // --- Tool logMeal opcional (estável por enableLogMealTool para não re-executar o effect a cada render) ---
   const logMealTool = useMemo<FunctionDeclaration | null>(
@@ -188,6 +224,13 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
   const cleanup = useCallback(() => {
     sessionStateRef.current = "closing";
     isSessionOpenRef.current = false;
+    sendFailedRef.current = true;
+    isSessionReadyRef.current = false;
+    hasReceivedFirstMessageRef.current = false;
+    if (handshakeTimeoutIdRef.current != null) {
+      clearTimeout(handshakeTimeoutIdRef.current);
+      handshakeTimeoutIdRef.current = null;
+    }
     // A partir daqui nenhum sendRealtimeInput/sendToolResponse deve ser feito (worklet e onmessage checam o ref).
 
     if (sessionPromiseRef.current) {
@@ -261,12 +304,18 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
     const initSession = async () => {
       const apiKeyTrim = (apiKey || '').trim();
       if (!apiKeyTrim) {
+        sessionStateRef.current = "closed";
         setStatus("Chave não configurada (VITE_GEMINI_LIVE_KEY)");
+        setIsConnected(false);
         console.warn('[LiveVoice] TTS neural: chave ausente. Configure VITE_GEMINI_LIVE_KEY no .env.local e no Vercel. Nenhum fallback para voz do navegador.');
         return;
       }
 
       sessionStateRef.current = "connecting";
+      sendFailedRef.current = false;
+      isSessionReadyRef.current = false;
+      hasReceivedFirstMessageRef.current = false;
+      handshakeTimeoutIdRef.current = null;
       try {
         setStatus("Conectando...");
         const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
@@ -277,16 +326,16 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
           model,
           voiceName,
           languageCode: 'pt-BR',
-          enableAffectiveDialog: true,
           sampleRateIn: 16000,
           sampleRateOut: 24000,
           noBrowserTTS: true,
         });
 
-        // Monta systemInstruction completo (contexto opcional)
+        // Monta systemInstruction completo (contexto opcional; usa ref para não re-executar effect quando contexto atualiza)
         let fullSystemInstruction = systemInstruction;
-        if (contextData) {
-          fullSystemInstruction += `\n\n[CONTEXTO DO USUÁRIO]\n${contextData}`;
+        const ctxData = contextDataRef.current;
+        if (ctxData) {
+          fullSystemInstruction += `\n\n[CONTEXTO DO USUÁRIO]\n${ctxData}`;
         }
 
         // AudioContexts
@@ -297,21 +346,39 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
 
         // Microfone
         streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.info("[LiveVoice] Microfone obtido, abrindo WebSocket...");
 
         const tools: { functionDeclarations: FunctionDeclaration[] }[] = [];
         if (logMealTool) {
           tools.push({ functionDeclarations: [logMealTool] });
         }
 
+        const generation = ++sessionGenerationRef.current;
+
+        /** Marca a sessão como pronta para envio de áudio (após handshake). Só então sendRealtimeInput() é permitido. */
+        const markSessionReady = () => {
+          if (sessionStateRef.current === "handshaking" && sessionGenerationRef.current === generation) {
+            if (handshakeTimeoutIdRef.current != null) {
+              clearTimeout(handshakeTimeoutIdRef.current);
+              handshakeTimeoutIdRef.current = null;
+            }
+            sessionStateRef.current = "open";
+            isSessionReadyRef.current = true;
+            isSessionOpenRef.current = true;
+            setStatus("Conectado");
+            setIsConnected(true);
+          }
+        };
+
         const sessionPromise = ai.live.connect({
           model,
           callbacks: {
             onopen: async () => {
-              if (sessionStateRef.current !== "connecting") return;
-              sessionStateRef.current = "open";
-              setStatus("Conectado");
-              setIsConnected(true);
-              isSessionOpenRef.current = true;
+              console.info("[LiveVoice] WebSocket aberto (onopen), iniciando AudioWorklet...");
+              if (sessionStateRef.current !== "connecting" || sessionGenerationRef.current !== generation) return;
+              // Não marcar "open" ainda: aguardar confirmação do servidor (primeiro onmessage) ou timeout.
+              sessionStateRef.current = "handshaking";
+              setStatus("Aguardando servidor...");
 
               if (!inputAudioContextRef.current || !streamRef.current) return;
 
@@ -324,12 +391,15 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
                 // URL do worklet na mesma origem da página (evita AbortError "Unable to load a worklet's module").
                 const workletUrl = new URL("/live-voice-processor.js", window.location.href).href;
                 await ctx.audioWorklet.addModule(workletUrl);
+                console.info("[LiveVoice] AudioWorklet carregado, canal ativo em breve.");
               } catch (err) {
                 console.error(
                   "[LiveVoice] Falha ao carregar AudioWorklet; a captura de áudio pode não funcionar.",
                   err
                 );
                 setStatus("Erro ao iniciar captura de áudio");
+                setIsConnected(false);
+                cleanup();
                 return;
               }
 
@@ -343,11 +413,13 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
               sourceRef.current = source;
               scriptProcessorRef.current = worklet;
 
-              // Recebe frames Float32Array do worklet. Usar sessionPromiseRef (nunca closure) para evitar
-              // enviar para a sessão antiga quando o effect re-roda (ex.: troca de gênero).
+              // AudioWorklet pode começar a emitir antes da sessão estar pronta: frames são descartados
+              // (nenhum sendRealtimeInput) até isSessionReadyRef === true, evitando violação de protocolo.
+              // Recebe frames Float32Array do worklet. Nenhum PCM é enviado antes da sessão estar READY:
+              // só enviamos quando isSessionReadyRef && sessionStateRef === "open" (após primeiro onmessage ou timeout).
               worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
                 const inputData = event.data;
-                if (!inputData || !isMicOnRef.current || sessionStateRef.current !== "open") {
+                if (!inputData || !isMicOnRef.current || sendFailedRef.current || !isSessionReadyRef.current || sessionStateRef.current !== "open") {
                   return;
                 }
 
@@ -364,29 +436,44 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
 
                 currentPromise
                   .then((session) => {
-                    if (sessionStateRef.current !== "open") return;
+                    if (sendFailedRef.current || !isSessionReadyRef.current || sessionStateRef.current !== "open") return;
                     try {
                       session.sendRealtimeInput({ media: pcmBlob });
                     } catch (err) {
-                      console.warn(
-                        "[LiveVoice] sendRealtimeInput falhou (provável WebSocket fechado). Bloqueando envios futuros.",
-                        err
-                      );
+                      sendFailedRef.current = true;
                       sessionStateRef.current = "closed";
                       isSessionOpenRef.current = false;
+                      console.warn(
+                        "[LiveVoice] sendRealtimeInput falhou (WebSocket fechado). Envios bloqueados.",
+                        err
+                      );
                     }
                   })
                   .catch(() => {
+                    sendFailedRef.current = true;
                     sessionStateRef.current = "closed";
                     isSessionOpenRef.current = false;
                   });
               };
 
               source.connect(worklet);
-              // Opcional: conecta ao destino apenas para evitar warnings de nós desconectados
               worklet.connect(inputAudioContextRef.current.destination);
+
+              // Marcar sessão pronta após curto delay (Gemini Live muitas vezes não envia primeiro; evita ficar travado em "Aguardando servidor").
+              handshakeTimeoutIdRef.current = setTimeout(() => {
+                handshakeTimeoutIdRef.current = null;
+                markSessionReady();
+                console.info("[LiveVoice] Sessão pronta (handshake timeout). Pode falar.");
+              }, HANDSHAKE_READY_DELAY_MS);
             },
             onmessage: async (msg: LiveServerMessage) => {
+              // Confirmação de handshake: primeira mensagem do servidor → sessão pronta para receber PCM.
+              if (!hasReceivedFirstMessageRef.current) {
+                hasReceivedFirstMessageRef.current = true;
+                markSessionReady();
+                console.info("[LiveVoice] Sessão pronta (primeira mensagem do servidor).");
+              }
+
               // Tools: logMeal (usa ref para não depender de onLogMeal no effect)
               const onLogMealCb = onLogMealRef.current;
               if (msg.toolCall && logMealTool && onLogMealCb) {
@@ -458,16 +545,20 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
                 nextStartTimeRef.current = 0;
               }
             },
-            onclose: () => {
+            onclose: (ev?: { code?: number; reason?: string }) => {
+              console.warn("[LiveVoice] WebSocket fechado (onclose)", ev?.code ?? "", ev?.reason ?? "");
               sessionStateRef.current = "closed";
+              isSessionReadyRef.current = false;
               setStatus("Desconectado");
               setIsConnected(false);
               isSessionOpenRef.current = false;
             },
-            onerror: (err) => {
-              console.error(err);
+            onerror: (err: unknown) => {
+              console.error("[LiveVoice] Erro WebSocket (onerror)", err);
               sessionStateRef.current = "closed";
+              isSessionReadyRef.current = false;
               setStatus("Erro na conexão");
+              setIsConnected(false);
               isSessionOpenRef.current = false;
             },
           },
@@ -483,8 +574,6 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
                 },
               },
             },
-            // Adapta entonação ao contexto (mais humana)
-            enableAffectiveDialog: true,
             // Leve variação para soar menos mecânico
             temperature: 0.85,
             systemInstruction: fullSystemInstruction,
@@ -493,9 +582,11 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
 
         sessionPromiseRef.current = sessionPromise;
       } catch (err) {
-        console.error("Failed to connect", err);
+        console.error("[LiveVoice] Failed to connect", err);
         sessionStateRef.current = "closed";
         setStatus("Erro ao acessar microfone ou API");
+        setIsConnected(false);
+        cleanup();
       }
     };
 
@@ -507,14 +598,13 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
       cleanup();
     };
     // voiceName/systemInstruction nas deps: ao trocar gênero/estilo, recriamos o canal TTS (uma sessão ativa).
-    // O novo canal só recebe envios após onopen (sessionStateRef === "open").
+    // O novo canal só aceita sendRealtimeInput após confirmação (primeiro onmessage ou timeout de handshake).
   }, [
     started,
     apiKey,
     model,
     voiceName,
     systemInstruction,
-    contextData,
     logMealTool,
     cleanup,
     isLimitReached,
