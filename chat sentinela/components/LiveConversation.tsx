@@ -240,10 +240,11 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
         const source = inputAudioContextRef.current.createMediaStreamSource(streamRef.current);
         source.connect(inputAnalyserRef.current);
 
+        const inputCtx = inputAudioContextRef.current;
         try {
-          await inputAudioContextRef.current.audioWorklet.addModule(
-            "/live-voice-processor.js"
-          );
+          if (inputCtx.state === "suspended") await inputCtx.resume();
+          const workletUrl = new URL("/live-voice-processor.js", window.location.href).href;
+          await inputCtx.audioWorklet.addModule(workletUrl);
         } catch (err) {
           console.error(
             "[LiveVoice/Sentinela] Falha ao carregar AudioWorklet; a captura de áudio pode não funcionar.",

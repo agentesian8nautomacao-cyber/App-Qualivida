@@ -315,11 +315,15 @@ export function useLiveVoiceConversation(options: UseLiveVoiceConversationOption
 
               if (!inputAudioContextRef.current || !streamRef.current) return;
 
+              const ctx = inputAudioContextRef.current;
               try {
-                // Registra o AudioWorklet responsável por capturar os frames de áudio
-                await inputAudioContextRef.current.audioWorklet.addModule(
-                  "/live-voice-processor.js"
-                );
+                // AudioContext pode iniciar suspended (política do navegador); addModule falha com AbortError se não estiver running.
+                if (ctx.state === "suspended") {
+                  await ctx.resume();
+                }
+                // URL do worklet na mesma origem da página (evita AbortError "Unable to load a worklet's module").
+                const workletUrl = new URL("/live-voice-processor.js", window.location.href).href;
+                await ctx.audioWorklet.addModule(workletUrl);
               } catch (err) {
                 console.error(
                   "[LiveVoice] Falha ao carregar AudioWorklet; a captura de áudio pode não funcionar.",
