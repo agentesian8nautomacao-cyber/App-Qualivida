@@ -86,7 +86,7 @@ export default defineConfig(({ mode }) => {
       setupFiles: []
     },
     server: {
-      port: DEV_PORT,
+      port: 3010,
       host: '0.0.0.0',
       strictPort: true, // sempre 3007; evita browser em 3008 e HMR em 3007 (loop/conexão recusada)
       open: false,

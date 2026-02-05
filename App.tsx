@@ -100,14 +100,60 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  // Splash de abertura: vídeo de apresentação ao abrir (não persiste "já visto" para o vídeo voltar a ser exibido)
+  // Splash de abertura: tela inicial com logo e call-to-action "Deslize para entrar"
   const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
-  // Controle de áudio do vídeo (muted por padrão para autoplay funcionar)
+  // Controle de áudio do vídeo (legacy – mantido por compatibilidade, mesmo sem vídeo)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
 
+  // Slider "Deslize para entrar" (padrão refinado):
+  // - splashTrackRef: trilho verde
+  // - sliderPosition: posição horizontal em pixels do knob
+  // - isDragging: se o knob está sendo arrastado
+  // - splashTextOpacity: opacidade do texto DESLIZE PARA ENTRAR
+  const splashTrackRef = useRef<HTMLDivElement | null>(null);
+  const [sliderPosition, setSliderPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [splashTextOpacity, setSplashTextOpacity] = useState(1);
+
   const handleSkipSplash = useCallback(() => {
-    console.log('[App] Pulando vídeo de abertura');
+    console.log('[App] Pulando tela de abertura');
     setShowLogoSplash(false);
+  }, []);
+
+  const handleSplashPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      setIsDragging(true);
+    },
+    []
+  );
+
+  const handleSplashPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDragging || !splashTrackRef.current) return;
+
+      const rect = splashTrackRef.current.getBoundingClientRect();
+      const knobWidth = 80; // aproximação de w-20
+      const minX = 0;
+      const maxX = rect.width - knobWidth;
+
+      let next = e.clientX - rect.left - knobWidth / 2;
+      next = Math.max(minX, Math.min(maxX, next));
+
+      setSliderPosition(next);
+      setSplashTextOpacity(maxX > 0 ? 1 - next / maxX : 1);
+
+      if (next >= maxX * 0.95) {
+        setIsDragging(false);
+        handleSkipSplash();
+      }
+    },
+    [isDragging, handleSkipSplash]
+  );
+
+  const handleSplashPointerUp = useCallback(() => {
+    setIsDragging(false);
   }, []);
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
@@ -2717,79 +2763,75 @@ const App: React.FC = () => {
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
   } else if (!isAuthenticated && showLogoSplash) {
-    // Vídeo: path absoluto + cache-bust para evitar CDN/browser servindo HTML em cache
-    const base = (typeof import.meta !== 'undefined' && (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL) || '/';
-    const basePath = base.replace(/\/$/, '');
-    const videoSrc = `${basePath}/GestaoQualivida.mp4?v=2`;
-    // Sem poster: evita flash da logo antes do vídeo (tela preta até o vídeo começar)
+    // Tela de abertura estática com logo Qualivida e call-to-action "Deslize para entrar"
     content = (
-      <div className="w-screen h-screen min-w-full min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          autoPlay
-          muted={isVideoMuted}
-          playsInline
-          loop={false}
-          preload="auto"
-          className="w-full h-full min-w-full min-h-full object-cover md:object-contain"
-          onEnded={handleSkipSplash}
-          onError={() => {
-            console.warn('[App] Vídeo de abertura não carregou; indo para login.');
-            setTimeout(handleSkipSplash, 300);
-          }}
-        />
-        {/* Indicador de áudio mudo com instrução para clicar */}
-        {isVideoMuted && (
-          <div
-            className="absolute inset-0 flex items-center justify-center cursor-pointer"
-            onClick={() => {
-              if (videoRef.current) {
-                // Ativa o áudio
-                videoRef.current.muted = false;
-                setIsVideoMuted(false);
-                // Reinicia o vídeo do começo para melhor experiência
-                videoRef.current.currentTime = 0;
-                videoRef.current
-                  .play()
-                  .catch((err) => console.warn('[App] Erro ao tentar reproduzir vídeo com áudio:', err));
-              }
-            }}
+      <div
+        className={`w-screen h-screen min-w-full min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-300 ${
+          theme === 'dark' ? 'bg-black' : 'bg-zinc-100'
+        }`}
+      >
+        {/* Toggle tema claro/escuro */}
+        <button
+          type="button"
+          className="absolute top-4 right-4 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] text-zinc-200 border border-white/15"
+          onClick={toggleTheme}
+        >
+          {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+        </button>
+
+        {/* Logo central */}
+        <div className="flex flex-col items-center gap-6 px-6">
+          <img
+            src="/1024.png"
+            alt="Qualivida Residence"
+            className="w-56 max-w-[70vw] object-contain drop-shadow-2xl"
+          />
+          <p
+            className={`text-xs md:text-sm font-medium tracking-[0.25em] uppercase text-center ${
+              theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
+            }`}
           >
-            <div className="bg-black/60 backdrop-blur-sm px-6 py-4 rounded-2xl flex flex-col items-center gap-2 animate-pulse">
-              <VolumeX className="w-10 h-10 text-white" />
-              <span className="text-white text-sm font-medium">Toque para ativar o áudio</span>
+            Bem-vindo ao portal do condomínio
+          </p>
+        </div>
+
+        {/* --- SLIDER INTERACTION (REFINED) --- */}
+        <div className="mt-10 w-full max-w-md px-6 md:px-8">
+          <div
+            ref={splashTrackRef}
+            className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10"
+          >
+            {/* Background Text */}
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+              style={{ opacity: splashTextOpacity, paddingLeft: '60px' }}
+            >
+              <span className="text-[#F5F1E8] font-light text-sm tracking-[0.2em] opacity-80 whitespace-nowrap animate-pulse">
+                DESLIZE PARA ENTRAR
+              </span>
+              <div className="absolute right-6 opacity-60">
+                <span className="text-[#F5F1E8] text-lg font-bold">&gt;</span>
+              </div>
+            </div>
+
+            {/* Draggable Knob - Jewel/Glassy look */}
+            <div
+              className="absolute top-2 left-2 h-16 w-20 bg-[#F5F1E8] rounded-[2.5rem] flex items-center justify-center shadow-[0_0_15px_rgba(245,241,232,0.4)] cursor-grab active:cursor-grabbing z-20 group transition-all"
+              style={{
+                transform: `translateX(${sliderPosition}px)`,
+                transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+              }}
+              onPointerDown={handleSplashPointerDown}
+              onPointerMove={handleSplashPointerMove}
+              onPointerUp={handleSplashPointerUp}
+              onPointerLeave={handleSplashPointerUp}
+            >
+              <div className="text-[#1A4D2E] group-active:scale-110 transition-transform drop-shadow-sm">
+                <Lock className="w-5 h-5" />
+              </div>
             </div>
           </div>
-        )}
-        {/* Botão de controle de áudio (canto inferior esquerdo) */}
-        <button
-          type="button"
-          className="absolute bottom-4 left-4 bg-white/80 text-black p-3 rounded-full shadow-lg hover:bg-white transition"
-          onClick={() => {
-            if (videoRef.current) {
-              const newMutedState = !isVideoMuted;
-              videoRef.current.muted = newMutedState;
-              setIsVideoMuted(newMutedState);
-              if (!newMutedState) {
-                videoRef.current
-                  .play()
-                  .catch((err) => console.warn('[App] Erro ao tentar reproduzir vídeo com áudio:', err));
-              }
-            }
-          }}
-          title={isVideoMuted ? 'Ativar áudio' : 'Silenciar'}
-        >
-          {isVideoMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </button>
-        {/* Botão Pular (canto superior direito) */}
-        <button
-          type="button"
-          className="absolute top-4 right-4 bg-white/80 text-black px-4 py-2 rounded-lg text-sm font-semibold shadow-lg hover:bg-white transition"
-          onClick={handleSkipSplash}
-        >
-          Pular
-        </button>
+        </div>
       </div>
     );
   } else if (!isAuthenticated && showResidentRegister) {
