@@ -1,0 +1,8 @@
+{
+  "name": "Aoenas sera o chat",
+  "description": "Nutri.ai é um app de nutrição que gera planos alimentares personalizados, analisa fotos de comida e monitora seus hábitos alimentares.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

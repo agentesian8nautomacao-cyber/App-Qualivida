@@ -4,7 +4,7 @@
     "version": "0.0.0",
     "type": "module",
     "scripts": {
-        "dev": "npx vite --config vite.config.ts",
+        "dev": "vite --config vite.config.ts",
         "build": "node scripts/run-build.cjs",
         "preview": "npx vite preview",
         "test": "vitest",

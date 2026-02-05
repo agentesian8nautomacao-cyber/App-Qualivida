@@ -2630,14 +2630,32 @@ const App: React.FC = () => {
           );
         }
         return (
-          <AiView 
-            allPackages={allPackages} 
-            visitorLogs={visitorLogs} 
-            allOccurrences={allOccurrences} 
+          <AiView
+            allPackages={allPackages}
+            visitorLogs={visitorLogs}
+            allOccurrences={allOccurrences}
             allResidents={allResidents}
             dayReservations={dayReservations}
             allNotices={allNotices}
             chatMessages={chatMessages}
+            role={role}
+            adminName={currentAdminUser?.name}
+            onAddOccurrenceFromSentinela={async (item) => {
+              const newOcc: Occurrence = {
+                id: item.id,
+                residentName: item.involvedParties ?? 'Sistema',
+                unit: item.involvedParties ?? '-',
+                description: `${item.title}: ${item.description}`,
+                status: 'Aberto',
+                date: new Date().toISOString().split('T')[0],
+                reportedBy: 'Sentinela',
+              };
+              const result = await saveOccurrence(newOcc);
+              if (result?.data) {
+                const { data } = await getOccurrences();
+                if (data) setAllOccurrences(data);
+              }
+            }}
           />
         );
       case 'staff':
@@ -2718,7 +2736,7 @@ const App: React.FC = () => {
           onEnded={handleSkipSplash}
           onError={() => {
             console.warn('[App] Vídeo de abertura não carregou; indo para login.');
-            setTimeout(handleSkipSplash, 1500);
+            setTimeout(handleSkipSplash, 300);
           }}
         />
         {/* Indicador de áudio mudo com instrução para clicar */}

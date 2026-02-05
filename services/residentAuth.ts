@@ -164,6 +164,29 @@ export const loginResident = async (
       .select('*');
     
     if (fetchError || !allResidents) {
+      if (fetchError) {
+        console.error('[residentAuth] Erro ao buscar moradores no Supabase:', fetchError.message, fetchError.code, fetchError.details);
+        const code = (fetchError as { code?: string }).code;
+        const msg = String(fetchError.message || '').toLowerCase();
+        const isRls = code === 'PGRST301' || msg.includes('row-level security') || msg.includes('policy');
+        const isConnection = msg.includes('fetch') || msg.includes('failed to fetch');
+        if (isRls) {
+          return {
+            resident: null,
+            success: false,
+            error: 'Acesso à tabela "residents" bloqueado (RLS). No Supabase: SQL Editor → política de SELECT para anon na tabela public.residents (veja SUPABASE_LOGIN_LOCAL.md).'
+          };
+        }
+        if (isConnection) {
+          return {
+            resident: null,
+            success: false,
+            error: (import.meta as { env?: { DEV?: boolean } }).env?.DEV
+              ? 'Sem conexão com o Supabase. Verifique internet e .env.local (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY).'
+              : 'Sem conexão com o servidor. Verifique as variáveis no Vercel e se o projeto Supabase está ativo.'
+          };
+        }
+      }
       return {
         resident: null,
         success: false,
@@ -217,11 +240,15 @@ export const loginResident = async (
       success: true
     };
   } catch (err: any) {
-    console.error('Erro ao fazer login:', err);
+    console.error('[residentAuth] Erro ao fazer login:', err);
+    const msg = (err?.message || '').toLowerCase();
+    const isNetwork = msg.includes('fetch') || msg.includes('failed to fetch');
     return {
       resident: null,
       success: false,
-      error: err.message || 'Erro ao fazer login'
+      error: isNetwork
+        ? 'Sem conexão com o Supabase. Verifique internet e variáveis de ambiente (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY).'
+        : (err?.message || 'Erro ao fazer login')
     };
   }
 };

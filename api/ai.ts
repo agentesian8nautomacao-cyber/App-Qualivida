@@ -4,7 +4,7 @@
  * Runtime Node.js obrigatório para compatibilidade com o SDK do Gemini.
  */
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +32,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+/** Perfil e mensagens no formato Sentinela (concierge) */
+interface SentinelaProfile {
+  name?: string;
+  role?: string;
+  condoName?: string;
+  doormanConfig?: { assistantName?: string; instructions?: string };
+  managerConfig?: { assistantName?: string; instructions?: string };
+}
+interface SentinelaChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+  isExternal?: boolean;
+  senderName?: string;
+}
+interface OccurrenceItemSentinela {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  timestamp: number;
+  involvedParties?: string;
+  status: string;
+}
+
 type Body = {
   action?: string;
   prompt?: string;
@@ -39,6 +65,11 @@ type Body = {
   persona?: string;
   dataContext?: string;
   reportPrompt?: string;
+  /** Concierge (Sentinela) */
+  messages?: SentinelaChatMessage[];
+  newMessage?: string;
+  profile?: SentinelaProfile | null;
+  recentLogs?: OccurrenceItemSentinela[];
 };
 
 export default {
@@ -84,9 +115,9 @@ export default {
       }
 
       const { action } = body;
-      if (action !== 'chat' && action !== 'chat-stream' && action !== 'report') {
+      if (action !== 'chat' && action !== 'chat-stream' && action !== 'report' && action !== 'concierge') {
         return Response.json(
-          { error: 'action deve ser "chat", "chat-stream" ou "report"', code: 'BAD_REQUEST' },
+          { error: 'action deve ser "chat", "chat-stream", "report" ou "concierge"', code: 'BAD_REQUEST' },
           { status: 400, headers: corsHeaders }
         );
       }
@@ -163,6 +194,87 @@ export default {
           const text = (response as { text?: string }).text ?? extractGeminiText(response);
           return Response.json(
             { text: (text && String(text).trim()) || 'Não foi possível gerar o relatório.' },
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (action === 'concierge') {
+          const { messages = [], newMessage = '', profile, recentLogs = [] } = body;
+          if (!newMessage || typeof newMessage !== 'string') {
+            return Response.json(
+              { error: 'newMessage obrigatório para action concierge', code: 'BAD_REQUEST' },
+              { status: 400, headers: corsHeaders }
+            );
+          }
+          const isManager = profile?.role === 'Síndico';
+          const assistantName = isManager
+            ? (profile?.managerConfig?.assistantName ?? 'Conselheiro')
+            : (profile?.doormanConfig?.assistantName ?? 'Sentinela');
+          const specificInstructions = isManager
+            ? (profile?.managerConfig?.instructions ?? 'Atue como assessor administrativo do Síndico.')
+            : (profile?.doormanConfig?.instructions ?? 'Foco em segurança e controle de acesso.');
+          const systemInstruction = `Você é o **${assistantName}**, assistente para Condomínios.
+CONTEXTO: Usuário ${profile?.name ?? 'Operador'}, Cargo ${profile?.role ?? 'Porteiro'}, Condomínio ${profile?.condoName ?? 'Não informado'}.
+ÚLTIMOS REGISTROS: ${JSON.stringify(recentLogs)}
+INSTRUÇÕES: ${specificInstructions}
+Use **negrito** para dados críticos. Se o usuário confirmar criação de registro/ocorrência, chame a função logEvent.`;
+          const logEventTool = {
+            name: 'logEvent',
+            description: 'Registra evento oficial no condomínio (visitante, encomenda, ocorrência, aviso, multa, circular).',
+            parameters: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING, description: 'Categoria: Visitante, Encomenda, Serviço, Ocorrência, Aviso, Multa, Circular' },
+                title: { type: Type.STRING, description: 'Título curto' },
+                description: { type: Type.STRING, description: 'Detalhes' },
+                involvedParties: { type: Type.STRING, description: 'Unidade ou pessoas envolvidas' },
+              },
+              required: ['type', 'title', 'description'],
+            },
+          };
+          const historyContent: { role: string; parts: { text: string }[] }[] = messages.map((m) => {
+            const text = m.isExternal
+              ? `[Mensagem Externa de ${m.senderName ?? 'Morador'}]: ${m.text}`
+              : m.role === 'user'
+                ? `[Usuário Local]: ${m.text}`
+                : m.text;
+            return { role: m.role, parts: [{ text }] };
+          });
+          const chat = ai.chats.create({
+            model,
+            history: historyContent as any,
+            config: {
+              systemInstruction,
+              tools: [{ functionDeclarations: [logEventTool] }],
+            },
+          });
+          let result = await chat.sendMessage({ message: `[Usuário Local]: ${newMessage}` });
+          const parts = (result as any).candidates?.[0]?.content?.parts ?? [];
+          const functionCall = parts.find((p: any) => p.functionCall);
+          let logEvent: OccurrenceItemSentinela | undefined;
+          if (functionCall?.functionCall?.name === 'logEvent') {
+            const args = functionCall.functionCall.args as any;
+            logEvent = {
+              id: String(Date.now()),
+              type: args.type ?? 'Ocorrência',
+              title: args.title ?? '',
+              description: args.description ?? '',
+              timestamp: Date.now(),
+              involvedParties: args.involvedParties,
+              status: 'Logged',
+            };
+            const functionResponseParts = [{
+              functionResponse: {
+                id: functionCall.functionCall.id,
+                name: 'logEvent',
+                response: { result: `Evento ${args.type} registrado: ${args.title}` },
+              },
+            }];
+            result = await chat.sendMessage({ message: functionResponseParts as any });
+          }
+          const text = extractGeminiText(result);
+          return Response.json(
+            { text: (text && String(text).trim()) || 'Sem resposta.', ...(logEvent && { logEvent }) },
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }

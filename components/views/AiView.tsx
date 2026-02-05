@@ -1,10 +1,11 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { BrainCircuit, Mic, SendHorizontal, X, Activity, Radio, Cpu, Sparkles, MessageSquare, History, Settings, User } from 'lucide-react';
+import { BrainCircuit, Mic, SendHorizontal, X, Activity, Radio, Cpu, Sparkles, MessageSquare, History, Settings } from 'lucide-react';
 import { getInternalInstructions } from '../../services/ai/internalInstructions';
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import { getGeminiVoiceName } from '../../utils/voiceConfig';
 import { useLiveVoiceConversation } from '../../hooks/useLiveVoiceConversation';
+import ChatAssistant from './sentinela/ChatAssistant';
+import type { SentinelaUserProfile, OccurrenceItemSentinela, SentinelaRole } from '../../types/sentinela';
 
 interface AiViewProps {
   allPackages: any[];
@@ -14,6 +15,9 @@ interface AiViewProps {
   dayReservations: any[];
   allNotices: any[];
   chatMessages: any[];
+  role?: 'MORADOR' | 'PORTEIRO' | 'SINDICO';
+  adminName?: string | null;
+  onAddOccurrenceFromSentinela?: (item: OccurrenceItemSentinela) => void;
 }
 
 interface ChatMessage {
@@ -45,17 +49,51 @@ const getAiApiUrl = () => {
   return '/api/ai';
 };
 
-const AiView: React.FC<AiViewProps> = ({ 
-  allPackages, 
-  visitorLogs, 
-  allOccurrences, 
+const AiView: React.FC<AiViewProps> = ({
+  allPackages,
+  visitorLogs,
+  allOccurrences,
   allResidents,
   dayReservations,
   allNotices,
-  chatMessages
+  chatMessages,
+  role: appRole = 'PORTEIRO',
+  adminName,
+  onAddOccurrenceFromSentinela,
 }) => {
   const { config, updateAIConfig } = useAppConfig();
-  // Chat State
+  const sentinelaRole: SentinelaRole = appRole === 'SINDICO' ? 'Síndico' : 'Porteiro';
+  const sentinelaProfile: SentinelaUserProfile | null = useMemo(
+    () => ({
+      name: adminName ?? (appRole === 'SINDICO' ? 'Síndico' : 'Porteiro'),
+      role: sentinelaRole,
+      condoName: config.condominiumName,
+      doormanConfig: {
+        assistantName: config.aiConfig?.name ?? 'Sentinela',
+        instructions: config.aiConfig?.externalInstructions ?? 'Foco total em segurança e controle de acesso. Entregas apenas na portaria. Visitantes: exigir RG. Tom formal e breve.',
+      },
+      managerConfig: {
+        assistantName: 'Conselheiro',
+        instructions: 'Atue como gestor administrativo e jurídico. Redija comunicados cultos. Cite leis do condomínio. Tom diplomático e executivo.',
+      },
+    }),
+    [config.condominiumName, config.aiConfig?.name, config.aiConfig?.externalInstructions, appRole, adminName, sentinelaRole]
+  );
+  const sentinelaOccurrences: OccurrenceItemSentinela[] = useMemo(
+    () =>
+      allOccurrences.slice(-20).map((o) => ({
+        id: o.id,
+        type: 'Ocorrência' as const,
+        title: o.description.slice(0, 60) + (o.description.length > 60 ? '...' : ''),
+        description: o.description,
+        timestamp: new Date(o.date).getTime(),
+        involvedParties: o.unit,
+        status: 'Logged' as const,
+      })),
+    [allOccurrences]
+  );
+
+  // Chat State (legacy, usado apenas se não estiver no modo Sentinela embutido)
   const [input, setInput] = useState('');
   const aiName = config.aiConfig.name;
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -521,128 +559,16 @@ INSTRUÇÕES PARA FALA:
          </div>
       </div>
 
-      {/* ÁREA DE CHAT CENTRAL */}
-      <div className="flex-1 flex flex-col min-w-0 bg-zinc-950/60 border border-white/5 rounded-[32px] lg:rounded-[40px] relative overflow-hidden">
-         
-         {/* Chat Header */}
-         <div className="p-4 md:p-6 lg:p-8 border-b border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 bg-black/30 backdrop-blur-xl z-10 flex-shrink-0">
-            <div className="flex items-center gap-3 md:gap-5 min-w-0 flex-1">
-               <div className="relative flex-shrink-0">
-                  <div className={`w-10 h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-2xl md:rounded-3xl bg-gradient-to-br flex items-center justify-center shadow-2xl ${voiceSettings.gender === 'male' ? 'from-cyan-600 to-blue-800 shadow-cyan-900/40' : 'from-purple-600 to-pink-800 shadow-purple-900/40'}`}>
-                     <BrainCircuit className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 md:w-4 md:h-4 bg-green-500 rounded-full border-2 md:border-4 border-black animate-pulse" />
-               </div>
-               <div className="min-w-0 flex-1">
-                  <h2 className="text-base md:text-lg lg:text-xl font-black uppercase text-white tracking-tight leading-none mb-1 truncate">Interface Neural</h2>
-                  <p className="text-[9px] md:text-[10px] font-bold text-zinc-500 uppercase tracking-wider md:tracking-widest flex items-center gap-2">
-                     <Radio className="w-3 h-3 flex-shrink-0" /> <span className="truncate">Conectado: Notas & Chat</span>
-                  </p>
-               </div>
-            </div>
-            
-            <div className="flex gap-2 md:gap-3 flex-shrink-0">
-               <button 
-                  onClick={() => setIsVoiceSettingsOpen(!isVoiceSettingsOpen)}
-                  className={`p-3 md:p-4 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all ${isVoiceSettingsOpen ? 'bg-white text-black' : 'bg-white/5 text-zinc-500'}`}
-                  title="Configurar Voz"
-               >
-                  <Settings className="w-4 h-4 md:w-5 md:h-5" />
-               </button>
-               <button 
-                  onClick={() => setMessages([{ id: '0', role: 'model', text: 'Memória limpa. Reindexando dados do condomínio...', timestamp: new Date() }])}
-                  className="p-3 md:p-4 bg-white/5 rounded-xl md:rounded-2xl hover:bg-white/10 transition-all text-zinc-500"
-                  title="Limpar Histórico"
-               >
-                  <History className="w-4 h-4 md:w-5 md:h-5" />
-               </button>
-               <button 
-                  onClick={startLiveMode}
-                  title="Iniciar chamada de voz"
-                  className={`group flex items-center gap-2 md:gap-4 px-4 md:px-6 lg:px-8 py-3 md:py-4 text-white rounded-2xl md:rounded-3xl transition-all shadow-2xl active:scale-95 ${voiceSettings.gender === 'male' ? 'bg-cyan-600 hover:bg-cyan-500' : 'bg-purple-600 hover:bg-purple-500'}`}
-               >
-                  <Mic className="w-4 h-4 md:w-5 md:h-5 group-hover:animate-bounce" />
-                  <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-wider md:tracking-widest hidden sm:inline">
-                    Iniciar chamada de voz
-                  </span>
-               </button>
-            </div>
-         </div>
-
-         {/* Messages Area - Interface Neural Sentinela (Condomínio Qualivida) */}
-         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 lg:space-y-10 relative min-h-0">
-            {messages.map((msg) => {
-               const isModel = msg.role === 'model';
-               const isStreaming = isModel && msg.isStreaming;
-               const isError = isModel && msg.isError;
-               return (
-                  <div key={msg.id} className={`flex ${isModel ? 'justify-start' : 'justify-end'} animate-in slide-in-from-bottom-4 duration-500`}>
-                     <div className={`max-w-[90%] sm:max-w-[85%] md:max-w-[75%] p-4 md:p-6 lg:p-7 rounded-[24px] md:rounded-[32px] relative group ${
-                        isModel 
-                           ? isError 
-                              ? 'bg-red-950/40 border border-red-500/30 text-red-200 rounded-tl-sm shadow-xl'
-                              : 'bg-zinc-900/80 border border-white/5 text-zinc-300 rounded-tl-sm shadow-xl' 
-                           : 'bg-white text-black rounded-tr-sm shadow-2xl'
-                     }`}>
-                        {isModel && (
-                           <div className="flex items-center gap-2 mb-3 opacity-40">
-                              <Sparkles className="w-3 h-3" />
-                              <span className="text-[9px] font-black uppercase tracking-widest">Sentinela ({voiceSettings.gender === 'male' ? 'M' : 'F'})</span>
-                           </div>
-                        )}
-                        <p className="text-xs md:text-sm font-bold leading-relaxed whitespace-pre-wrap break-words">
-                           {msg.text}
-                           {isStreaming && (
-                              <span className="inline-block w-2 h-4 ml-0.5 bg-cyan-400 animate-pulse align-middle" />
-                           )}
-                        </p>
-                        <div className={`flex items-center gap-2 mt-4 ${isModel ? 'justify-end' : 'justify-start'} opacity-20`}>
-                           <span className="text-[8px] font-black uppercase">
-                              {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                           </span>
-                        </div>
-                     </div>
-                  </div>
-               );
-            })}
-            
-            {isProcessing && !messages.some(m => m.role === 'model' && m.isStreaming) && (
-               <div className="flex justify-start animate-pulse">
-                  <div className="bg-zinc-900 border border-white/5 p-6 rounded-[24px] flex gap-3">
-                     <div className={`w-2 h-2 rounded-full animate-bounce ${voiceSettings.gender === 'male' ? 'bg-cyan-500' : 'bg-purple-500'}`} />
-                     <div className={`w-2 h-2 rounded-full animate-bounce delay-150 ${voiceSettings.gender === 'male' ? 'bg-cyan-500' : 'bg-purple-500'}`} />
-                     <div className={`w-2 h-2 rounded-full animate-bounce delay-300 ${voiceSettings.gender === 'male' ? 'bg-cyan-500' : 'bg-purple-500'}`} />
-                  </div>
-               </div>
-            )}
-            <div ref={chatEndRef} />
-         </div>
-
-         {/* Input Area */}
-         <div className="p-4 md:p-6 lg:p-8 bg-black/40 border-t border-white/5 backdrop-blur-md flex-shrink-0">
-            <div className="relative group">
-               <div className={`absolute inset-0 bg-gradient-to-r rounded-[24px] md:rounded-[32px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity ${voiceSettings.gender === 'male' ? 'from-cyan-600/10 via-blue-600/10 to-transparent' : 'from-purple-600/10 via-pink-600/10 to-transparent'}`} />
-               <input 
-                  type="text" 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  placeholder="Pergunte sobre notas, chat ou operações..."
-                  className="w-full relative bg-zinc-900/50 border border-white/10 rounded-[24px] md:rounded-[32px] pl-4 md:pl-8 pr-16 md:pr-20 py-4 md:py-6 lg:py-7 text-xs md:text-sm font-bold text-white outline-none focus:border-white/20 transition-all placeholder:text-zinc-600 shadow-inner"
-               />
-               <button 
-                  onClick={handleSendMessage}
-                  disabled={!input.trim() || isProcessing}
-                  className={`absolute right-2 md:right-3 top-1/2 -translate-y-1/2 p-3 md:p-4 lg:p-5 rounded-xl md:rounded-2xl transition-all ${
-                     input.trim() && !isProcessing
-                        ? 'bg-white text-black shadow-2xl hover:scale-105 active:scale-95' 
-                        : 'bg-zinc-800 text-zinc-600 cursor-not-allowed opacity-50'
-                  }`}
-               >
-                  <SendHorizontal className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6" />
-               </button>
-            </div>
-         </div>
+      {/* ÁREA SENTINELA — Chat Assistente Porteiro/Síndico (lógica chat sentinela) */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 rounded-[32px] lg:rounded-[40px] overflow-hidden border border-white/5 bg-zinc-950/60">
+        <ChatAssistant
+          userProfile={sentinelaProfile}
+          occurrences={sentinelaOccurrences}
+          onAddOccurrence={onAddOccurrenceFromSentinela}
+          isFullScreen={false}
+          onLiveCall={startLiveMode}
+          onSettings={() => setIsVoiceSettingsOpen(true)}
+        />
       </div>
     </div>
   );

@@ -143,6 +143,7 @@ export const loginUser = async (
   blocked?: boolean; 
   remainingMinutes?: number;
   attemptsRemaining?: number;
+  mustChangePassword?: boolean;
 }> => {
   const normalizedUsername = username.toLowerCase().trim();
   const normalizedPassword = password.trim();
@@ -168,6 +169,31 @@ export const loginUser = async (
       .maybeSingle();
 
     if (error || !row) {
+      if (error) {
+        console.error('[userAuth] Erro ao buscar usuário no Supabase:', error.message, error.code, error.details);
+        const code = (error as { code?: string }).code;
+        const msg = (error.message || '').toLowerCase();
+        const isRls = code === 'PGRST301' || msg.includes('row-level security') || msg.includes('policy');
+        const isConnection = msg.includes('fetch') || msg.includes('failed to fetch');
+        if (isRls) {
+          incrementFailedAttempts(normalizedUsername);
+          return {
+            user: null,
+            error: 'Acesso à tabela "users" bloqueado (RLS). No Supabase: SQL Editor → execute a política de SELECT para anon na tabela public.users (veja SUPABASE_LOGIN_LOCAL.md).',
+            attemptsRemaining: MAX_LOGIN_ATTEMPTS - getLoginAttempts(normalizedUsername).count
+          };
+        }
+        if (isConnection) {
+          incrementFailedAttempts(normalizedUsername);
+          return {
+            user: null,
+            error: (import.meta as { env?: { DEV?: boolean } }).env?.DEV
+              ? 'Sem conexão com o Supabase. Verifique internet, .env.local (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY) e reinicie "npm run dev".'
+              : 'Sem conexão com o servidor. Verifique as variáveis de ambiente no Vercel (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY) e se o projeto Supabase está ativo.',
+            attemptsRemaining: MAX_LOGIN_ATTEMPTS - getLoginAttempts(normalizedUsername).count
+          };
+        }
+      }
       incrementFailedAttempts(normalizedUsername);
       return {
         user: null,
@@ -256,11 +282,14 @@ export const loginUser = async (
       error: null,
       mustChangePassword: usedDefaultPassword
     };
-  } catch (error) {
-    console.error('Erro ao fazer login:', error);
+  } catch (error: any) {
+    console.error('[userAuth] Erro ao buscar usuário no Supabase:', error);
+    const msg = (error?.message ?? '').toLowerCase();
+    const isNetwork = msg.includes('fetch') || msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('err_name_not_resolved');
+    const networkMessage = 'Não foi possível conectar ao Supabase (erro de rede/DNS). No navegador (F12 → Console) pode aparecer ERR_NAME_NOT_RESOLVED: este computador ou rede não consegue resolver o endereço do Supabase. Tente: outra rede (ex.: celular como hotspot), outro DNS (ex.: 8.8.8.8), desativar VPN; confira .env.local (VITE_SUPABASE_URL) e no Vercel as variáveis de ambiente.';
     return {
       user: null,
-      error: 'Erro ao conectar com o servidor. Tente novamente.'
+      error: isNetwork ? networkMessage : (error?.message || 'Erro ao conectar com o servidor. Tente novamente.')
     };
   }
 };

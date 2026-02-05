@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 const DEV_PORT = 3007;
 
-/** Warmup + abre o navegador na URL/porta real em que o servidor subiu. */
+/** Warmup da página + abre o navegador quando o servidor estiver pronto. */
 function warmupAndOpenPlugin(): import('vite').Plugin {
   return {
     name: 'warmup-and-open',
@@ -17,13 +17,21 @@ function warmupAndOpenPlugin(): import('vite').Plugin {
         const addr = server.httpServer?.address();
         const port = typeof addr === 'object' && addr && 'port' in addr ? addr.port : DEV_PORT;
         const url = `http://localhost:${port}/`;
-        fetch(url).catch(() => {});
-        setTimeout(() => {
+        // Aquecer a página (uma requisição) e só então abrir o browser
+        const openBrowser = () => {
           import('node:child_process').then(({ exec }) => {
             const cmd = process.platform === 'win32' ? `start "" "${url}"` : `xdg-open "${url}"`;
             exec(cmd, () => {});
           }).catch(() => {});
-        }, 1500);
+        };
+        const timeout = setTimeout(openBrowser, 12000);
+        fetch(url)
+          .then(() => {})
+          .catch(() => {})
+          .finally(() => {
+            clearTimeout(timeout);
+            setTimeout(openBrowser, 300);
+          });
       });
     }
   };
@@ -80,8 +88,18 @@ export default defineConfig(({ mode }) => {
     server: {
       port: DEV_PORT,
       host: '0.0.0.0',
-      strictPort: false, // se 3007 estiver ocupada, usa a próxima (3008, 3009...)
+      strictPort: true, // sempre 3007; evita browser em 3008 e HMR em 3007 (loop/conexão recusada)
       open: false,
+      // HMR na mesma porta do servidor para evitar WebSocket em porta errada
+      hmr: {
+        port: DEV_PORT,
+        host: 'localhost',
+        protocol: 'ws',
+      },
+      // Pré-compila entradas no startup para a primeira abertura ser mais rápida
+      warmup: {
+        clientFiles: ['./index.tsx', './App.tsx'],
+      },
       // Durante o desenvolvimento, proxia /api → backend real (Vercel ou outro host),
       // evitando 404 do Vite dev server em http://localhost:3007/api/*.
       proxy: apiBase
@@ -94,8 +112,15 @@ export default defineConfig(({ mode }) => {
           }
         : undefined,
       watch: {
-        ignored: ['**/.env*', '**/node_modules/**']
-      }
+        ignored: [
+          '**/.env*',
+          '**/node_modules/**',
+          '**/node_modules.bak/**',
+          '**/node_modules.OLD.*/**',
+          '**/.git/**',
+          '**/dist/**',
+        ],
+      },
     },
     plugins: [
       react(),
@@ -114,8 +139,11 @@ export default defineConfig(({ mode }) => {
         '@supabase/supabase-js',
         'lucide-react',
         'recharts',
-        '@google/genai'
-      ]
+        'dexie',
+        'jspdf',
+        'jsqr',
+        '@google/genai',
+      ],
     },
     resolve: {
       alias: {
