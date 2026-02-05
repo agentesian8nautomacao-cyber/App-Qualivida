@@ -53,8 +53,18 @@ export async function chatWithConcierge(
   });
 
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error ?? 'Erro ao falar com o assistente.');
+    // Em vez de lançar exceção, devolve a mensagem de erro para ser mostrada no chat.
+    // Isso ajuda a diagnosticar problemas de ambiente (ex.: GEMINI_API_KEY ausente no Vercel).
+    let errorText = 'Erro ao falar com o assistente.';
+    try {
+      const data = await res.json();
+      if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+        errorText = data.error;
+      }
+    } catch {
+      // ignore JSON parse errors – mantém texto genérico
+    }
+    return errorText;
   }
 
   const data = (await res.json()) as ConciergeResult;
