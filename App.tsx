@@ -2662,8 +2662,9 @@ const App: React.FC = () => {
           />
         );
       case 'sentinela':
-        // Módulo Sentinela (concierge de portaria/síndico) – experiência standalone
-        return <SentinelaConciergeApp />;
+        // Módulo Sentinela (concierge de portaria/síndico)
+        // Porteiro acessa apenas "Controle de Acesso"; gestão administrativa (Síndico) é restrita.
+        return <SentinelaConciergeApp allowManager={role === 'SINDICO'} />;
       case 'staff':
         if (role === 'MORADOR' || role === 'PORTEIRO') {
           return (

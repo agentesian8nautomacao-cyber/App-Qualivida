@@ -28,18 +28,27 @@ const INITIAL_PROFILE: UserProfile = {
     }
 };
 
-const App: React.FC = () => {
+interface SentinelaAppProps {
+  /** 
+   * Quando false (porteiro logado no app principal),
+   * o fluxo de "Gestão Administrativa" (Síndico) fica bloqueado.
+   */
+  allowManager?: boolean;
+}
+
+const App: React.FC<SentinelaAppProps> = ({ allowManager = true }) => {
   const [view, setView] = useState<'landing' | 'chat' | 'live' | 'settings'>('landing');
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [occurrences, setOccurrences] = useState<OccurrenceItem[]>([]);
 
   const handleEnterApp = (role: UserRole) => {
       // Update profile with the selected role for this session
+      const effectiveRole = !allowManager && role === UserRole.Manager ? UserRole.Doorman : role;
       setUserProfile(prev => ({
           ...prev,
-          role: role,
+          role: effectiveRole,
           // Update name purely for display purposes in logs if needed
-          name: role === UserRole.Manager ? "Marcos (Síndico)" : "Carlos (Portaria)"
+          name: effectiveRole === UserRole.Manager ? "Marcos (Síndico)" : "Carlos (Portaria)"
       }));
       setView('chat');
   };
@@ -51,7 +60,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#09090b] text-white">
         {view === 'landing' && (
-            <LandingPage onGetStarted={handleEnterApp} />
+            <LandingPage 
+              onGetStarted={handleEnterApp} 
+              allowManager={allowManager}
+            />
         )}
         
         {view === 'chat' && (
@@ -78,7 +90,8 @@ const App: React.FC = () => {
             <SettingsView 
                 onBack={() => setView('chat')}
                 userProfile={userProfile}
-                onUpdateProfile={setUserProfile}
+              onUpdateProfile={setUserProfile}
+              canEditManager={allowManager}
             />
         )}
     </div>

@@ -7,9 +7,11 @@ interface SettingsViewProps {
     onBack: () => void;
     userProfile: UserProfile;
     onUpdateProfile: (p: UserProfile) => void;
+    /** Quando false, o modo Síndico não pode ser selecionado (porteiro logado). */
+    canEditManager?: boolean;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ onBack, userProfile, onUpdateProfile }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ onBack, userProfile, onUpdateProfile, canEditManager = true }) => {
   // The role currently being EDITED in settings (toggle switch)
   // We initialize this to the user's active role, but changing it here doesn't change the active role immediately until save.
   const [editingRole, setEditingRole] = useState<UserRole>(userProfile.role || UserRole.Doorman);
@@ -142,8 +144,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack, userProfile, onUpda
                         <User size={16} /> Porteiro
                     </button>
                     <button 
-                        onClick={() => setEditingRole(UserRole.Manager)}
-                        className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${isManagerEditing ? 'bg-amber-500 text-black shadow-lg scale-[1.02]' : 'text-zinc-500 hover:text-amber-500'}`}
+                        onClick={() => {
+                            if (!canEditManager) return;
+                            setEditingRole(UserRole.Manager);
+                        }}
+                        disabled={!canEditManager}
+                        className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                            !canEditManager
+                              ? 'text-zinc-600 cursor-not-allowed'
+                              : isManagerEditing 
+                                  ? 'bg-amber-500 text-black shadow-lg scale-[1.02]' 
+                                  : 'text-zinc-500 hover:text-amber-500'
+                        }`}
                     >
                         <Shield size={16} /> Síndico
                     </button>

@@ -5,9 +5,14 @@ import { UserRole } from '../types';
 
 interface LandingPageProps {
   onGetStarted: (role: UserRole) => void;
+  /**
+   * Quando false, o botão "Síndico" fica desabilitado
+   * (porteiro logado no app principal).
+   */
+  allowManager?: boolean;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, allowManager = true }) => {
   const [sliderPosition, setSliderPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.Doorman);
@@ -132,15 +137,37 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                                     </button>
 
                                     <button 
-                                        onClick={() => setSelectedRole(UserRole.Manager)}
+                                        onClick={() => {
+                                          if (!allowManager) return;
+                                          setSelectedRole(UserRole.Manager);
+                                        }}
+                                        disabled={!allowManager}
                                         className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
-                                            selectedRole === UserRole.Manager 
-                                            ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.1)]' 
-                                            : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
+                                            !allowManager
+                                              ? 'bg-zinc-900/40 border-zinc-700 text-zinc-600 cursor-not-allowed'
+                                              : selectedRole === UserRole.Manager 
+                                                  ? 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.1)]' 
+                                                  : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                                         }`}
                                     >
-                                        <Briefcase size={24} className={selectedRole === UserRole.Manager ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
-                                        <span className="text-xs font-bold uppercase tracking-wider">Síndico</span>
+                                        <Briefcase 
+                                          size={24} 
+                                          className={
+                                            !allowManager
+                                              ? 'opacity-50'
+                                              : selectedRole === UserRole.Manager 
+                                                ? 'scale-110' 
+                                                : 'group-hover:scale-110 transition-transform'
+                                          } 
+                                        />
+                                        <span className="text-xs font-bold uppercase tracking-wider">
+                                          Síndico
+                                        </span>
+                                        {!allowManager && (
+                                          <span className="mt-1 text-[10px] uppercase tracking-widest text-zinc-500">
+                                            Restrito
+                                          </span>
+                                        )}
                                     </button>
                                 </div>
 
