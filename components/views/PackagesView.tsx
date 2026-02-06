@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Camera, Image as ImageIcon, Users, ChevronDown, ChevronUp, Trash2, Download, Filter, Upload } from 'lucide-react';
+import { Search, Plus, Camera, Image as ImageIcon, Users, ChevronDown, ChevronUp, Trash2, Download, Filter } from 'lucide-react';
 import { Package, Resident } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { isMobile } from '../../utils/deviceDetection';
@@ -15,8 +15,6 @@ interface PackagesViewProps {
   setSelectedPackageForDetail: (pkg: Package) => void;
   onDeletePackage?: (id: string) => void;
   onCameraScan?: () => void;
-  /** Abre o modal de importação de encomendas (CSV/JSON). */
-  onImportClick?: () => void;
   /** 
    * Define se o usuário atual pode registrar novas encomendas.
    * Para moradores, este valor deve ser false para impedir o registro.
@@ -33,7 +31,6 @@ const PackagesView: React.FC<PackagesViewProps> = ({
   setSelectedPackageForDetail,
   onDeletePackage,
   onCameraScan,
-  onImportClick,
   canRegister = true,
 }) => {
   const mobile = isMobile();
@@ -220,15 +217,6 @@ const PackagesView: React.FC<PackagesViewProps> = ({
                 </>
               )}
             </div>
-            {onImportClick && (
-              <button
-                onClick={onImportClick}
-                className="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[9px] sm:text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-1.5 sm:gap-2 hover:bg-[var(--border-color)]"
-                title="Importar encomendas (CSV/JSON)"
-              >
-                <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Importar</span>
-              </button>
-            )}
             {canRegister && (
               <button
                 onClick={() => setIsNewPackageModalOpen(true)}
