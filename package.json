@@ -5,6 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite --config vite.config.ts",
+        "optimize-deps": "vite optimize-deps",
         "build": "node scripts/run-build.cjs",
         "preview": "npx vite preview",
         "test": "vitest",

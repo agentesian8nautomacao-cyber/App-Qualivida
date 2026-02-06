@@ -114,6 +114,8 @@ const App: React.FC = () => {
   const [sliderPosition, setSliderPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [splashTextOpacity, setSplashTextOpacity] = useState(1);
+  /** Exibir a splash só após o primeiro frame para que todos os elementos apareçam de uma vez (evita pintura progressiva). */
+  const [splashPaintReady, setSplashPaintReady] = useState(false);
 
   const handleSkipSplash = useCallback(() => {
     console.log('[App] Pulando tela de abertura');
@@ -155,6 +157,18 @@ const App: React.FC = () => {
   const handleSplashPointerUp = useCallback(() => {
     setIsDragging(false);
   }, []);
+
+  // Exibir a splash só após o primeiro frame para que logo, texto e botão apareçam juntos (evita elemento por elemento)
+  useEffect(() => {
+    if (!showLogoSplash || isAuthenticated) {
+      setSplashPaintReady(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      setSplashPaintReady(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showLogoSplash, isAuthenticated]);
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
@@ -2763,75 +2777,81 @@ const App: React.FC = () => {
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
   } else if (!isAuthenticated && showLogoSplash) {
-    // Tela de abertura estática com logo Qualivida e call-to-action "Deslize para entrar"
+    // Tela de abertura: todos os elementos (logo, texto, botão) aparecem de uma vez via splashPaintReady
     content = (
       <div
         className={`w-screen h-screen min-w-full min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-300 ${
           theme === 'dark' ? 'bg-black' : 'bg-zinc-100'
         }`}
       >
-        {/* Toggle tema claro/escuro */}
-        <button
-          type="button"
-          title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-          className={`absolute top-6 right-6 p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 flex items-center justify-center z-20 bg-white/5 hover:bg-white/10 ${
-            theme === 'dark' ? 'text-white border-white/10' : 'text-black border-black/20'
-          }`}
-          onClick={toggleTheme}
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-200 ease-out"
+          style={{ opacity: splashPaintReady ? 1 : 0 }}
+          aria-hidden={!splashPaintReady}
         >
-          <Sun className="w-5 h-5" />
-        </button>
-
-        {/* Logo central (preload em index.html reduz delay) */}
-        <div className="flex flex-col items-center gap-6 px-6">
-          <img
-            src="/1024.png"
-            alt="Qualivida Residence"
-            className="w-56 max-w-[70vw] object-contain drop-shadow-2xl"
-            fetchPriority="high"
-          />
-          <p
-            className={`text-xs md:text-sm font-medium tracking-[0.25em] uppercase text-center ${
-              theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
+          {/* Toggle tema claro/escuro */}
+          <button
+            type="button"
+            title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            className={`absolute top-6 right-6 p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 flex items-center justify-center z-20 bg-white/5 hover:bg-white/10 ${
+              theme === 'dark' ? 'text-white border-white/10' : 'text-black border-black/20'
             }`}
+            onClick={toggleTheme}
           >
-            Bem-vindo ao Gestão Qualivida Clube Residence
-          </p>
-        </div>
+            <Sun className="w-5 h-5" />
+          </button>
 
-        {/* --- SLIDER INTERACTION (REFINED) --- */}
-        <div className="mt-10 w-full max-w-md px-6 md:px-8">
-          <div
-            ref={splashTrackRef}
-            className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10"
-          >
-            {/* Background Text */}
-            <div
-              className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
-              style={{ opacity: splashTextOpacity, paddingLeft: '60px' }}
+          {/* Logo central (preload em index.html reduz delay) */}
+          <div className="flex flex-col items-center gap-6 px-6">
+            <img
+              src="/1024.png"
+              alt="Qualivida Residence"
+              className="w-56 max-w-[70vw] h-auto min-h-[8rem] object-contain drop-shadow-2xl"
+              fetchPriority="high"
+            />
+            <p
+              className={`text-xs md:text-sm font-medium tracking-[0.25em] uppercase text-center ${
+                theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
+              }`}
             >
-              <span className="text-[#F5F1E8] font-light text-sm tracking-[0.2em] opacity-80 whitespace-nowrap animate-pulse">
-                DESLIZE PARA ENTRAR
-              </span>
-              <div className="absolute right-6 opacity-60">
-                <span className="text-[#F5F1E8] text-lg font-bold">&gt;</span>
+              Bem-vindo ao Gestão Qualivida Clube Residence
+            </p>
+          </div>
+
+          {/* --- SLIDER INTERACTION (REFINED) --- */}
+          <div className="mt-10 w-full max-w-md px-6 md:px-8">
+            <div
+              ref={splashTrackRef}
+              className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10"
+            >
+              {/* Background Text */}
+              <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+                style={{ opacity: splashTextOpacity, paddingLeft: '60px' }}
+              >
+                <span className="text-[#F5F1E8] font-light text-sm tracking-[0.2em] opacity-80 whitespace-nowrap animate-pulse">
+                  DESLIZE PARA ENTRAR
+                </span>
+                <div className="absolute right-6 opacity-60">
+                  <span className="text-[#F5F1E8] text-lg font-bold">&gt;</span>
+                </div>
               </div>
-            </div>
 
-            {/* Draggable Knob - Jewel/Glassy look */}
-            <div
-              className="absolute top-2 left-2 h-16 w-20 bg-[#F5F1E8] rounded-[2.5rem] flex items-center justify-center shadow-[0_0_15px_rgba(245,241,232,0.4)] cursor-grab active:cursor-grabbing z-20 group transition-all"
-              style={{
-                transform: `translateX(${sliderPosition}px)`,
-                transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
-              }}
-              onPointerDown={handleSplashPointerDown}
-              onPointerMove={handleSplashPointerMove}
-              onPointerUp={handleSplashPointerUp}
-              onPointerLeave={handleSplashPointerUp}
-            >
-              <div className="text-[#1A4D2E] group-active:scale-110 transition-transform drop-shadow-sm">
-                <Lock className="w-5 h-5" />
+              {/* Draggable Knob - Jewel/Glassy look */}
+              <div
+                className="absolute top-2 left-2 h-16 w-20 bg-[#F5F1E8] rounded-[2.5rem] flex items-center justify-center shadow-[0_0_15px_rgba(245,241,232,0.4)] cursor-grab active:cursor-grabbing z-20 group transition-all"
+                style={{
+                  transform: `translateX(${sliderPosition}px)`,
+                  transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                }}
+                onPointerDown={handleSplashPointerDown}
+                onPointerMove={handleSplashPointerMove}
+                onPointerUp={handleSplashPointerUp}
+                onPointerLeave={handleSplashPointerUp}
+              >
+                <div className="text-[#1A4D2E] group-active:scale-110 transition-transform drop-shadow-sm">
+                  <Lock className="w-5 h-5" />
+                </div>
               </div>
             </div>
           </div>

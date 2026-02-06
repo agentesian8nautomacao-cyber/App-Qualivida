@@ -4,28 +4,22 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const DEV_PORT = 3010;
+const DEV_PORT = 3008;
 
-/** Abre o navegador assim que o servidor estiver listening; warmup em background. */
-function warmupAndOpenPlugin(): import('vite').Plugin {
+/** Abre o navegador assim que o servidor estiver listening. */
+function openBrowserPlugin(): import('vite').Plugin {
   return {
-    name: 'warmup-and-open',
+    name: 'open-browser',
     apply: 'serve' as const,
     configureServer(server) {
       server.httpServer?.once('listening', () => {
         const addr = server.httpServer?.address();
         const port = typeof addr === 'object' && addr && 'port' in addr ? addr.port : DEV_PORT;
         const url = `http://localhost:${port}/`;
-        const openBrowser = () => {
-          import('node:child_process').then(({ exec }) => {
-            const cmd = process.platform === 'win32' ? `start "" "${url}"` : `xdg-open "${url}"`;
-            exec(cmd, () => {});
-          }).catch(() => {});
-        };
-        // Abre o browser de imediato (evita sensação de lentidão)
-        setTimeout(openBrowser, 400);
-        // Warmup em background (não bloqueia a abertura)
-        fetch(url).then(() => {}).catch(() => {});
+        import('node:child_process').then(({ exec }) => {
+          const cmd = process.platform === 'win32' ? `start "" "${url}"` : `xdg-open "${url}"`;
+          exec(cmd, () => {});
+        }).catch(() => {});
       });
     }
   };
@@ -80,20 +74,17 @@ export default defineConfig(({ mode }) => {
       setupFiles: []
     },
     server: {
-      port: 3010,
+      port: 3008,
       host: '0.0.0.0',
       strictPort: true,
       open: false,
-      // HMR na mesma porta do servidor (3010) para evitar WebSocket em porta errada
+      // HMR na mesma porta do servidor (3008) para evitar WebSocket em porta errada
       hmr: {
-        port: 3010,
+        port: 3008,
         host: 'localhost',
         protocol: 'ws',
       },
-      // Pré-compila entradas no startup para a primeira abertura ser mais rápida
-      warmup: {
-        clientFiles: ['./index.tsx', './App.tsx'],
-      },
+      // Sem warmup: servidor sobe em segundos (warmup com App.tsx pesado atrasava 3+ s)
       // Durante o desenvolvimento, proxia /api → backend real (Vercel ou outro host),
       // evitando 404 do Vite dev server em http://localhost:3007/api/*.
       proxy: apiBase
@@ -119,7 +110,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      warmupAndOpenPlugin(),
+      openBrowserPlugin(),
       VitePWA({
         injectRegister: 'inline',
         registerType: 'autoUpdate',
