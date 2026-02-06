@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowRight, User, Lock, Eye, EyeOff, Sun, Moon, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowRight, User, Lock, Eye, EyeOff, Sun, Moon, Building2, Briefcase, ChevronRight } from 'lucide-react';
 import { UserRole } from '../types';
 import { loginUser, saveUserSession } from '../services/userAuth';
 import ForgotPassword from './ForgotPassword';
@@ -24,6 +24,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetFromLink, setResetFromLink] = useState<{ token: string } | null>(null);
   const [recoveryLinkExpired, setRecoveryLinkExpired] = useState(false);
+  // Slider "Iniciar Turno" (estilo LandingPage)
+  const [sliderPosition, setSliderPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,6 +81,47 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
     setUsername('');
     setPassword('');
     setError(null);
+  };
+
+  // Resetar slider quando houver erro
+  useEffect(() => {
+    if (error) setSliderPosition(0);
+  }, [error]);
+
+  // Slider "Iniciar Turno" - handlers (estilo LandingPage)
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (loading) return;
+    setIsDragging(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging || !trackRef.current || loading) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const knobWidth = 80;
+    const maxPos = rect.width - knobWidth - 16;
+    let newPos = e.clientX - rect.left - knobWidth / 2;
+    if (newPos < 0) newPos = 0;
+    if (newPos > maxPos) newPos = maxPos;
+    setSliderPosition(newPos);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    if (!trackRef.current || loading) return;
+
+    const rect = trackRef.current.getBoundingClientRect();
+    const knobWidth = 80;
+    const maxPos = rect.width - knobWidth - 16;
+
+    if (sliderPosition >= maxPos * 0.85) {
+      setSliderPosition(maxPos);
+      if (navigator.vibrate) navigator.vibrate(50);
+      handleLogin();
+    } else {
+      setSliderPosition(0);
+    }
   };
 
   const handleLogin = useCallback(async (e?: React.FormEvent | React.KeyboardEvent) => {
@@ -240,63 +285,60 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
                   />
                 </div>
               </div>
-              {/* Texto Acesso Restrito */}
               <p className={`text-[10px] uppercase tracking-[0.3em] font-black ${
                 theme === 'light' ? 'text-gray-500' : 'text-zinc-500'
-              }`}>ACESSO RESTRITO</p>
+              }`}>Qualivida Gestão</p>
             </header>
 
-            <div className={`p-1 rounded-2xl mb-8 flex relative border transition-all ${
-              theme === 'light' 
-                ? 'bg-gray-100/80 border-gray-200/50' 
-                : 'bg-white/5 border-white/5'
-            }`}>
-              {/* Indicador deslizante */}
-              <div 
-                className={`absolute top-1 bottom-1 rounded-xl transition-all duration-500 ease-out shadow-xl ${
-                  theme === 'light' ? 'bg-white shadow-lg' : 'bg-white'
-                }`}
-                style={{
-                  width: 'calc(33.333% - 4px)',
-                  transform: selectedRole === 'MORADOR' 
-                    ? 'translateX(0)' 
-                    : selectedRole === 'PORTEIRO' 
-                    ? 'translateX(calc(100% + 4px))' 
-                    : 'translateX(calc(200% + 8px))'
-                }}
-              />
+            {/* Seletor de perfil - estilo LandingPage (modal Controle de Acesso) */}
+            <div className="grid grid-cols-3 gap-4 mb-8">
               <button 
                 type="button"
                 onClick={() => handleRoleChange('MORADOR')}
-                className={`relative z-10 flex-1 py-3 text-[10px] font-black uppercase transition-colors duration-200 ${
-                  selectedRole === 'MORADOR' 
-                    ? (theme === 'light' ? 'text-gray-900' : 'text-black')
-                    : (theme === 'light' ? 'text-gray-600' : 'text-zinc-500')
+                className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  selectedRole === 'MORADOR'
+                    ? theme === 'light'
+                      ? 'bg-sky-500/10 border-sky-500 text-sky-600 shadow-[0_0_20px_rgba(14,165,233,0.15)]'
+                      : 'bg-sky-500/10 border-sky-500 text-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.1)]'
+                    : theme === 'light'
+                      ? 'bg-gray-100/80 border-gray-200/50 text-gray-500 hover:bg-gray-200/80'
+                      : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
-                Morador
+                <Building2 size={24} className={selectedRole === 'MORADOR' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
+                <span className="text-xs font-bold uppercase tracking-wider">Morador</span>
               </button>
               <button 
                 type="button"
                 onClick={() => handleRoleChange('PORTEIRO')}
-                className={`relative z-10 flex-1 py-3 text-[10px] font-black uppercase transition-colors duration-200 ${
-                  selectedRole === 'PORTEIRO' 
-                    ? (theme === 'light' ? 'text-gray-900' : 'text-black')
-                    : (theme === 'light' ? 'text-gray-600' : 'text-zinc-500')
+                className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  selectedRole === 'PORTEIRO'
+                    ? theme === 'light'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+                      : 'bg-emerald-500/10 border-emerald-500 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+                    : theme === 'light'
+                      ? 'bg-gray-100/80 border-gray-200/50 text-gray-500 hover:bg-gray-200/80'
+                      : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
-                Portaria
+                <User size={24} className={selectedRole === 'PORTEIRO' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
+                <span className="text-xs font-bold uppercase tracking-wider">Portaria</span>
               </button>
               <button 
                 type="button"
                 onClick={() => handleRoleChange('SINDICO')}
-                className={`relative z-10 flex-1 py-3 text-[10px] font-black uppercase transition-colors duration-200 ${
-                  selectedRole === 'SINDICO' 
-                    ? (theme === 'light' ? 'text-gray-900' : 'text-black')
-                    : (theme === 'light' ? 'text-gray-600' : 'text-zinc-500')
+                className={`p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  selectedRole === 'SINDICO'
+                    ? theme === 'light'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-600 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+                      : 'bg-amber-500/10 border-amber-500 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+                    : theme === 'light'
+                      ? 'bg-gray-100/80 border-gray-200/50 text-gray-500 hover:bg-gray-200/80'
+                      : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
-                Síndico
+                <Briefcase size={24} className={selectedRole === 'SINDICO' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
+                <span className="text-xs font-bold uppercase tracking-wider">Síndico</span>
               </button>
             </div>
 
@@ -372,28 +414,62 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
                 </div>
               </div>
 
-              <button 
-                type="submit"
-                disabled={loading}
-                className={`group w-full py-5 font-black text-[11px] uppercase tracking-[0.2em] rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 ${
+              {/* Slider "Iniciar Turno" (estilo LandingPage) */}
+              <div 
+                ref={trackRef}
+                className={`relative rounded-[2.5rem] h-20 shadow-2xl border max-w-sm mx-auto overflow-hidden touch-none ${
                   theme === 'light'
-                    ? 'bg-gray-900 text-white hover:bg-gray-800 shadow-lg'
-                    : 'bg-white text-black hover:bg-zinc-200 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.2)]'
+                    ? 'bg-gray-200/80 border-gray-300/50'
+                    : 'bg-[#18181B] border-white/5'
                 }`}
               >
-                {loading ? (
-                  <div className={`w-4 h-4 border-2 rounded-full animate-spin ${
-                    theme === 'light' 
-                      ? 'border-white/20 border-t-white' 
-                      : 'border-black/20 border-t-black'
-                  }`} />
-                ) : (
-                  <>
-                    {selectedRole === 'MORADOR' ? 'Entrar' : 'Entrar no Sistema'}
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </button>
+                <div 
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+                  style={{ opacity: Math.max(0, 1 - sliderPosition / 150), paddingLeft: '60px' }}
+                >
+                  <span className={`font-medium text-xs tracking-[0.3em] uppercase animate-pulse ${
+                    theme === 'light' ? 'text-gray-600' : 'text-white/40'
+                  }`}>
+                    {loading ? 'Entrando...' : 'Deslize para entrar'}
+                  </span>
+                  <div className={`absolute right-6 opacity-30 ${theme === 'light' ? 'text-gray-600' : 'text-white'}`}>
+                    <ChevronRight size={18} />
+                  </div>
+                </div>
+                <div 
+                  className={`absolute top-2 left-2 h-16 w-20 rounded-[2rem] flex items-center justify-center cursor-grab active:cursor-grabbing z-20 group transition-colors duration-300 ${
+                    loading
+                      ? theme === 'light'
+                        ? 'bg-gray-400 text-white'
+                        : 'bg-white/50 text-black'
+                      : selectedRole === 'SINDICO'
+                        ? 'bg-amber-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+                        : selectedRole === 'PORTEIRO'
+                          ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                          : theme === 'light'
+                            ? 'bg-gray-900 text-white shadow-[0_0_20px_rgba(0,0,0,0.2)]'
+                            : 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]'
+                  }`}
+                  style={{ 
+                    transform: `translateX(${sliderPosition}px)`, 
+                    transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)' 
+                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerLeave={handlePointerUp}
+                >
+                  <div className="group-active:scale-110 transition-transform">
+                    {loading ? (
+                      <div className={`w-6 h-6 border-2 rounded-full animate-spin ${
+                        theme === 'light' ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'
+                      }`} />
+                    ) : (
+                      <ChevronRight size={24} strokeWidth={3} />
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {/* Morador: cadastro + esqueci senha; Porteiro/Síndico: esqueci senha */}
               <div className="flex flex-col items-center gap-2 mt-4">

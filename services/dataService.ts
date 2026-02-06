@@ -526,7 +526,23 @@ export const saveOccurrence = async (occurrence: Occurrence): Promise<{ success:
     };
 
     const result = await createData('occurrences', payload);
-    return { success: result.success, id: result.id, error: result.error };
+    if (!result.success) return { success: false, error: result.error };
+
+    // Notificar o morador na interface (igual ao fluxo manual)
+    if (residentId && result.id && typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        await createNotification(
+          residentId,
+          '📋 Nova ocorrência registrada',
+          occurrence.description || occurrence.residentName ? `Ocorrência relacionada a ${occurrence.residentName} (${occurrence.unit})` : 'Uma nova ocorrência foi registrada.',
+          'occurrence',
+          result.id
+        );
+      } catch (err) {
+        console.warn('[saveOccurrence] Erro ao criar notificação para morador:', err);
+      }
+    }
+    return { success: true, id: result.id };
   } catch (err: any) {
     console.error('Erro ao salvar ocorrência:', err);
     return { success: false, error: err.message || 'Erro ao salvar ocorrência' };

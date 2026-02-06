@@ -7,6 +7,7 @@ import ResidentRegister from './components/ResidentRegister';
 import ScreenSaver from './components/ScreenSaver';
 import { UserRole, Package, Resident, VisitorLog, PackageItem, Occurrence, Notice, ChatMessage, QuickViewCategory, Staff, Boleto, Notification } from './types';
 import SentinelaConciergeApp from './sentinela/App';
+import type { OccurrenceItem } from './sentinela/types';
 
 // Components
 import RecentEventsBar from './components/RecentEventsBar';
@@ -98,78 +99,8 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
   const [showResidentRegister, setShowResidentRegister] = useState(false);
-  // Splash de abertura: tela inicial com logo e call-to-action "Deslize para entrar"
-  const [showLogoSplash, setShowLogoSplash] = useState<boolean>(true);
   // Controle de áudio do vídeo (legacy – mantido por compatibilidade, mesmo sem vídeo)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
-
-  // Slider "Deslize para entrar" (padrão refinado):
-  // - splashTrackRef: trilho verde
-  // - sliderPosition: posição horizontal em pixels do knob
-  // - isDragging: se o knob está sendo arrastado
-  // - splashTextOpacity: opacidade do texto DESLIZE PARA ENTRAR
-  const splashTrackRef = useRef<HTMLDivElement | null>(null);
-  const [sliderPosition, setSliderPosition] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [splashTextOpacity, setSplashTextOpacity] = useState(1);
-  // Splash aparece imediatamente (sem delay de pintura)
-  const [splashPaintReady] = useState(true);
-
-  const handleSkipSplash = useCallback(() => {
-    console.log('[App] Pulando tela de abertura');
-    setShowLogoSplash(false);
-  }, []);
-
-  const handleSplashPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      setIsDragging(true);
-    },
-    []
-  );
-
-  const handleSplashPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!isDragging || !splashTrackRef.current) return;
-
-      const rect = splashTrackRef.current.getBoundingClientRect();
-      const knobWidth = 80; // aproximação de w-20
-      const minX = 0;
-      const maxX = rect.width - knobWidth;
-
-      let next = e.clientX - rect.left - knobWidth / 2;
-      next = Math.max(minX, Math.min(maxX, next));
-
-      setSliderPosition(next);
-      setSplashTextOpacity(maxX > 0 ? 1 - next / maxX : 1);
-
-      if (next >= maxX * 0.95) {
-        setIsDragging(false);
-        handleSkipSplash();
-      }
-    },
-    [isDragging, handleSkipSplash]
-  );
-
-  const handleSplashPointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Fallback: tap no track (área verde) → pular splash (mobile/deploy onde o arraste pode falhar)
-  const handleSplashTrackClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!splashTrackRef.current || isDragging) return;
-      const rect = splashTrackRef.current.getBoundingClientRect();
-      const knobWidth = 80;
-      const knobRight = 8 + knobWidth + sliderPosition; // left padding + knob
-      const clickX = e.clientX - rect.left;
-      if (clickX > knobRight + 20) {
-        handleSkipSplash();
-      }
-    },
-    [isDragging, sliderPosition, handleSkipSplash]
-  );
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
@@ -1713,6 +1644,108 @@ const App: React.FC = () => {
     imageUrl: undefined
   });
 
+  /** Resolve morador a partir do texto "envolvidos" (ex: "Apto 102", "Maria Silva"). */
+  const resolveResidentFromParties = useCallback((involvedParties: string | undefined): Resident | null => {
+    if (!involvedParties?.trim() || !allResidents.length) return null;
+    const q = involvedParties.trim().toLowerCase();
+    const byUnit = allResidents.find((r) => r.unit.toLowerCase() === q || r.unit.toLowerCase().includes(q));
+    if (byUnit) return byUnit;
+    const byName = allResidents.find((r) => r.name.toLowerCase().includes(q) || q.includes(r.name.toLowerCase()));
+    return byName || null;
+  }, [allResidents]);
+
+  /** Persiste no backend e notifica o morador quando o assistente de voz (ou chat) regista encomenda, ocorrência ou aviso. */
+  const handleVoiceEventPersist = useCallback(async (item: OccurrenceItem) => {
+    const reporterName = currentAdminUser?.name || currentAdminUser?.username || (role === 'SINDICO' ? 'Síndico' : 'Portaria');
+    const resident = resolveResidentFromParties(item.involvedParties);
+
+    try {
+      if (item.type === 'Encomenda') {
+        const newPkg: Package = {
+          id: `temp-${Date.now()}`,
+          recipient: resident?.name ?? (item.involvedParties || 'A confirmar'),
+          unit: resident?.unit ?? (item.involvedParties || '—'),
+          type: item.title || 'Encomenda',
+          receivedAt: new Date().toISOString(),
+          displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'Pendente',
+          deadlineMinutes: 45,
+          recipientId: resident?.id,
+          receivedByName: reporterName
+        };
+        const result = await savePackage(newPkg);
+        if (result.success) {
+          const { data } = await getPackages();
+          if (data) setAllPackages(data);
+          toast.success('Encomenda registrada por voz. O morador foi notificado.');
+        } else toast.error(result.error || 'Erro ao salvar encomenda.');
+        return;
+      }
+
+      if (item.type === 'Ocorrência' || item.type === 'Serviço') {
+        const occ: Occurrence = {
+          id: `temp-${Date.now()}`,
+          residentName: resident?.name ?? (item.involvedParties || 'Condomínio'),
+          unit: resident?.unit ?? (item.involvedParties || '—'),
+          description: [item.title, item.description].filter(Boolean).join(' — '),
+          status: 'Aberto',
+          date: new Date().toISOString(),
+          reportedBy: reporterName
+        };
+        const result = await saveOccurrence(occ);
+        if (result.success) {
+          const { data } = await getOccurrences();
+          if (data) setAllOccurrences(data);
+          toast.success('Ocorrência registrada por voz. O morador foi notificado.');
+        } else toast.error(result.error || 'Erro ao salvar ocorrência.');
+        return;
+      }
+
+      if (item.type === 'Aviso') {
+        const notice: Notice = {
+          id: '',
+          title: item.title || 'Aviso',
+          content: item.description || '',
+          author: reporterName,
+          authorRole: role,
+          date: new Date().toISOString(),
+          priority: 'normal',
+          pinned: false,
+          read: false
+        };
+        const result = await saveNotice(notice);
+        if (result.success) {
+          getNotices((data) => { if (data) setAllNotices(data); }).then((res) => { if (res.data) setAllNotices(res.data); });
+          toast.success('Aviso registrado por voz e publicado no mural.');
+        } else toast.error(result.error || 'Erro ao salvar aviso.');
+        return;
+      }
+
+      if (item.type === 'Visitante') {
+        const visitor: VisitorLog = {
+          id: `temp-${Date.now()}`,
+          residentName: resident?.name ?? (item.involvedParties || 'A confirmar'),
+          unit: resident?.unit ?? (item.involvedParties || '—'),
+          visitorCount: 1,
+          visitorNames: item.title || item.description || undefined,
+          entryTime: new Date().toISOString(),
+          status: 'active',
+          type: 'Visita'
+        };
+        const result = await saveVisitor(visitor);
+        if (result.success) {
+          const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
+          const { data } = await getVisitors(unitFilter);
+          if (data) setVisitorLogs(data);
+          toast.success('Visitante registrado por voz.');
+        } else toast.error(result.error || 'Erro ao registrar visitante.');
+      }
+    } catch (err: any) {
+      console.error('[handleVoiceEventPersist]', err);
+      toast.error('Erro ao persistir registro de voz: ' + (err?.message || 'Erro desconhecido'));
+    }
+  }, [currentAdminUser, role, currentResident, resolveResidentFromParties, toast]);
+
   const [isOccurrenceModalOpen, setIsOccurrenceModalOpen] = useState(false);
   const [occurrenceDescription, setOccurrenceDescription] = useState('');
 
@@ -2683,6 +2716,7 @@ const App: React.FC = () => {
           <SentinelaConciergeApp
             allowManager={role === 'SINDICO'}
             onExit={() => setActiveTab('dashboard')}
+            onPersistVoiceEvent={handleVoiceEventPersist}
           />
         );
       case 'staff':
@@ -2723,99 +2757,12 @@ const App: React.FC = () => {
   let content: React.ReactNode;
   if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
-  } else if (!isAuthenticated && showLogoSplash) {
-    // Tela de abertura: todos os elementos (logo, texto, botão) aparecem de uma vez via splashPaintReady
-    content = (
-      <div
-        className={`w-screen h-screen min-w-full min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-300 ${
-          theme === 'dark' ? 'bg-black' : 'bg-zinc-100'
-        }`}
-      >
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-200 ease-out"
-          style={{ opacity: splashPaintReady ? 1 : 0 }}
-          aria-hidden={!splashPaintReady}
-        >
-          {/* Toggle tema claro/escuro */}
-          <button
-            type="button"
-            title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
-            className={`absolute top-6 right-6 p-3 rounded-2xl border transition-all hover:scale-110 active:scale-95 flex items-center justify-center z-20 bg-white/5 hover:bg-white/10 ${
-              theme === 'dark' ? 'text-white border-white/10' : 'text-black border-black/20'
-            }`}
-            onClick={toggleTheme}
-          >
-            <Sun className="w-5 h-5" />
-          </button>
-
-          {/* Logo central (preload em index.html reduz delay) */}
-          <div className="flex flex-col items-center gap-6 px-6">
-            <img
-              src="/1024.png"
-              alt="Qualivida Residence"
-              className="w-56 max-w-[70vw] h-auto min-h-[8rem] object-contain drop-shadow-2xl"
-              fetchPriority="high"
-            />
-            <p
-              className={`text-xs md:text-sm font-medium tracking-[0.25em] uppercase text-center ${
-                theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
-              }`}
-            >
-              Bem-vindo ao Gestão Qualivida Clube Residence
-            </p>
-          </div>
-
-          {/* --- SLIDER INTERACTION (REFINED) --- */}
-          <div className="mt-10 w-full max-w-md px-6 md:px-8">
-            <div
-              ref={splashTrackRef}
-              role="button"
-              tabIndex={0}
-              onClick={handleSplashTrackClick}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSkipSplash(); } }}
-              aria-label="Deslize para entrar ou toque na área verde"
-              className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10 cursor-pointer"
-            >
-              {/* Background Text */}
-              <div
-                className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
-                style={{ opacity: splashTextOpacity, paddingLeft: '60px' }}
-              >
-                <span className="text-[#F5F1E8] font-light text-sm tracking-[0.2em] opacity-80 whitespace-nowrap animate-pulse">
-                  DESLIZE PARA ENTRAR
-                </span>
-                <div className="absolute right-6 opacity-60">
-                  <span className="text-[#F5F1E8] text-lg font-bold">&gt;</span>
-                </div>
-              </div>
-
-              {/* Draggable Knob - Jewel/Glassy look */}
-              <div
-                className="absolute top-2 left-2 h-16 w-20 bg-[#F5F1E8] rounded-[2.5rem] flex items-center justify-center shadow-[0_0_15px_rgba(245,241,232,0.4)] cursor-grab active:cursor-grabbing z-20 group transition-all"
-                style={{
-                  transform: `translateX(${sliderPosition}px)`,
-                  transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                }}
-                onPointerDown={handleSplashPointerDown}
-                onPointerMove={handleSplashPointerMove}
-                onPointerUp={handleSplashPointerUp}
-                onPointerLeave={handleSplashPointerUp}
-              >
-                <div className="text-[#1A4D2E] group-active:scale-110 transition-transform drop-shadow-sm">
-                  <Lock className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   } else if (!isAuthenticated && showResidentRegister) {
     content = (
       <ResidentRegister
         onRegister={handleResidentRegister}
         onLogin={handleResidentLogin}
-        onBack={() => { setShowResidentRegister(false); setShowLogoSplash(false); }}
+        onBack={() => setShowResidentRegister(false)}
         theme={theme}
         toggleTheme={toggleTheme}
         existingResidents={allResidents}
