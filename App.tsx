@@ -156,6 +156,21 @@ const App: React.FC = () => {
     setIsDragging(false);
   }, []);
 
+  // Fallback: tap no track (área verde) → pular splash (mobile/deploy onde o arraste pode falhar)
+  const handleSplashTrackClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!splashTrackRef.current || isDragging) return;
+      const rect = splashTrackRef.current.getBoundingClientRect();
+      const knobWidth = 80;
+      const knobRight = 8 + knobWidth + sliderPosition; // left padding + knob
+      const clickX = e.clientX - rect.left;
+      if (clickX > knobRight + 20) {
+        handleSkipSplash();
+      }
+    },
+    [isDragging, sliderPosition, handleSkipSplash]
+  );
+
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
     if (!isAuthenticated) {
@@ -2754,7 +2769,12 @@ const App: React.FC = () => {
           <div className="mt-10 w-full max-w-md px-6 md:px-8">
             <div
               ref={splashTrackRef}
-              className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10"
+              role="button"
+              tabIndex={0}
+              onClick={handleSplashTrackClick}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSkipSplash(); } }}
+              aria-label="Deslize para entrar ou toque na área verde"
+              className="relative bg-[#1A4D2E]/90 backdrop-blur-sm rounded-[3rem] h-20 shadow-2xl shadow-[#1A4D2E]/20 max-w-sm mx-auto overflow-hidden touch-none border border-white/10 cursor-pointer"
             >
               {/* Background Text */}
               <div
