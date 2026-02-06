@@ -140,7 +140,8 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
         <button 
           onClick={() => {
-            if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+            // Se o menu foi aberto no mobile (overlay), fechar. Senão, colapsar no desktop.
+            if (isMobileMenuOpen) {
               setIsMobileMenuOpen(false);
             } else {
               setIsDesktopCollapsed(true);
