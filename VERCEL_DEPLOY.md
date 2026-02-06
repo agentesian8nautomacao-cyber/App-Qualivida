@@ -166,6 +166,24 @@ Se você já configurou as variáveis mas ainda não funciona:
 - Use a chave **anon public**, não a service_role key
 - A chave anon deve começar com `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9`
 
+## 🌐 URL de produção vs URLs de deploy
+
+**Use sempre a URL de produção:** [https://app-qualivida.vercel.app](https://app-qualivida.vercel.app)
+
+Cada deploy no Vercel gera uma URL única (ex.: `gestaoqualividaresidence-xxxx-paulos-projects-26d60594.vercel.app`). Essas URLs são **imutáveis**: continuam servindo exatamente aquele build, mesmo depois de novos deploys.
+
+- **app-qualivida.vercel.app** → sempre o deploy de produção (atualizado a cada deploy).
+- **URLs com hash (gestaoqualividaresidence-...)** → um deploy específico; podem ficar “antigas” se você já fez novos deploys.
+
+### Se uma URL antiga ainda mostra versão desatualizada
+
+1. No [Vercel Dashboard](https://vercel.com) → seu projeto → **Deployments**.
+2. Localize o deploy correspondente à URL antiga (pode usar o ID na URL ou a data).
+3. Clique nos **três pontos (...)** desse deploy → **Delete**.
+4. A partir daí essa URL deixa de servir aquele build (geralmente passa a retornar 404 ou redirecionar).
+
+Assim você evita que versões antigas continuem acessíveis por URLs de deploy. Para uso normal, use apenas **https://app-qualivida.vercel.app**.
+
 ## 📚 Recursos Adicionais
 
 - [Documentação do Vercel sobre Environment Variables](https://vercel.com/docs/concepts/projects/environment-variables)
