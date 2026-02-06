@@ -114,8 +114,8 @@ const App: React.FC = () => {
   const [sliderPosition, setSliderPosition] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [splashTextOpacity, setSplashTextOpacity] = useState(1);
-  /** Exibir a splash só após o primeiro frame para que todos os elementos apareçam de uma vez (evita pintura progressiva). */
-  const [splashPaintReady, setSplashPaintReady] = useState(false);
+  // Splash aparece imediatamente (sem delay de pintura)
+  const [splashPaintReady] = useState(true);
 
   const handleSkipSplash = useCallback(() => {
     console.log('[App] Pulando tela de abertura');
@@ -157,18 +157,6 @@ const App: React.FC = () => {
   const handleSplashPointerUp = useCallback(() => {
     setIsDragging(false);
   }, []);
-
-  // Exibir a splash só após o primeiro frame para que logo, texto e botão apareçam juntos (evita elemento por elemento)
-  useEffect(() => {
-    if (!showLogoSplash || isAuthenticated) {
-      setSplashPaintReady(false);
-      return;
-    }
-    const id = requestAnimationFrame(() => {
-      setSplashPaintReady(true);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [showLogoSplash, isAuthenticated]);
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
