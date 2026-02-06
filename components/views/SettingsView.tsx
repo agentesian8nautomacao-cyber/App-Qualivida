@@ -1,9 +1,8 @@
 import React from 'react';
-import { Settings as SettingsIcon, Building2, MessageSquare, Keyboard, Brain, Save } from 'lucide-react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import CondominiumNameSection from '../settings/CondominiumNameSection';
 import CondominiumWhatsAppSection from '../settings/CondominiumWhatsAppSection';
 import WhatsAppTemplatesSection from '../settings/WhatsAppTemplatesSection';
-import AIPersonalitySection from '../settings/AIPersonalitySection';
 import ThemeSelectionSection from '../settings/ThemeSelectionSection';
 
 const SettingsView: React.FC = () => {
@@ -26,7 +25,6 @@ const SettingsView: React.FC = () => {
         <CondominiumWhatsAppSection />
         <ThemeSelectionSection />
         <WhatsAppTemplatesSection />
-        <AIPersonalitySection />
       </div>
     </div>
   );

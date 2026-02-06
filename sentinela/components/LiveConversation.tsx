@@ -1,8 +1,9 @@
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality, Blob, Type, FunctionDeclaration } from "@google/genai";
 import { X, Mic, MicOff, PhoneOff, CheckCircle2, Lock, AudioLines, Building2, Bot } from 'lucide-react';
 import { UserProfile, OccurrenceItem, UserRole } from '../types';
+import { getGeminiApiKey } from '../../utils/geminiApiKey';
 
 interface LiveConversationProps {
   onClose: () => void;
@@ -29,15 +30,6 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
   const streamRef = useRef<MediaStream | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
-
-  // Controle de sessão Live (WebSocket interno do Gemini Live).
-  // Estado explícito evita send() em CLOSING/CLOSED (causa raiz do "WebSocket is already in CLOSING or CLOSED state").
-  type SessionState = "idle" | "connecting" | "open" | "closing" | "closed";
-  const sessionPromiseRef = useRef<ReturnType<GoogleGenAI["live"]["connect"]> | null>(null);
-  const isSessionOpenRef = useRef(false);
-  const sessionStateRef = useRef<SessionState>("idle");
-  const isMicOnRef = useRef(isMicOn);
-  isMicOnRef.current = isMicOn;
 
   // Timer State for 15 min limit
   const [secondsActive, setSecondsActive] = useState(0);
@@ -159,57 +151,21 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
     };
   }, [isConnected, isLimitReached, isMicOn]);
 
-  const cleanup = useCallback(() => {
-    sessionStateRef.current = "closing";
-    isSessionOpenRef.current = false;
-    if (sessionPromiseRef.current) {
-      sessionPromiseRef.current
-        .then((session: any) => {
-          try {
-            session.close?.();
-          } catch {
-            // ignore
-          }
-        })
-        .catch(() => {
-          // ignore
-        });
-      sessionPromiseRef.current = null;
-    }
-    sessionStateRef.current = "closed";
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (inputAudioContextRef.current) {
-      inputAudioContextRef.current.close();
-      inputAudioContextRef.current = null;
-    }
-    if (outputAudioContextRef.current) {
-      outputAudioContextRef.current.close();
-      outputAudioContextRef.current = null;
-    }
-    if (inputAnalyserRef.current) {
-      inputAnalyserRef.current.disconnect();
-      inputAnalyserRef.current = null;
-    }
-    if (outputAnalyserRef.current) {
-      outputAnalyserRef.current.disconnect();
-      outputAnalyserRef.current = null;
-    }
-    nextStartTimeRef.current = 0;
-    setIsConnected(false);
-    setStatus("Desconectado");
-  }, []);
-
   useEffect(() => {
     if (isLimitReached) return;
 
     const initSession = async () => {
-      sessionStateRef.current = "connecting";
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = getGeminiApiKey();
+        const apiKeyTrim = (apiKey || '').trim();
+        if (!apiKeyTrim) {
+          console.warn('[Sentinela LiveConversation] Chave Gemini ausente. Configure VITE_GEMINI_API_KEY ou VITE_API_KEY.');
+          setStatus("Chave da API não configurada");
+          setIsConnected(false);
+          return;
+        }
+
+        const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
 
         const roleInstruction = isManager
             ? userProfile?.managerConfig.instructions 
@@ -226,12 +182,10 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
         `;
 
         // Context Construction
-        const AnyAudioContext =
-          (window as any).AudioContext || (window as any).webkitAudioContext;
-        inputAudioContextRef.current = new AnyAudioContext({ sampleRate: 16000 });
-        outputAudioContextRef.current = new AnyAudioContext({ sampleRate: 24000 });
+        inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-        // Input Setup (Mic -> Analyser -> AudioWorkletNode)
+        // Input Setup (Mic -> Analyser -> ScriptProcessor)
         streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
         inputAnalyserRef.current.fftSize = 256;
@@ -239,27 +193,10 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
         
         const source = inputAudioContextRef.current.createMediaStreamSource(streamRef.current);
         source.connect(inputAnalyserRef.current);
-
-        const inputCtx = inputAudioContextRef.current;
-        try {
-          if (inputCtx.state === "suspended") await inputCtx.resume();
-          const workletUrl = new URL("/live-voice-processor.js", window.location.href).href;
-          await inputCtx.audioWorklet.addModule(workletUrl);
-        } catch (err) {
-          console.error(
-            "[LiveVoice/Sentinela] Falha ao carregar AudioWorklet; a captura de áudio pode não funcionar.",
-            err
-          );
-          setStatus("Erro ao iniciar captura de áudio");
-          return;
-        }
-
-        const worklet = new AudioWorkletNode(
-          inputAudioContextRef.current,
-          "live-voice-processor"
-        );
-        inputAnalyserRef.current.connect(worklet);
-        worklet.connect(inputAudioContextRef.current.destination);
+        
+        const scriptProcessor = inputAudioContextRef.current.createScriptProcessor(4096, 1, 1);
+        inputAnalyserRef.current.connect(scriptProcessor);
+        scriptProcessor.connect(inputAudioContextRef.current.destination);
 
         // Output Setup (Analyser -> Destination)
         outputAnalyserRef.current = outputAudioContextRef.current.createAnalyser();
@@ -271,37 +208,16 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
           model: 'gemini-2.5-flash-native-audio-preview-12-2025',
           callbacks: {
             onopen: () => {
-              if (sessionStateRef.current !== "connecting") return;
-              sessionStateRef.current = "open";
               setStatus("Conectado");
               setIsConnected(true);
-              isSessionOpenRef.current = true;
-
-              worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-                const inputData = event.data;
-                if (!inputData || !isMicOnRef.current || sessionStateRef.current !== "open") return;
-
+              
+              scriptProcessor.onaudioprocess = (e) => {
+                if (!isMicOn) return;
+                const inputData = e.inputBuffer.getChannelData(0);
                 const pcmBlob = createBlob(inputData);
-                const currentPromise = sessionPromiseRef.current;
-                if (!currentPromise) return;
-                currentPromise
-                  .then((session) => {
-                    if (sessionStateRef.current !== "open") return;
-                    try {
-                      session.sendRealtimeInput({ media: pcmBlob });
-                    } catch (err) {
-                      console.warn(
-                        "[LiveVoice/Sentinela] sendRealtimeInput falhou (provável WebSocket fechado). Bloqueando envios futuros.",
-                        err
-                      );
-                      sessionStateRef.current = "closed";
-                      isSessionOpenRef.current = false;
-                    }
-                  })
-                  .catch(() => {
-                    sessionStateRef.current = "closed";
-                    isSessionOpenRef.current = false;
-                  });
+                sessionPromise.then(session => {
+                  session.sendRealtimeInput({ media: pcmBlob });
+                });
               };
             },
             onmessage: async (msg: LiveServerMessage) => {
@@ -332,28 +248,10 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
                         });
                     }
                 }
-                if (responses.length > 0 && sessionStateRef.current === "open") {
-                  const currentPromise = sessionPromiseRef.current;
-                  if (currentPromise) {
-                    currentPromise
-                      .then((session) => {
-                        if (sessionStateRef.current !== "open") return;
-                        try {
-                          session.sendToolResponse({ functionResponses: responses });
-                        } catch (err) {
-                          console.warn(
-                            "[LiveVoice/Sentinela] sendToolResponse falhou (provável WebSocket fechado).",
-                            err
-                          );
-                          sessionStateRef.current = "closed";
-                          isSessionOpenRef.current = false;
-                        }
-                      })
-                      .catch(() => {
-                        sessionStateRef.current = "closed";
-                        isSessionOpenRef.current = false;
-                      });
-                  }
+                if (responses.length > 0) {
+                    sessionPromise.then(session => {
+                        session.sendToolResponse({ functionResponses: responses });
+                    });
                 }
               }
 
@@ -378,16 +276,12 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
               }
             },
             onclose: () => {
-              sessionStateRef.current = "closed";
               setStatus("Desconectado");
               setIsConnected(false);
-              isSessionOpenRef.current = false;
             },
             onerror: (err) => {
               console.error(err);
-              sessionStateRef.current = "closed";
               setStatus("Erro na conexão");
-              isSessionOpenRef.current = false;
             }
           },
           config: {
@@ -400,8 +294,6 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
           }
         });
 
-        sessionPromiseRef.current = sessionPromise;
-
       } catch (err) {
         console.error("Failed to connect", err);
         setStatus("Erro ao acessar microfone ou API");
@@ -411,9 +303,11 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
     initSession();
 
     return () => {
-      cleanup();
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+      if (inputAudioContextRef.current) inputAudioContextRef.current.close();
+      if (outputAudioContextRef.current) outputAudioContextRef.current.close();
     };
-  }, [userProfile, isLimitReached, cleanup]);
+  }, [userProfile, isLimitReached]);
 
   const toggleMic = () => {
     setIsMicOn(!isMicOn);

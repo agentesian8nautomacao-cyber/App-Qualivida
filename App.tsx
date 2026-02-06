@@ -6,6 +6,7 @@ import Login from './components/Login';
 import ResidentRegister from './components/ResidentRegister';
 import ScreenSaver from './components/ScreenSaver';
 import { UserRole, Package, Resident, VisitorLog, PackageItem, Occurrence, Notice, ChatMessage, QuickViewCategory, Staff, Boleto, Notification } from './types';
+import SentinelaConciergeApp from './sentinela/App';
 
 // Components
 import RecentEventsBar from './components/RecentEventsBar';
@@ -20,14 +21,11 @@ import VisitorsView from './components/views/VisitorsView';
 import PackagesView from './components/views/PackagesView';
 import ResidentsView from './components/views/ResidentsView';
 import OccurrencesView from './components/views/OccurrencesView';
-import AiView from './components/views/AiView';
 import StaffView from './components/views/StaffView';
-import AiReportsView from './components/views/AiReportsView';
 import SettingsView from './components/views/SettingsView';
 import BoletosView from './components/views/BoletosView';
 import MoradorDashboardView from './components/views/MoradorDashboardView';
 import NotificationsView from './components/views/NotificationsView';
-import LiveConversation from './components/views/LiveConversation';
 
 // Contexts
 import { useAppConfig } from './contexts/AppConfigContext';
@@ -640,7 +638,6 @@ const App: React.FC = () => {
   const [noticeFilter, setNoticeFilter] = useState<'all' | 'urgent' | 'unread'>('all');
   const [activeNoticeTab, setActiveNoticeTab] = useState<'wall' | 'chat'>('wall');
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isLiveOpen, setIsLiveOpen] = useState(false);
 
   // === LINHA DIRETA (CHAT GLOBAL) ===
   // Registra o início da sessão de chat para que o histórico
@@ -2664,48 +2661,9 @@ const App: React.FC = () => {
             handleDeleteOccurrence={handleDeleteOccurrence}
           />
         );
-      case 'ai': 
-        // ASSISTENTE IA: Acesso exclusivo para PORTEIRO e SINDICO - Moradores NÃO têm acesso
-        if (role === 'MORADOR') {
-          return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-              <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-              <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                Esta página é de acesso exclusivo do Porteiro e Síndico.
-              </p>
-            </div>
-          );
-        }
-        return (
-          <AiView
-            allPackages={allPackages}
-            visitorLogs={visitorLogs}
-            allOccurrences={allOccurrences}
-            allResidents={allResidents}
-            dayReservations={dayReservations}
-            allNotices={allNotices}
-            chatMessages={chatMessages}
-            role={role}
-            adminName={currentAdminUser?.name}
-            onAddOccurrenceFromSentinela={async (item) => {
-              const newOcc: Occurrence = {
-                id: item.id,
-                residentName: item.involvedParties ?? 'Sistema',
-                unit: item.involvedParties ?? '-',
-                description: `${item.title}: ${item.description}`,
-                status: 'Aberto',
-                date: new Date().toISOString().split('T')[0],
-                reportedBy: 'Sentinela',
-              };
-              const result = await saveOccurrence(newOcc);
-              if (result?.data) {
-                const { data } = await getOccurrences();
-                if (data) setAllOccurrences(data);
-              }
-            }}
-          />
-        );
+      case 'sentinela':
+        // Módulo Sentinela (concierge de portaria/síndico) – experiência standalone
+        return <SentinelaConciergeApp />;
       case 'staff':
         if (role === 'MORADOR' || role === 'PORTEIRO') {
           return (
@@ -2736,26 +2694,6 @@ const App: React.FC = () => {
               onDeleteStaff={handleDeleteStaff}
               onImportClick={() => setIsImportStaffModalOpen(true)}
            />
-        );
-      case 'reports':
-        if (role === 'MORADOR' || role === 'PORTEIRO') {
-          return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-              <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-              <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                Esta página é de acesso exclusivo do Síndico.
-              </p>
-            </div>
-          );
-        }
-        return (
-          <AiReportsView 
-            allPackages={allPackages} 
-            visitorLogs={visitorLogs} 
-            allOccurrences={allOccurrences} 
-            dayReservations={dayReservations} 
-          />
         );
       default: return <div className="p-10 text-center opacity-40 font-black uppercase">{activeTab}</div>;
     }
@@ -3123,9 +3061,6 @@ const App: React.FC = () => {
           </div>
         )}
         {content}
-        {isLiveOpen && (
-          <LiveConversation onClose={() => setIsLiveOpen(false)} />
-        )}
       </>
     </ConnectivityProvider>
   );

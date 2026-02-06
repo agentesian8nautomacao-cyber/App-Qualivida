@@ -10,17 +10,14 @@ import {
   BarChart3, 
   UserCircle,
   LogOut,
-  BrainCircuit,
   Settings,
   ShieldCheck,
-  MessageSquare,
   Menu,
   Sun,
   Moon,
   X,
   ChevronLeft,
   ChevronRight,
-  FileText,
   Receipt
 } from 'lucide-react';
 import { UserRole } from '../types';
@@ -120,10 +117,7 @@ const Layout: React.FC<LayoutProps> = ({
     
     // Apenas Síndico
     { id: 'staff', label: 'Funcionários', icon: ClipboardList, roles: ['SINDICO'] },
-    { id: 'reports', label: 'Relatórios IA', icon: FileText, roles: ['SINDICO'] },
-    
-    // Porteiro e Síndico - ASSISTENTE IA EXCLUSIVO (Moradores NÃO têm acesso)
-    { id: 'ai', label: 'Inteligência IA', icon: BrainCircuit, roles: ['PORTEIRO', 'SINDICO'] },
+    { id: 'sentinela', label: 'Sentinela AI', icon: ShieldCheck, roles: ['PORTEIRO', 'SINDICO'] },
     { id: 'settings', label: 'Configurações', icon: Settings, roles: ['PORTEIRO', 'SINDICO'] },
   ];
 

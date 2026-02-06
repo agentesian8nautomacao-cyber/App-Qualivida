@@ -2,6 +2,7 @@
 
 import { GoogleGenAI, Type, FunctionDeclaration, Schema } from "@google/genai";
 import { UserProfile, OccurrenceItem, UserRole, MealItem, Recipe, LogItem, ChatMessage } from "../types";
+import { getGeminiApiKey } from "../../utils/geminiApiKey";
 
 // Helper to retry functions
 const callWithRetry = async <T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> => {
@@ -47,7 +48,13 @@ export const chatWithConcierge = async (
   },
   onLogEvent?: (data: OccurrenceItem) => void
 ) => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela chatWithConcierge] Chave Gemini ausente. Configure VITE_GEMINI_API_KEY ou VITE_API_KEY.');
+      return "Central indisponível no momento. Verifique a configuração da chave de API.";
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     const isManager = context?.profile?.role === UserRole.Manager;
     
     // Select the correct instruction set based on role from new config structure
@@ -210,7 +217,13 @@ export const chatWithConcierge = async (
 // --- NUTRITION APP FUNCTIONS ---
 
 export const searchFoodAI = async (query: string): Promise<MealItem[]> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela searchFoodAI] Chave Gemini ausente.');
+      return [];
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: `Search food items matching query: "${query}". Return list of 3-5 items with calories and macros.`,
@@ -241,7 +254,13 @@ export const searchFoodAI = async (query: string): Promise<MealItem[]> => {
 };
 
 export const generateImageBackground = async (prompt: string): Promise<string | null> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela generateImageBackground] Chave Gemini ausente.');
+      return null;
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-3-pro-image-preview',
@@ -269,7 +288,13 @@ export const generateImageBackground = async (prompt: string): Promise<string | 
 };
 
 export const analyzeFoodImage = async (base64Data: string): Promise<MealItem | null> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela analyzeFoodImage] Chave Gemini ausente.');
+      return null;
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: {
@@ -302,7 +327,13 @@ export const analyzeFoodImage = async (base64Data: string): Promise<MealItem | n
 };
 
 export const generateRecipeAI = async (ingredients: string[], pantryItems: string[] = []): Promise<Recipe | null> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela generateRecipeAI] Chave Gemini ausente.');
+      return null;
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     const prompt = `Create a healthy recipe using these ingredients: ${ingredients.join(', ')}. 
     Available pantry items to use if needed: ${pantryItems.join(', ')}.
     Return a structured recipe.`;
@@ -335,7 +366,13 @@ export const generateRecipeAI = async (ingredients: string[], pantryItems: strin
 };
 
 export const generateArticleContentAI = async (title: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela generateArticleContentAI] Chave Gemini ausente.');
+      return "";
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: `Write a short, engaging educational article (approx 400 words) with the title: "${title}". Use markdown formatting.`
@@ -350,7 +387,13 @@ export const chatWithPersonalTrainer = async (
   dailyLog?: LogItem[],
   attachment?: {data: string, mimeType: string}
 ): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getGeminiApiKey();
+    const apiKeyTrim = (apiKey || '').trim();
+    if (!apiKeyTrim) {
+      console.warn('[Sentinela chatWithPersonalTrainer] Chave Gemini ausente.');
+      return "Central de treino indisponível no momento. Verifique a configuração da chave de API.";
+    }
+    const ai = new GoogleGenAI({ apiKey: apiKeyTrim });
     
     let systemInstruction = `
       You are Coach Bruno, an elite personal nutritionist and trainer AI.
