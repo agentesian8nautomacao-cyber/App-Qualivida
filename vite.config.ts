@@ -75,12 +75,14 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3008,
-      host: '0.0.0.0',
-      strictPort: true,
+      // host localhost: evita ERR_CONNECTION_REFUSED no navegador (Cursor/Chrome)
+      // Se no Cursor ainda falhar, rode "npm run dev" no PowerShell/CMD externo (permite rede)
+      host: 'localhost',
+      // Se 3008 estiver em uso, Vite tenta a próxima porta em vez de falhar
+      strictPort: false,
       open: false,
-      // HMR na mesma porta do servidor (3008) para evitar WebSocket em porta errada
+      // HMR na mesma porta do servidor (omitir port para usar a porta real quando strictPort: false)
       hmr: {
-        port: 3008,
         host: 'localhost',
         protocol: 'ws',
       },
