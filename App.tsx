@@ -2664,7 +2664,12 @@ const App: React.FC = () => {
       case 'sentinela':
         // Módulo Sentinela (concierge de portaria/síndico)
         // Porteiro acessa apenas "Controle de Acesso"; gestão administrativa (Síndico) é restrita.
-        return <SentinelaConciergeApp allowManager={role === 'SINDICO'} />;
+        return (
+          <SentinelaConciergeApp
+            allowManager={role === 'SINDICO'}
+            onExit={() => setActiveTab('dashboard')}
+          />
+        );
       case 'staff':
         if (role === 'MORADOR' || role === 'PORTEIRO') {
           return (

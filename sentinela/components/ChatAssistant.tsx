@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Send, Loader2, AudioLines, Package, Users, AlertTriangle, FileText, Gavel, Scale, Bot, Plus, CheckSquare, RefreshCcw, Settings2, UserCircle2 } from 'lucide-react';
+import { Send, Loader2, AudioLines, Package, Users, AlertTriangle, FileText, Gavel, Scale, Bot, Plus, CheckSquare, RefreshCcw, Settings2, UserCircle2, X } from 'lucide-react';
 import { ChatMessage, UserProfile, OccurrenceItem, UserRole, Task } from '../types';
 import { chatWithConcierge } from '../services/geminiService';
 import TaskCreator from './TaskCreator';
@@ -10,6 +10,8 @@ interface ChatAssistantProps {
   onClose?: () => void;
   onLiveCall?: () => void;
   onSettings?: () => void;
+  /** Fecha completamente o módulo Sentinela (volta para o dashboard principal). */
+  onExitApp?: () => void;
   userProfile?: UserProfile | null;
   occurrences?: OccurrenceItem[];
   onAddOccurrence?: (item: OccurrenceItem) => void;
@@ -263,7 +265,7 @@ const MessageBubble: React.FC<{ message: ChatMessage }> = ({ message }) => {
   );
 };
 
-const ChatAssistant: React.FC<ChatAssistantProps> = ({ onClose, onLiveCall, onSettings, userProfile, occurrences, onAddOccurrence, isFullScreen, externalMessages }) => {
+const ChatAssistant: React.FC<ChatAssistantProps> = ({ onClose, onLiveCall, onSettings, onExitApp, userProfile, occurrences, onAddOccurrence, isFullScreen, externalMessages }) => {
   const [input, setInput] = useState('');
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [isTaskCreatorOpen, setIsTaskCreatorOpen] = useState(false);
@@ -388,7 +390,11 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ onClose, onLiveCall, onSe
   };
 
   return (
-    <div className={`fixed inset-0 bg-[#09090b] z-50 flex flex-col ${isFullScreen ? '' : 'animate-in slide-in-from-bottom duration-300'}`}>
+    <div
+      className={`fixed inset-0 bg-[#09090b] z-50 flex flex-col ${
+        isFullScreen ? '' : 'animate-in slide-in-from-bottom duration-300'
+      } lg:pl-24`}
+    >
       
       <TaskCreator 
          isOpen={isTaskCreatorOpen}
@@ -413,21 +419,31 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ onClose, onLiveCall, onSe
           </div>
         </div>
         
-        <div className="flex gap-4 items-center">
-            <button 
-                onClick={onLiveCall}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 text-white hover:bg-white hover:text-black transition-all border border-white/10"
-                title="Rádio / Voz"
-            >
-                <AudioLines size={18} />
-            </button>
-            
-            <button onClick={handleReset} className="text-zinc-500 hover:text-white transition-colors">
-                <RefreshCcw size={18} />
-            </button>
-            <button onClick={onSettings} className="text-zinc-500 hover:text-white transition-colors">
-                <Settings2 size={18} />
-            </button>
+        <div className="flex gap-3 items-center">
+          <button 
+              onClick={onLiveCall}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 text-white hover:bg-white hover:text-black transition-all border border-white/10"
+              title="Rádio / Voz"
+          >
+              <AudioLines size={18} />
+          </button>
+          
+          <button onClick={handleReset} className="text-zinc-500 hover:text-white transition-colors">
+              <RefreshCcw size={18} />
+          </button>
+          <button onClick={onSettings} className="text-zinc-500 hover:text-white transition-colors">
+              <Settings2 size={18} />
+          </button>
+          <button
+            onClick={() => {
+              if (onExitApp) onExitApp();
+              else if (onClose) onClose();
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-all border border-white/10"
+            title="Fechar Sentinela"
+          >
+            <X size={18} />
+          </button>
         </div>
       </div>
 

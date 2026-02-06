@@ -317,7 +317,7 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
 
   if (isLimitReached) {
       return (
-        <div className="fixed inset-0 bg-[#09090b] z-[60] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500 font-sans text-white">
+        <div className="fixed inset-0 bg-[#09090b] z-[60] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500 font-sans text-white lg:pl-24">
             <Lock size={64} className="text-white mb-6 opacity-80" />
             <h2 className="text-3xl font-serif mb-4">Sessão Finalizada</h2>
             <button onClick={onClose} className="bg-white text-black px-8 py-4 rounded-full font-bold text-lg hover:scale-105 transition-transform">
@@ -339,7 +339,7 @@ const LiveConversation: React.FC<LiveConversationProps> = ({ onClose, userProfil
   // We use CSS keyframes for ripples, but scale them with volume.
   
   return (
-    <div className="fixed inset-0 bg-[#000000] z-50 flex flex-col animate-in fade-in duration-700 font-sans overflow-hidden">
+    <div className="fixed inset-0 bg-[#000000] z-50 flex flex-col animate-in fade-in duration-700 font-sans overflow-hidden lg:pl-24">
        
        <style>{`
           @keyframes ripple {

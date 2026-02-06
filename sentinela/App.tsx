@@ -34,9 +34,11 @@ interface SentinelaAppProps {
    * o fluxo de "Gestão Administrativa" (Síndico) fica bloqueado.
    */
   allowManager?: boolean;
+  /** Chamado para fechar o módulo Sentinela e voltar ao dashboard principal. */
+  onExit?: () => void;
 }
 
-const App: React.FC<SentinelaAppProps> = ({ allowManager = true }) => {
+const App: React.FC<SentinelaAppProps> = ({ allowManager = true, onExit }) => {
   const [view, setView] = useState<'landing' | 'chat' | 'live' | 'settings'>('landing');
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [occurrences, setOccurrences] = useState<OccurrenceItem[]>([]);
@@ -69,6 +71,7 @@ const App: React.FC<SentinelaAppProps> = ({ allowManager = true }) => {
         {view === 'chat' && (
             <ChatAssistant 
                 onClose={() => setView('landing')}
+                onExitApp={onExit}
                 onLiveCall={() => setView('live')}
                 onSettings={() => setView('settings')}
                 userProfile={userProfile}
