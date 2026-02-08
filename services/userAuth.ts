@@ -204,11 +204,12 @@ export const loginUser = async (
   }
 
   try {
-    // If input is not an email (username), try to resolve it to an email in users/residents
+    // If input is not an email (username), try to resolve it to an email in users/residents/staff
     let emailToUse = normalizedEmail;
     if (!normalizedEmail.includes('@')) {
       try {
         const usernameQ = normalizedEmail;
+        // Try users table
         const { data: userRow } = await supabase
           .from('users')
           .select('email')
@@ -218,17 +219,47 @@ export const loginUser = async (
           emailToUse = String(userRow.email).trim().toLowerCase();
         } else {
           // try residents table (some apps use unit/name login)
-          const { data: residentRow } = await supabase
-            .from('residents')
-            .select('email')
-            .eq('username', usernameQ)
-            .maybeSingle();
-          if (residentRow?.email) emailToUse = String(residentRow.email).trim().toLowerCase();
+          try {
+            const { data: residentRow } = await supabase
+              .from('residents')
+              .select('email')
+              .eq('username', usernameQ)
+              .maybeSingle();
+            if (residentRow?.email) emailToUse = String(residentRow.email).trim().toLowerCase();
+          } catch {
+            // ignore resident lookup errors
+          }
+
+          // try staff table (porteiro/admin/dev podem estar aqui)
+          if (!emailToUse.includes('@')) {
+            try {
+              const { data: staffRow } = await supabase
+                .from('staff')
+                .select('email')
+                .eq('username', usernameQ)
+                .maybeSingle();
+              if (staffRow?.email) emailToUse = String(staffRow.email).trim().toLowerCase();
+            } catch {
+              // ignore staff lookup errors
+            }
+          }
         }
       } catch {
-        // ignore lookup errors and continue using the raw input as email
+        // ignore lookup errors and continue using the raw input as email (validated below)
       }
     }
+
+    // Normalize and validate email before sending to Supabase Auth.
+    const simpleEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!simpleEmailRegex.test(emailToUse)) {
+      // Do not call Supabase Auth with an invalid email format (this causes 400).
+      return {
+        user: null,
+        error: 'Informe o e-mail cadastrado para efetuar login. Se você usa um usuário (ex.: porteiro), verifique se há um e-mail cadastrado no perfil.'
+      };
+    }
+
+    // Debug logs removed in production.
 
     // Autenticar via Supabase Auth usando email resolvido
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -237,8 +268,9 @@ export const loginUser = async (
     });
 
     if (authError || !authData?.user?.id) {
-      // Falha de autenticação
-      // Se for usuário com bypass (porteiro/admin/dev), NÃO incrementar tentativas nem bloquear localmente.
+    // Falha de autenticação
+    // Se for usuário com bypass (porteiro/admin/dev), NÃO incrementar tentativas nem bloquear localmente.
+
       if (!skipLocalBlock) {
         const attempts = incrementFailedAttempts(normalizedEmail);
         const remaining = MAX_LOGIN_ATTEMPTS - attempts.count;

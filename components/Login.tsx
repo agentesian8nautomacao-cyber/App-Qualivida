@@ -172,19 +172,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onMoradorLogin, onRequestResiden
         return;
       }
 
-      // Verificar se o role do usuário corresponde ao selecionado
-      if (result.user.role !== selectedRole) {
-        setError(`Este usuário é ${result.user.role === 'PORTEIRO' ? 'Porteiro' : 'Síndico'}. Selecione o papel correto.`);
-        setLoading(false);
-        return;
-      }
+      // Não exigir correspondência entre selectedRole e role retornado.
+      // Adotar o papel retornado pelo perfil do usuário e prosseguir.
+      try { setSelectedRole(result.user.role as UserRole); } catch {}
 
       // Salvar sessão
       saveUserSession(result.user);
 
-      // Delay para feedback visual
+      // Delay para feedback visual — informar papel real do usuário ao onLogin
       setTimeout(() => {
-        onLogin(selectedRole, { mustChangePassword: !!(result as { mustChangePassword?: boolean }).mustChangePassword });
+        onLogin(result.user.role as UserRole, { mustChangePassword: !!(result as { mustChangePassword?: boolean }).mustChangePassword });
       }, 500);
     } catch (err) {
       console.error('Erro ao fazer login:', err);
