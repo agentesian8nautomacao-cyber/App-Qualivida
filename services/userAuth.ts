@@ -237,33 +237,46 @@ export const loginUser = async (
     });
 
     if (authError || !authData?.user?.id) {
-      // Falha de autenticação — incrementar tentativas locais
-      const attempts = incrementFailedAttempts(normalizedEmail);
-      const remaining = MAX_LOGIN_ATTEMPTS - attempts.count;
-      if (attempts.blockedUntil) {
-        const remainingMinutes = Math.ceil((attempts.blockedUntil - Date.now()) / (60 * 1000));
+      // Falha de autenticação
+      // Se for usuário com bypass (porteiro/admin/dev), NÃO incrementar tentativas nem bloquear localmente.
+      if (!skipLocalBlock) {
+        const attempts = incrementFailedAttempts(normalizedEmail);
+        const remaining = MAX_LOGIN_ATTEMPTS - attempts.count;
+        if (attempts.blockedUntil) {
+          const remainingMinutes = Math.ceil((attempts.blockedUntil - Date.now()) / (60 * 1000));
+          return {
+            user: null,
+            error: `Senha incorreta. Conta bloqueada por ${remainingMinutes} minutos devido a múltiplas tentativas falhas.`,
+            blocked: true,
+            remainingMinutes
+          };
+        }
+
+        // Mapear mensagens técnicas para mensagens amigáveis
+        const rawMsg = (authError?.message || '').toString();
+        let friendly = authError?.message || 'Credenciais inválidas.';
+        if (rawMsg.toLowerCase().includes('invalid login credentials') || rawMsg.toLowerCase().includes('invalid_credentials')) {
+          friendly = 'Credenciais inválidas. Verifique e-mail/usuário e senha.';
+        } else if (rawMsg.toLowerCase().includes('email not confirmed') || rawMsg.toLowerCase().includes('email_confirm')) {
+          friendly = 'E-mail não confirmado. Verifique sua caixa de entrada.';
+        }
+
         return {
           user: null,
-          error: `Senha incorreta. Conta bloqueada por ${remainingMinutes} minutos devido a múltiplas tentativas falhas.`,
-          blocked: true,
-          remainingMinutes
+          error: friendly,
+          attemptsRemaining: remaining
         };
+      } else {
+        // Bypass: não registrar tentativas nem bloquear — apenas retornar erro amigável.
+        const rawMsg = (authError?.message || '').toString();
+        let friendly = authError?.message || 'Credenciais inválidas.';
+        if (rawMsg.toLowerCase().includes('invalid login credentials') || rawMsg.toLowerCase().includes('invalid_credentials')) {
+          friendly = 'Credenciais inválidas. Verifique e-mail/usuário e senha.';
+        } else if (rawMsg.toLowerCase().includes('email not confirmed') || rawMsg.toLowerCase().includes('email_confirm')) {
+          friendly = 'E-mail não confirmado. Verifique sua caixa de entrada.';
+        }
+        return { user: null, error: friendly };
       }
-
-      // Mapear mensagens técnicas para mensagens amigáveis
-      const rawMsg = (authError?.message || '').toString();
-      let friendly = authError?.message || 'Credenciais inválidas.';
-      if (rawMsg.toLowerCase().includes('invalid login credentials') || rawMsg.toLowerCase().includes('invalid_credentials')) {
-        friendly = 'Credenciais inválidas. Verifique e-mail/usuário e senha.';
-      } else if (rawMsg.toLowerCase().includes('email not confirmed') || rawMsg.toLowerCase().includes('email_confirm')) {
-        friendly = 'E-mail não confirmado. Verifique sua caixa de entrada.';
-      }
-
-      return {
-        user: null,
-        error: friendly,
-        attemptsRemaining: remaining
-      };
     }
 
     // Sucesso de Auth: resetar tentativas e buscar perfil por auth_user_id
@@ -366,7 +379,11 @@ export const loginUser = async (
     const msg = (error?.message ?? '').toLowerCase();
     const isNetwork = msg.includes('fetch') || msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('err_name_not_resolved');
     const networkMessage = 'Não foi possível conectar ao Supabase (erro de rede/DNS). No navegador (F12 → Console) pode aparecer ERR_NAME_NOT_RESOLVED: este computador ou rede não consegue resolver o endereço do Supabase. Tente: outra rede (ex.: celular como hotspot), outro DNS (ex.: 8.8.8.8), desativar VPN; confira .env.local (VITE_SUPABASE_URL) e no Vercel as variáveis de ambiente.';
-    incrementFailedAttempts(normalizedEmail);
+    try {
+      if (!skipLocalBlock) incrementFailedAttempts(normalizedEmail);
+    } catch {
+      // ignore
+    }
     return {
       user: null,
       error: isNetwork ? networkMessage : (error?.message || 'Erro ao conectar com o servidor. Tente novamente.')
