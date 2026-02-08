@@ -4,7 +4,8 @@ import { supabase } from './supabase';
 export interface User {
   id: string;
   username: string;
-  role: 'PORTEIRO' | 'SINDICO';
+  // Usar string genérico para suportar múltiplos papéis (MORADOR, PORTEIRO, SINDICO, DESENVOLVEDOR, etc.)
+  role: string;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -205,9 +206,19 @@ export const loginUser = async (
           remainingMinutes
         };
       }
+
+      // Mapear mensagens técnicas para mensagens amigáveis
+      const rawMsg = (authError?.message || '').toString();
+      let friendly = authError?.message || 'Credenciais inválidas.';
+      if (rawMsg.toLowerCase().includes('invalid login credentials') || rawMsg.toLowerCase().includes('invalid_credentials')) {
+        friendly = 'Credenciais inválidas. Verifique e-mail/usuário e senha.';
+      } else if (rawMsg.toLowerCase().includes('email not confirmed') || rawMsg.toLowerCase().includes('email_confirm')) {
+        friendly = 'E-mail não confirmado. Verifique sua caixa de entrada.';
+      }
+
       return {
         user: null,
-        error: authError?.message || 'Usuário ou senha inválidos',
+        error: friendly,
         attemptsRemaining: remaining
       };
     }
@@ -228,10 +239,13 @@ export const loginUser = async (
           .eq('auth_user_id', authUser.id)
           .maybeSingle();
         if (residentRow) {
+          // Preservar o papel tal como salvo no banco (case-insensitive -> uppercase para consistência)
+          const rawRole = (residentRow.role ?? '').toString();
+          const roleNormalized = rawRole ? rawRole.toUpperCase() : 'MORADOR';
           profile = {
             id: authUser.id,
             username: residentRow.username ?? residentRow.email ?? '',
-            role: (residentRow.role as any) === 'SINDICO' ? 'SINDICO' : 'PORTEIRO',
+            role: roleNormalized,
             name: residentRow.name ?? null,
             email: residentRow.email ?? authUser.email ?? null,
             phone: residentRow.phone ?? null,
@@ -252,10 +266,12 @@ export const loginUser = async (
           .eq('auth_user_id', authUser.id)
           .maybeSingle();
         if (staffRow) {
+          const rawRole = (staffRow.role ?? '').toString();
+          const roleNormalized = rawRole ? rawRole.toUpperCase() : 'PORTEIRO';
           profile = {
             id: authUser.id,
             username: staffRow.username ?? staffRow.email ?? '',
-            role: (staffRow.role as any) === 'SINDICO' ? 'SINDICO' : 'PORTEIRO',
+            role: roleNormalized,
             name: staffRow.name ?? null,
             email: staffRow.email ?? authUser.email ?? null,
             phone: staffRow.phone ?? null,
@@ -269,15 +285,34 @@ export const loginUser = async (
 
     // 4) fallback: usar dados do auth user quando não existir perfil nas tabelas
     if (!profile) {
+      // Fallback: criar um perfil mínimo com papel "MORADOR" por padrão.
       profile = {
         id: authUser.id,
         username: authUser.email ?? '',
-        role: 'PORTEIRO',
+        role: 'MORADOR',
         name: (authUser.user_metadata as any)?.full_name ?? null,
         email: authUser.email ?? null,
         phone: (authUser.user_metadata as any)?.phone ?? null,
         is_active: true
       };
+    }
+
+    // Tentar criar perfil mínimo na tabela `users` se não existir (não deve bloquear o login).
+    try {
+      await supabase
+        .from('users')
+        .insert({
+          auth_user_id: authUser.id,
+          username: profile.username || authUser.email || '',
+          role: profile.role || 'MORADOR',
+          name: profile.name ?? null,
+          email: profile.email ?? null,
+          phone: profile.phone ?? null,
+          is_active: profile.is_active ?? true
+        });
+    } catch (e) {
+      // Ignorar erros (ex.: duplicidade, RLS) — o login não deve falhar por causa disso.
+      console.warn('[userAuth] Não foi possível criar perfil automático (não crítico):', e);
     }
 
     // Salvar sessão e retornar
@@ -313,7 +348,7 @@ async function getProfileByAuthId(authId: string): Promise<User | null> {
   return {
     id: (row as any).auth_user_id || row.auth_id || row.id,
     username: row.username,
-    role: row.role as 'PORTEIRO' | 'SINDICO',
+    role: row.role as string,
     name: row.name,
     email: row.email,
     phone: row.phone,
@@ -325,7 +360,7 @@ async function getProfileByAuthId(authId: string): Promise<User | null> {
  * Restaura sessão a partir do Supabase Auth (útil após reload da página).
  * Retorna { user, role } se houver sessão Auth e perfil em public.users.
  */
-export async function restoreAuthSession(): Promise<{ user: User; role: 'PORTEIRO' | 'SINDICO' } | null> {
+export async function restoreAuthSession(): Promise<{ user: User; role: string } | null> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return null;
@@ -400,7 +435,7 @@ export const updateUserProfile = async (
     const updatedUser: User = {
       id: row.auth_id || row.id,
       username: row.username,
-      role: row.role as 'PORTEIRO' | 'SINDICO',
+      role: row.role as string,
       name: row.name,
       email: row.email,
       phone: row.phone,
@@ -473,7 +508,7 @@ export const changeUsername = async (
     const updatedUser: User = {
       id: row.auth_id || row.id,
       username: row.username,
-      role: row.role as 'PORTEIRO' | 'SINDICO',
+      role: row.role as string,
       name: row.name,
       email: row.email,
       phone: row.phone,
