@@ -942,11 +942,26 @@ export function clearRecoveryHashFromUrl(): void {
  */
 export const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    const redirectTo = 'https://qualivida-club-residence.vercel.app/reset-password';
+    // Determine redirectTo from env when available, fallback to known production URL
+    const metaEnv = (import.meta as any).env || {};
+    const envApp = (metaEnv.VITE_APP_URL || metaEnv.VITE_PUBLIC_URL || metaEnv.VITE_SUPABASE_REDIRECT || '').toString();
+    const originFallback = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'https://qualivida-club-residence.vercel.app';
+    const appBase = envApp.trim() || originFallback;
+    const redirectTo = `${appBase.replace(/\/$/, '')}/reset-password`;
+
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo
     });
     if (error) {
+      // Provide clearer guidance for common misconfiguration
+      const raw = (error.message || '').toString().toLowerCase();
+      if (raw.includes('redirect') || raw.includes('redirect url') || raw.includes('url configuration')) {
+        return {
+          success: false,
+          error: 'Falha ao enviar o e-mail de recuperação. No Supabase: Authentication → URL Configuration → Redirect URLs, adicione as URLs da sua aplicação (ex.: ' +
+            `${appBase.replace(/\/$/, '')} e ${appBase.replace(/\/$/, '')}/reset-password). Se usar SMTP personalizado, verifique Authentication → E-mails → Configurações SMTP.`
+        };
+      }
       return { success: false, error: error.message };
     }
     return { success: true };
