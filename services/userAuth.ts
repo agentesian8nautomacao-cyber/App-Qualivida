@@ -161,9 +161,13 @@ export const loginUser = async (
   const comparePassword = async (plain: string, storedHash: string | null): Promise<boolean> => {
     if (!storedHash) return false;
     if (typeof storedHash !== 'string') return false;
+    // Support legacy explicit plain marker
     if (storedHash.startsWith('plain:')) {
       return plain === storedHash.slice(6);
     }
+    // If stored value appears to be plain text (no prefix) accept direct match
+    if (storedHash === plain) return true;
+    // Otherwise compare hashed representations
     const computed = await hashPassword(plain);
     return computed === storedHash;
   };
