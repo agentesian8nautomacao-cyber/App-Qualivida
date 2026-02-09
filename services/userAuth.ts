@@ -666,31 +666,70 @@ export const updateUserProfile = async (
       phone: updates.phone ?? null,
       updated_at: new Date().toISOString()
     };
-    const { data, error } = await supabase
-      .from('users')
-      .update(updatePayload)
-      .or(`id.eq.${userId},auth_id.eq.${userId}`)
-      .select('id, auth_id, username, role, name, email, phone, is_active')
-      .maybeSingle();
+    // Try updating common profile tables: users, staff, residents (some deployments use different tables)
+    const tableCandidates = ['users', 'staff', 'residents', 'resident'];
+    let row: any = null;
+    let lastError: any = null;
 
-    if (error || !data) {
-      console.error('Erro ao atualizar perfil do usuário:', error);
-      return { success: false, error: error?.message || 'Erro ao atualizar perfil' };
+    for (const tbl of tableCandidates) {
+      try {
+        const { data, error } = await supabase
+          .from(tbl)
+          .update(updatePayload)
+          .or(`id.eq.${userId},auth_id.eq.${userId},auth_user_id.eq.${userId}`)
+          .select('id, auth_id, auth_user_id, username, role, name, email, phone, is_active')
+          .maybeSingle();
+        if (error) {
+          lastError = error;
+          continue;
+        }
+        if (data) {
+          row = data;
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
     }
 
-    const row = data as { id: string; auth_id?: string; username: string; role: string; name: string | null; email: string | null; phone: string | null; is_active: boolean };
+    if (!row) {
+      console.error('Erro ao atualizar perfil do usuário (nenhuma tabela atualizada):', lastError);
+      return { success: false, error: (lastError?.message || 'Erro ao atualizar perfil') };
+    }
+
     const updatedUser: User = {
-      id: row.auth_id || row.id,
-      username: row.username,
-      role: row.role as string,
-      name: row.name,
-      email: row.email,
-      phone: row.phone,
-      is_active: row.is_active
+      id: row.auth_user_id || row.auth_id || row.id,
+      username: row.username ?? '',
+      role: (row.role as string) ?? 'MORADOR',
+      name: row.name ?? null,
+      email: row.email ?? null,
+      phone: row.phone ?? null,
+      is_active: typeof row.is_active === 'boolean' ? row.is_active : true
     };
-    if (updates.email && typeof supabase.auth.updateUser === 'function') {
-      supabase.auth.updateUser({ email: updates.email }).catch(() => {});
+
+    // If email changed, attempt to update Supabase Auth user too.
+    if (updates.email) {
+      try {
+        // If we have an active session for the same auth user, update will succeed client-side.
+        // Otherwise, attempt update and ignore failures (will be logged).
+        const { data: { session } } = await supabase.auth.getSession();
+        const authIdInRow = row.auth_user_id || row.auth_id || null;
+        if (session?.user?.id && authIdInRow && session.user.id === authIdInRow) {
+          await supabase.auth.updateUser({ email: updates.email });
+        } else {
+          // Best-effort attempt (in some deployments this will fail if not the same session)
+          try {
+            await supabase.auth.updateUser({ email: updates.email });
+          } catch (e) {
+            console.warn('[userAuth] Não foi possível atualizar email em Supabase Auth (possível diferença de sessão):', e);
+          }
+        }
+      } catch (e) {
+        console.warn('[userAuth] Falha ao tentar atualizar Supabase Auth email:', e);
+      }
     }
+
     saveUserSession(updatedUser);
     return { success: true, user: updatedUser };
   } catch (err: any) {
