@@ -21,9 +21,12 @@ export async function createAuthUserForRow(table: string, rowId: string | number
     const normalizedEmail = String(email).trim().toLowerCase();
     if (!normalizedEmail) throw new Error('Email inválido');
 
-    // Criar usuário no Auth via admin (sem enviar/definir senha)
+    // Criar usuário no Auth via admin com senha temporária
+    // Gera senha temporária segura
+    const tempPassword = generateTempPassword();
     const { data: createData, error: createError } = await (supabase.auth as any).admin.createUser({
       email: normalizedEmail,
+      password: tempPassword,
       email_confirm: true
     });
 
@@ -50,6 +53,9 @@ export async function createAuthUserForRow(table: string, rowId: string | number
     }
 
     console.log(`Usuário criado no Auth: ${authUserId} -> ${table}.id=${rowId}`);
+    // Retornar authUserId e senha temporária (senha só para uso do administrador no processo de notificação)
+    // Atenção: não persistir senha em tabelas de domínio; salve resultado externamente (CSV) quando usar em massa.
+    (createAuthUserForRow as any).lastTempPassword = tempPassword;
     return authUserId;
   } catch (err: any) {
     console.error('Erro inesperado em createAuthUserForRow:', err);
@@ -67,7 +73,27 @@ if (require.main === module) {
     }
     const res = await createAuthUserForRow(table, rowId, email);
     if (!res) process.exit(2);
+    console.log('auth_user_id:', res);
+    console.log('temp_password (in-memory):', (createAuthUserForRow as any).lastTempPassword || '');
     process.exit(0);
   })();
+}
+
+/**
+ * Gera senha temporária alfanumérica segura (12 chars)
+ */
+function generateTempPassword(length = 12): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  const array = new Uint32Array(length);
+  // Node.js compatibility: use crypto from node
+  // @ts-ignore
+  const cryptoModule = typeof crypto !== 'undefined' ? crypto : require('crypto');
+  const buf = cryptoModule.randomBytes(length);
+  for (let i = 0; i < length; i++) {
+    const idx = buf[i] % chars.length;
+    out += chars.charAt(idx);
+  }
+  return out;
 }
 

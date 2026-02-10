@@ -39,6 +39,17 @@ export const registerResident = async (
   password: string
 ): Promise<{ resident: Resident; success: boolean; error?: string }> => {
   try {
+    // Validar e normalizar e-mail (obrigatório para integração com Supabase Auth)
+    const emailRaw = (resident.email || '').toString().trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRaw || !emailRegex.test(emailRaw)) {
+      return {
+        resident: resident as Resident,
+        success: false,
+        error: 'Informe um e-mail válido. O e-mail é obrigatório para cadastro e recuperação de senha.'
+      };
+    }
+
     // Normalizar unidade antes de verificar e salvar
     const normalizedUnit = normalizeUnit(resident.unit);
     
@@ -58,7 +69,51 @@ export const registerResident = async (
       };
     }
 
-    // Hash da senha
+    // Criar usuário primeiro em auth.users (Supabase Auth)
+    // Isso garante que login e recuperação de senha usem sempre o Auth.
+    let authUserId: string | null = null;
+    try {
+      const pwdTrim = password.trim();
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: emailRaw,
+        password: pwdTrim,
+        options: {
+          emailRedirectTo: 'https://qualivida-club-residence.vercel.app/reset-password'
+        }
+      });
+
+      if (signUpError) {
+        console.error('[registerResident] Erro ao criar usuário em auth.users:', signUpError);
+        const rawMsg = (signUpError.message || '').toString().toLowerCase();
+        let friendly = signUpError.message || 'Erro ao criar usuário de autenticação.';
+        if (rawMsg.includes('user already registered') || rawMsg.includes('already exists')) {
+          friendly = 'Este e-mail já está cadastrado. Use "Esqueci minha senha" para redefinir a senha.';
+        }
+        return {
+          resident: resident as Resident,
+          success: false,
+          error: friendly
+        };
+      }
+
+      authUserId = (signUpData?.user?.id ?? (signUpData as any)?.id) || null;
+      if (!authUserId) {
+        return {
+          resident: resident as Resident,
+          success: false,
+          error: 'Não foi possível criar o usuário de autenticação. Tente novamente.'
+        };
+      }
+    } catch (authErr: any) {
+      console.error('[registerResident] Exceção ao criar usuário em auth.users:', authErr);
+      return {
+        resident: resident as Resident,
+        success: false,
+        error: authErr?.message || 'Erro ao criar usuário de autenticação.'
+      };
+    }
+
+    // Hash da senha (para login por unidade + senha na aba Morador)
     const passwordHash = await hashPassword(password);
 
     // Inserir morador com unidade normalizada
@@ -68,7 +123,7 @@ export const registerResident = async (
       .insert({
         name: resident.name.trim(),
         unit: normalizedUnit,
-        email: resident.email || null,
+        email: emailRaw,
         phone: resident.phone || null,
         whatsapp: resident.whatsapp || null,
         // Persistir dados extras, incluindo veículo, em extra_data (JSONB)
@@ -78,7 +133,8 @@ export const registerResident = async (
           vehicleModel: resident.vehicleModel || undefined,
           vehicleColor: resident.vehicleColor || undefined
         },
-        password_hash: passwordHash
+        password_hash: passwordHash,
+        auth_user_id: authUserId
       } as any) // Usar 'as any' temporariamente para contornar cache do schema
       .select()
       .single();

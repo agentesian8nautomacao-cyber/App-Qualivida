@@ -942,12 +942,10 @@ export function clearRecoveryHashFromUrl(): void {
  */
 export const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    // Determine redirectTo from env when available, fallback to known production URL
-    const metaEnv = (import.meta as any).env || {};
-    const envApp = (metaEnv.VITE_APP_URL || metaEnv.VITE_PUBLIC_URL || metaEnv.VITE_SUPABASE_REDIRECT || '').toString();
-    const originFallback = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'https://qualivida-club-residence.vercel.app';
-    const appBase = envApp.trim() || originFallback;
-    const redirectTo = `${appBase.replace(/\/$/, '')}/reset-password`;
+    // Para o Qualivida, usamos sempre a URL oficial de reset da aplicação.
+    // Isso evita divergência entre ambientes e garante que o link do Supabase Auth
+    // volte para a tela correta de redefinição de senha.
+    const redirectTo = 'https://qualivida-club-residence.vercel.app/reset-password';
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo
