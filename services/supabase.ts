@@ -4,21 +4,27 @@ import { createClient } from '@supabase/supabase-js';
 const rawSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-// Garantir que a URL tenha https:// (correção automática)
-let supabaseUrl = rawSupabaseUrl;
-if (supabaseUrl) {
-  // Remove http:// ou https:// se já existir para normalizar
-  supabaseUrl = supabaseUrl.replace(/^https?:\/\//, '');
-  // Adiciona https://
-  supabaseUrl = `https://${supabaseUrl}`;
-  // Remove barra no final se houver
-  supabaseUrl = supabaseUrl.replace(/\/$/, '');
+// Garantir URL absoluta https:// (evita "requested path is invalid" em localhost)
+let supabaseUrl = '';
+if (rawSupabaseUrl) {
+  let host = rawSupabaseUrl.replace(/^https?:\/\//, '').replace(/^\/+/, '').split('/')[0].trim();
+  if (host && host.includes('.supabase.co')) {
+    supabaseUrl = `https://${host}`;
+  }
+}
+// Garantia final: nunca passar URL sem protocolo (evita requisição relativa → localhost)
+if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
+  supabaseUrl = supabaseUrl.startsWith('http://') ? supabaseUrl : `https://${supabaseUrl}`;
 }
 
-const isPlaceholder = !rawSupabaseUrl?.trim() || !supabaseAnonKey?.trim();
-if (import.meta.env.DEV && isPlaceholder) {
-  const envMode = import.meta.env.MODE || 'unknown';
-  console.warn(`[Supabase] Mode: ${envMode}. URL: ${rawSupabaseUrl ? 'ok' : 'NÃO DEFINIDA'}. Key: ${supabaseAnonKey ? 'ok' : 'NÃO DEFINIDA'}. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local ou Vercel.`);
+const isPlaceholder = !supabaseUrl || !supabaseAnonKey?.trim();
+const isAbsolute = supabaseUrl.startsWith('https://');
+if (import.meta.env.DEV) {
+  if (isPlaceholder) {
+    console.warn(`[Supabase] URL: ${rawSupabaseUrl ? 'definida' : 'NÃO DEFINIDA'}. Key: ${supabaseAnonKey ? 'ok' : 'NÃO DEFINIDA'}. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local`);
+  } else {
+    console.log(`[Supabase] Usando: ${supabaseUrl}`);
+  }
 }
 
 // Criar cliente Supabase (mesmo que as variáveis estejam vazias, para evitar erros)

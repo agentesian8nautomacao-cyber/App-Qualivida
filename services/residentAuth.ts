@@ -232,6 +232,15 @@ export const loginResident = async (
       };
     }
 
+    // Morador sem auth_user_id: cadastrado sem senha (ex.: import sem API). Precisa cadastro completo.
+    if (!(data as any).auth_user_id) {
+      return {
+        resident: null,
+        success: false,
+        error: 'Morador não possui senha cadastrada. O síndico/porteiro deve recadastrar com senha, ou use "Criar conta" na tela de login.'
+      };
+    }
+
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password: password.trim()
