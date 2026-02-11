@@ -12,6 +12,7 @@ import type { OccurrenceItem } from './sentinela/types';
 // Components
 import RecentEventsBar from './components/RecentEventsBar';
 import QuickViewModal from './components/QuickViewModal';
+import ResetPasswordPage from './components/ResetPasswordPage';
 
 // Views
 import DashboardView from './components/views/DashboardView';
@@ -2789,7 +2790,24 @@ const App: React.FC = () => {
   };
 
   let content: React.ReactNode;
-  if (isScreenSaverActive) {
+
+  // Verificar se estamos na rota de reset de senha
+  const isResetPasswordRoute = typeof window !== 'undefined' &&
+    (window.location.pathname === '/reset-password' ||
+     window.location.hash.includes('type=recovery'));
+
+  if (isResetPasswordRoute) {
+    content = (
+      <ResetPasswordPage
+        theme={theme}
+        onBackToLogin={() => {
+          // Limpar a URL e redirecionar para login
+          window.history.replaceState({}, '', '/');
+          window.location.reload();
+        }}
+      />
+    );
+  } else if (isScreenSaverActive) {
     content = <ScreenSaver onExit={() => setIsScreenSaverActive(false)} theme={theme} />;
   } else if (!isAuthenticated && showResidentRegister) {
     content = (
