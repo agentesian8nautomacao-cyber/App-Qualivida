@@ -1,12 +1,11 @@
-/* Config em CommonJS: defineConfig do vite + plugins. */
-const path = require('path');
-const { defineConfig } = require('vite');
-const react = require('@vitejs/plugin-react');
-const tailwindcssPlugin = require('@tailwindcss/vite');
-const tailwindcss = typeof tailwindcssPlugin === 'function' ? tailwindcssPlugin : (tailwindcssPlugin.default || tailwindcssPlugin);
-const { VitePWA } = require('vite-plugin-pwa');
+/* Config em ESM: defineConfig do vite + plugins. */
+import path from 'path';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
-module.exports = defineConfig({
+export default defineConfig({
   base: '/',
   build: {
     outDir: 'dist',
