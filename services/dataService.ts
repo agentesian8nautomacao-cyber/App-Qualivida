@@ -3,6 +3,7 @@ import { Package, Resident, VisitorLog, Occurrence, Boleto, PackageItem, Notice,
 import { createNotification } from './notificationService';
 import { getData, createData, updateData, deleteData, type GetDataOptions } from './offlineDataService';
 import { createClient } from '@supabase/supabase-js';
+import { calculateFileSHA256 } from '../utils/hashUtils';
 
 // ============================================
 // SERVIÇOS PARA PACOTES (ENCOMENDAS)
@@ -668,9 +669,12 @@ export const saveBoleto = async (boleto: Boleto): Promise<{ success: boolean; er
       status: boleto.status,
       boleto_type: boleto.boletoType || 'condominio',
       barcode: boleto.barcode || null,
-      pdf_url: boleto.pdfUrl || null,
+      pdf_url: boleto.pdfUrl || null, // LEGACY - será removido
       paid_date: boleto.paidDate || null,
-      description: boleto.description || null
+      description: boleto.description || null,
+      // Campos para PDF original (documento imutável)
+      pdf_original_path: boleto.pdf_original_path || null,
+      checksum_pdf: boleto.checksum_pdf || null
     };
 
     const result = await createData('boletos', payload);
@@ -729,7 +733,7 @@ export const getBoletos = async (): Promise<GetBoletosResult> => {
         // Limitar a 1000 registros mais recentes para performance
         const { data, error } = await supabase
           .from('boletos')
-          .select('id, resident_name, unit, reference_month, due_date, amount, status, boleto_type, barcode, pdf_url, paid_date, description')
+          .select('id, resident_name, unit, reference_month, due_date, amount, status, boleto_type, barcode, pdf_url, paid_date, description, pdf_original_path, checksum_pdf')
           .order('due_date', { ascending: false })
           .limit(1000);
         if (error) throw error;
@@ -754,9 +758,12 @@ export const getBoletos = async (): Promise<GetBoletosResult> => {
       status: b.status as 'Pendente' | 'Pago' | 'Vencido',
       boletoType: (b.boleto_type === 'agua' || b.boleto_type === 'luz' ? b.boleto_type : 'condominio') as 'condominio' | 'agua' | 'luz',
       barcode: b.barcode ?? undefined,
-      pdfUrl: b.pdf_url ?? undefined,
+      pdfUrl: b.pdf_url ?? undefined, // LEGACY
       paidDate: b.paid_date ? toDateStr(b.paid_date) : undefined,
-      description: b.description ?? undefined
+      description: b.description ?? undefined,
+      // Campos para PDF original (documento imutável)
+      pdf_original_path: b.pdf_original_path ?? undefined,
+      checksum_pdf: b.checksum_pdf ?? undefined
     }));
     return { data: list, error: result.error };
   } catch (err: any) {
@@ -768,288 +775,100 @@ export const getBoletos = async (): Promise<GetBoletosResult> => {
 /** Nome do bucket de storage para PDFs de boleto (deve existir no Supabase e estar público). */
 const BOLETOS_STORAGE_BUCKET = 'boletos';
 
-/**
- * Gera um boleto virtual em formato HTML que pode ser impresso como PDF
- * @param boleto Dados do boleto
- * @returns Promise com a URL do blob do HTML gerado
- */
-export const generateBoletoPDF = async (boleto: Boleto): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    try {
-      // Gerar HTML estruturado para impressão como PDF
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Boleto - ${boleto.unit} - ${boleto.referenceMonth}</title>
-          <style>
-            @page {
-              size: A4;
-              margin: 1cm;
-            }
 
-            * {
-              box-sizing: border-box;
-            }
-
-            body {
-              font-family: 'Courier New', monospace;
-              font-size: 12px;
-              line-height: 1.4;
-              color: #000;
-              background: #fff;
-              margin: 0;
-              padding: 20px;
-            }
-
-            .boleto-container {
-              max-width: 800px;
-              margin: 0 auto;
-              border: 2px solid #000;
-              padding: 20px;
-            }
-
-            .header {
-              text-align: center;
-              border-bottom: 2px solid #000;
-              padding-bottom: 15px;
-              margin-bottom: 20px;
-            }
-
-            .header h1 {
-              font-size: 20px;
-              font-weight: bold;
-              margin: 0 0 10px 0;
-              text-transform: uppercase;
-            }
-
-            .header .subtitle {
-              font-size: 14px;
-              margin: 0;
-            }
-
-            .header .date {
-              font-size: 10px;
-              margin: 5px 0 0 0;
-            }
-
-            .info-section {
-              display: table;
-              width: 100%;
-              margin-bottom: 20px;
-              border-collapse: collapse;
-            }
-
-            .info-row {
-              display: table-row;
-            }
-
-            .info-cell {
-              display: table-cell;
-              padding: 8px 12px;
-              border: 1px solid #ccc;
-              vertical-align: top;
-            }
-
-            .info-label {
-              font-weight: bold;
-              font-size: 10px;
-              text-transform: uppercase;
-              margin-bottom: 3px;
-              display: block;
-            }
-
-            .info-value {
-              font-size: 12px;
-            }
-
-            .status-section {
-              text-align: center;
-              margin: 20px 0;
-              padding: 10px;
-              border: 2px solid #000;
-              background: #f9f9f9;
-            }
-
-            .status-text {
-              font-size: 14px;
-              font-weight: bold;
-              text-transform: uppercase;
-            }
-
-            .barcode-section {
-              margin: 20px 0;
-              padding: 15px;
-              border: 2px solid #000;
-              background: #f9f9f9;
-              text-align: center;
-            }
-
-            .barcode-label {
-              font-weight: bold;
-              font-size: 12px;
-              margin-bottom: 10px;
-              text-transform: uppercase;
-            }
-
-            .barcode {
-              font-family: 'Courier New', monospace;
-              font-size: 11px;
-              letter-spacing: 0.5px;
-              word-break: break-all;
-              line-height: 1.3;
-              font-weight: bold;
-            }
-
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              font-size: 9px;
-              color: #666;
-              border-top: 1px solid #ccc;
-              padding-top: 15px;
-            }
-
-            .footer p {
-              margin: 3px 0;
-            }
-
-            @media print {
-              body {
-                background: white !important;
-              }
-
-              .boleto-container {
-                border: 2px solid #000 !important;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="boleto-container">
-            <div class="header">
-              <h1>Boleto de Pagamento</h1>
-              <p class="subtitle">Condomínio Qualivida Residence</p>
-              <p class="date">Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}</p>
-            </div>
-
-            <div class="info-section">
-              <div class="info-row">
-                <div class="info-cell">
-                  <span class="info-label">Unidade:</span>
-                  <span class="info-value">${boleto.unit}</span>
-                </div>
-                <div class="info-cell">
-                  <span class="info-label">Morador:</span>
-                  <span class="info-value">${boleto.residentName}</span>
-                </div>
-                <div class="info-cell">
-                  <span class="info-label">Referência:</span>
-                  <span class="info-value">${boleto.referenceMonth}</span>
-                </div>
-              </div>
-              <div class="info-row">
-                <div class="info-cell">
-                  <span class="info-label">Vencimento:</span>
-                  <span class="info-value">${new Date(boleto.dueDate).toLocaleDateString('pt-BR')}</span>
-                </div>
-                <div class="info-cell">
-                  <span class="info-label">Valor:</span>
-                  <span class="info-value">R$ ${boleto.amount.toFixed(2).replace('.', ',')}</span>
-                </div>
-                <div class="info-cell">
-                  <span class="info-label">Tipo:</span>
-                  <span class="info-value">${boleto.boletoType === 'condominio' ? 'Condomínio' : boleto.boletoType === 'agua' ? 'Água' : 'Luz'}</span>
-                </div>
-              </div>
-              ${boleto.description ? `
-              <div class="info-row">
-                <div class="info-cell" style="width: 100%;">
-                  <span class="info-label">Descrição:</span>
-                  <span class="info-value">${boleto.description}</span>
-                </div>
-              </div>
-              ` : ''}
-            </div>
-
-            <div class="status-section">
-              <span class="status-text">Status: ${boleto.status.toUpperCase()}</span>
-            </div>
-
-            ${boleto.barcode ? `
-            <div class="barcode-section">
-              <div class="barcode-label">Código de Barras para Pagamento:</div>
-              <div class="barcode">${boleto.barcode}</div>
-            </div>
-            ` : ''}
-
-            <div class="footer">
-              <p>Este documento foi gerado automaticamente pelo sistema de gestão condominial.</p>
-              <p>Para pagamentos, utilize o código de barras acima ou as informações bancárias do condomínio.</p>
-              <p>Documento gerado em: ${new Date().toLocaleString('pt-BR')}</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      // Criar blob HTML
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      resolve(url);
-
-    } catch (error) {
-      reject(error);
-    }
-  });
-};
-
-/**
- * Faz upload de um PDF gerado (via URL blob) para o Supabase Storage
- * @param blobUrl URL do blob contendo o PDF
- * @param boletoId ID do boleto para nomear o arquivo
- * @returns Promise com resultado do upload
- */
-const uploadBoletoPdfFromUrl = async (blobUrl: string, boletoId: string): Promise<{ success: boolean; url?: string; error?: string }> => {
-  try {
-    // Converter blob URL para File
-    const response = await fetch(blobUrl);
-    const blob = await response.blob();
-    const file = new File([blob], `boleto_${boletoId}.pdf`, { type: 'application/pdf' });
-
-    return await uploadBoletoPdf(file, boletoId);
-  } catch (error) {
-    console.error('Erro ao fazer upload do PDF gerado:', error);
-    return { success: false, error: 'Erro ao fazer upload do PDF gerado' };
-  }
-};
 
 /**
  * Faz upload do PDF do boleto para o Supabase Storage e retorna a URL pública.
  * O bucket "boletos" deve existir no projeto e estar configurado como público para leitura.
  */
-export const uploadBoletoPdf = async (
+
+/**
+ * Faz upload do PDF ORIGINAL do boleto para o Supabase Storage.
+ * Este é o PDF imutável importado pelo síndico, que deve ser preservado integralmente.
+ * @param file Arquivo PDF original do boleto
+ * @param boletoId UUID único do boleto
+ * @returns Promise com caminho do arquivo e checksum SHA-256
+ */
+export const uploadBoletoOriginalPdf = async (
   file: File,
-  pathId: string
-): Promise<{ url: string; error?: string }> => {
+  boletoId: string
+): Promise<{ path: string; checksum: string; error?: string }> => {
   try {
-    const path = `${pathId}.pdf`;
+    // Calcular hash SHA-256 do arquivo original para garantia de integridade
+    const checksum = await calculateFileSHA256(file);
+
+    // Caminho do arquivo: /boletos/original/{uuid}.pdf
+    const path = `original/${boletoId}.pdf`;
+
     const { error: uploadError } = await supabase.storage
       .from(BOLETOS_STORAGE_BUCKET)
-      .upload(path, file, { upsert: true, contentType: 'application/pdf' });
+      .upload(path, file, {
+        upsert: true,
+        contentType: 'application/pdf',
+        // Metadata para auditoria
+        metadata: {
+          checksum_sha256: checksum,
+          uploaded_at: new Date().toISOString(),
+          original_filename: file.name,
+          file_size: file.size.toString()
+        }
+      });
+
     if (uploadError) {
-      console.error('Erro ao fazer upload do PDF do boleto:', uploadError);
-      return { url: '', error: uploadError.message };
+      console.error('[uploadBoletoOriginalPdf] Erro ao fazer upload do PDF original:', uploadError);
+      return { path: '', checksum: '', error: uploadError.message };
     }
-    const { data } = supabase.storage
-      .from(BOLETOS_STORAGE_BUCKET)
-      .getPublicUrl(path);
-    return { url: data.publicUrl };
+
+    console.log(`[uploadBoletoOriginalPdf] PDF original salvo com sucesso: ${path}, checksum: ${checksum}`);
+    return { path, checksum };
   } catch (err: any) {
-    console.error('Erro ao fazer upload do PDF do boleto:', err);
-    return { url: '', error: err?.message ?? 'Erro ao enviar PDF' };
+    console.error('[uploadBoletoOriginalPdf] Erro ao fazer upload do PDF original:', err);
+    return { path: '', checksum: '', error: err?.message ?? 'Erro ao enviar PDF original' };
+  }
+};
+
+/**
+ * Faz download do PDF original do boleto e verifica integridade
+ * @param pdfOriginalPath Caminho do PDF original no storage
+ * @param expectedChecksum Hash SHA-256 esperado para verificação
+ * @returns Promise com URL do blob para download ou erro
+ */
+export const downloadBoletoOriginalPdf = async (
+  pdfOriginalPath: string,
+  expectedChecksum?: string
+): Promise<{ url: string; error?: string }> => {
+  try {
+    console.log(`[downloadBoletoOriginalPdf] Baixando PDF original: ${pdfOriginalPath}`);
+
+    // Fazer download do arquivo
+    const { data, error } = await supabase.storage
+      .from(BOLETOS_STORAGE_BUCKET)
+      .download(pdfOriginalPath);
+
+    if (error || !data) {
+      console.error('[downloadBoletoOriginalPdf] Erro ao baixar PDF original:', error);
+      return { url: '', error: error?.message ?? 'Erro ao baixar PDF original' };
+    }
+
+    // Verificar integridade se checksum foi fornecido
+    if (expectedChecksum) {
+      const actualChecksum = await calculateFileSHA256(data);
+      if (actualChecksum !== expectedChecksum) {
+        console.error(`[downloadBoletoOriginalPdf] ❌ CHECKSUM INVÁLIDO! Esperado: ${expectedChecksum}, Calculado: ${actualChecksum}`);
+        return {
+          url: '',
+          error: 'PDF original foi alterado ou corrompido. Integridade comprometida.'
+        };
+      }
+      console.log(`[downloadBoletoOriginalPdf] ✅ Integridade verificada: checksum ${actualChecksum}`);
+    }
+
+    // Criar URL do blob para download
+    const blobUrl = URL.createObjectURL(data);
+    return { url: blobUrl };
+  } catch (err: any) {
+    console.error('[downloadBoletoOriginalPdf] Erro ao baixar PDF original:', err);
+    return { url: '', error: err?.message ?? 'Erro ao baixar PDF original' };
   }
 };
 

@@ -23,6 +23,7 @@ import {
 import { Boleto, BoletoType, Resident } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { useAppConfig } from '../../contexts/AppConfigContext';
+import { downloadBoletoOriginalPdf } from '../../services/dataService';
 
 const BOLETO_TYPE_LABELS: Record<BoletoType, string> = {
   condominio: 'Taxa/Condomínio',
@@ -495,67 +496,45 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                     <button
                       onClick={async () => {
                         try {
-                          console.log('[Boleto] Iniciando geração e download...');
+                          console.log('[Boleto] Iniciando download do PDF original...');
 
-                          // Sempre gerar um novo boleto em HTML para visualização
-                          const { generateBoletoPDF } = await import('../../services/dataService');
-                          const boletoUrl = await generateBoletoPDF(selectedBoleto);
+                          // Verificar se temos o caminho do PDF original
+                          if (!selectedBoleto.pdf_original_path) {
+                            alert('❌ Este boleto não possui PDF original disponível.\n\nEntre em contato com a administração.');
+                            return;
+                          }
 
-                          if (boletoUrl) {
-                            // Abrir em nova janela com instruções para salvar como PDF
-                            const printWindow = window.open(boletoUrl, '_blank', 'width=900,height=700,scrollbars=yes,resizable=yes');
+                          // Baixar PDF original com verificação de integridade
+                          const result = await downloadBoletoOriginalPdf(
+                            selectedBoleto.pdf_original_path,
+                            selectedBoleto.checksum_pdf
+                          );
 
-                            if (printWindow) {
-                              printWindow.onload = () => {
-                                // Adicionar instruções na página
-                                setTimeout(() => {
-                                  try {
-                                    const instructions = printWindow.document.createElement('div');
-                                    instructions.style.cssText = `
-                                      position: fixed;
-                                      top: 10px;
-                                      right: 10px;
-                                      background: #e3f2fd;
-                                      border: 2px solid #2196f3;
-                                      border-radius: 8px;
-                                      padding: 15px;
-                                      font-family: Arial, sans-serif;
-                                      font-size: 14px;
-                                      z-index: 10000;
-                                      max-width: 300px;
-                                      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-                                    `;
-                                    instructions.innerHTML = `
-                                      <strong style="color: #1976d2;">📄 Boleto pronto para download!</strong><br><br>
-                                      <strong>Tecla de atalho:</strong><br>
-                                      • Windows/Linux: <kbd>Ctrl</kbd> + <kbd>P</kbd><br>
-                                      • Mac: <kbd>Cmd</kbd> + <kbd>P</kbd><br><br>
-                                      <strong>Passos:</strong><br>
-                                      1. Selecione "Salvar como PDF"<br>
-                                      2. Clique em "Salvar"<br>
-                                      3. Escolha onde salvar<br><br>
-                                      <em style="font-size: 12px; color: #666;">Feche esta janela quando terminar.</em>
-                                    `;
-                                    printWindow.document.body.appendChild(instructions);
+                          if (result.url) {
+                            // Criar nome amigável para o arquivo
+                            const fileName = `boleto_${selectedBoleto.referenceMonth.replace('/', '_')}_${formatUnit(selectedBoleto.unit).replace('/', '_')}.pdf`;
 
-                                    // Também mostrar um alert com instruções
-                                    setTimeout(() => {
-                                      alert(`📄 Boleto pronto para download!\n\nPara salvar como PDF:\n• Pressione Ctrl+P (ou Cmd+P no Mac)\n• Selecione "Salvar como PDF"\n• Clique em "Salvar"`);
-                                    }, 500);
-                                  } catch (e) {
-                                    console.warn('Não foi possível adicionar instruções na janela');
-                                  }
-                                }, 100);
-                              };
-                              console.log('[Boleto] Boleto gerado com sucesso para download');
-                            } else {
-                              alert('❌ Não foi possível abrir o boleto para download.\n\nVerifique se o bloqueador de pop-ups está desabilitado e tente novamente.');
-                            }
+                            // Criar link para download direto
+                            const link = document.createElement('a');
+                            link.href = result.url;
+                            link.download = fileName;
+                            link.style.display = 'none';
+
+                            // Adicionar ao DOM e clicar
+                            document.body.appendChild(link);
+                            link.click();
+
+                            // Limpar
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(result.url);
+
+                            console.log(`[Boleto] PDF original baixado com sucesso: ${fileName}`);
+                            alert(`✅ Boleto baixado com sucesso!\n\nArquivo: ${fileName}`);
                           } else {
-                            alert('❌ Não foi possível gerar o boleto.\n\nEntre em contato com a administração.');
+                            alert(`❌ Erro ao baixar o boleto: ${result.error}\n\nEntre em contato com a administração.`);
                           }
                         } catch (error) {
-                          console.error('Erro ao gerar boleto para download:', error);
+                          console.error('Erro ao baixar boleto:', error);
                           alert('❌ Erro ao baixar o boleto.\n\nEntre em contato com a administração.');
                         }
 

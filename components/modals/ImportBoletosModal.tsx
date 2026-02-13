@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, CheckCircle2, AlertCircle, Download, File as FileIcon } from 'lucide-react';
 import { Boleto, BoletoType, Resident } from '../../types';
-import { getResidents, uploadBoletoPdf } from '../../services/dataService';
+import { getResidents, uploadBoletoOriginalPdf } from '../../services/dataService';
 import { useToast } from '../../contexts/ToastContext';
 import { normalizeUnit, compareUnits } from '../../utils/unitFormatter';
 import { extractFieldsFromBoletoText, extractTextFromPdf } from '../../services/pdfBoletoExtractor';
@@ -1155,32 +1155,38 @@ Baixe o template CSV para ver o formato correto.`;
           }
         }
       });
-      // Upload PDFs e montar mapa id -> url final
-      const fileToUrl = new Map<File, string>();
-      const boletoIdToPdfUrl = new Map<string, string>();
+      // Upload PDFs ORIGINAIS e montar mapa id -> path/checksum
+      const fileToPath = new Map<File, { path: string; checksum: string }>();
+      const boletoIdToOriginalData = new Map<string, { path: string; checksum: string }>();
       const uploadWarnings: string[] = [];
       for (const b of previewData) {
         const pdfFile = pdfAssignmentsRef.current.get(b.id);
         if (!pdfFile) continue;
-        let url = fileToUrl.get(pdfFile);
-        if (url === undefined) {
-          const result = await uploadBoletoPdf(pdfFile, b.id);
-          if (result.error || !result.url) {
-            uploadWarnings.push(`${b.unit} ${b.referenceMonth}: ${result.error || 'Falha no envio do PDF'}`);
+        let originalData = fileToPath.get(pdfFile);
+        if (originalData === undefined) {
+          console.log(`[ImportBoletos] Fazendo upload do PDF original para boleto ${b.id}...`);
+          const result = await uploadBoletoOriginalPdf(pdfFile, b.id);
+          if (result.error || !result.path) {
+            uploadWarnings.push(`${b.unit} ${b.referenceMonth}: ${result.error || 'Falha no envio do PDF original'}`);
           } else {
-            url = result.url;
-            fileToUrl.set(pdfFile, url);
-            boletoIdToPdfUrl.set(b.id, url);
+            originalData = { path: result.path, checksum: result.checksum };
+            fileToPath.set(pdfFile, originalData);
+            boletoIdToOriginalData.set(b.id, originalData);
           }
         } else {
-          boletoIdToPdfUrl.set(b.id, url);
+          boletoIdToOriginalData.set(b.id, originalData);
         }
       }
-      // Construir lista para importação sem mutar previewData (sem blob URLs)
-      const boletosToImport: Boleto[] = previewData.map(b => ({
-        ...b,
-        pdfUrl: boletoIdToPdfUrl.get(b.id) ?? undefined,
-      }));
+      // Construir lista para importação com dados do PDF original
+      const boletosToImport: Boleto[] = previewData.map(b => {
+        const originalData = boletoIdToOriginalData.get(b.id);
+        return {
+          ...b,
+          pdfUrl: undefined, // Removido - não usaremos mais PDFs gerados
+          pdf_original_path: originalData?.path,
+          checksum_pdf: originalData?.checksum,
+        };
+      });
       await onImport(boletosToImport);
       if (uploadWarnings.length > 0) {
         toast.error(`Boletos importados, mas alguns PDFs não foram enviados (verifique o bucket "boletos" no Supabase).`);

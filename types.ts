@@ -166,7 +166,7 @@ export interface Boleto {
   /** Tipo: Condomínio (padrão), Água ou Luz */
   boletoType?: BoletoType;
   barcode?: string; // Código de barras do boleto
-  pdfUrl?: string; // URL para download do PDF
+  pdfUrl?: string; // URL para download do PDF (LEGACY - será removido)
   paidDate?: string; // Data de pagamento
   description?: string; // Descrição adicional
 
@@ -174,6 +174,10 @@ export interface Boleto {
   resident_id?: string; // ID do morador no sistema (referência para residents.id)
   unidade_id?: string; // ID da unidade no sistema
   nosso_numero?: string; // Nosso número do boleto
+
+  // Campos para PDF original (regra de ouro: documento imutável)
+  pdf_original_path?: string; // Caminho do PDF original no storage (ex: /boletos/original/uuid.pdf)
+  checksum_pdf?: string; // Hash SHA-256 do PDF original para garantia de integridade
 }
 
 export interface Notification {
