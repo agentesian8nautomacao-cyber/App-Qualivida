@@ -2756,17 +2756,6 @@ const App: React.FC = () => {
           </div>
         );
       case 'financeiro':
-        if (role !== 'SINDICO') {
-          return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-              <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-              <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                Esta página é de acesso exclusivo do Síndico para gestão financeira.
-              </p>
-            </div>
-          );
-        }
         return <FinanceiroView
           allBoletos={allBoletos}
           boletoSearch={boletoSearch}

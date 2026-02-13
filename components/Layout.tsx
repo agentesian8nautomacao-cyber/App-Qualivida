@@ -107,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     { id: 'notices', label: 'Mural de Avisos', icon: Bell, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     { id: 'notifications', label: 'Notificações', icon: Bell, roles: ['MORADOR'] },
-    { id: 'financeiro', label: 'Financeiro', icon: Receipt, roles: ['SINDICO'] },
+    { id: 'financeiro', label: 'Financeiro', icon: Receipt, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
     { id: 'residentProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['MORADOR'] },
     { id: 'sindicoProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['SINDICO', 'PORTEIRO'] },
     { id: 'reservations', label: 'Reservas', icon: Calendar, roles: ['MORADOR', 'PORTEIRO', 'SINDICO'] },
