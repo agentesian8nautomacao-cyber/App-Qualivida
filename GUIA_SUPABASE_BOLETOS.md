@@ -4,16 +4,24 @@
 
 Este guia explica como diagnosticar e corrigir boletos que não têm PDFs anexados usando o **SQL Editor do Supabase**.
 
-## 🎯 **Passo a Passo Completo**
+## 🎯 **Sistema Atual: Importação Direta**
 
-### **1. Acessar o Supabase**
-1. Vá para: https://supabase.com/dashboard
-2. Faça login na sua conta
+### **Novo Fluxo Simplificado:**
+
+1. **Administrador loga** na aplicação
+2. **Vai para Financeiro → Boletos**
+3. **Clica "IMPORTAR BOLETOS"**
+4. **Seleciona múltiplos PDFs** diretamente
+5. **Sistema processa automaticamente**
+6. **Moradores baixam PDFs** dos boletos
+
+### **Diagnóstico SQL (Quando necessário):**
+
+1. **Acesse o Supabase** (para diagnóstico apenas)
+2. Vá para: https://supabase.com/dashboard
 3. Selecione o projeto da **Gestão Qualivida Residence**
-
-### **2. Abrir SQL Editor**
-1. No menu lateral esquerdo, clique em **"SQL Editor"**
-2. Clique no botão **"New Query"** (canto superior direito)
+4. No menu lateral esquerdo, clique em **"SQL Editor"**
+5. Clique no botão **"New Query"** (canto superior direito)
 
 ### **3. Executar Diagnóstico Inicial**
 

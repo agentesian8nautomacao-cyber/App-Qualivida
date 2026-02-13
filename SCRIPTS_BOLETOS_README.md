@@ -6,13 +6,14 @@ Os boletos importados anteriormente **não tinham PDFs anexados**, impedindo que
 
 ## ✅ **Solução Implementada**
 
-### **1. Importação com PDFs Automática**
-- Modal de importação agora suporta upload simultâneo de CSV + PDFs
-- Associação automática baseada no nome do arquivo
-- Template CSV atualizado com coluna `pdf_filename`
+### **1. Importação Direta de PDFs**
+- **Fluxo direto**: Botão abre seletor de arquivos sem modal intermediário
+- **Processamento automático**: Extração inteligente de dados dos PDFs
+- **Associação automática**: Vinculação com moradores baseada no conteúdo
+- **Upload simultâneo**: Múltiplos PDFs processados em background
 
-### **2. Scripts de Correção para Supabase**
-Dois scripts SQL para diagnóstico e correção, compatíveis com Supabase:
+### **2. Scripts de Diagnóstico para Supabase**
+Scripts SQL para diagnóstico e correção, compatíveis com Supabase:
 
 #### **🔍 Script: `correcao_boletos_sem_pdf.sql`**
 Identifica boletos sem PDF e fornece estatísticas detalhadas.
@@ -21,7 +22,30 @@ Identifica boletos sem PDF e fornece estatísticas detalhadas.
 Valida importações e gera relatórios de sucesso/falha.
 
 #### **🎯 Script: `supabase_sql_editor_queries.sql`**
-Versão otimizada com consultas individuais para copiar e colar no SQL Editor do Supabase.
+Consultas individuais para copiar e colar no SQL Editor do Supabase.
+
+## 📋 **Fluxo de Importação Atual**
+
+### **Como Funciona Agora:**
+
+1. **Administrador clica** "IMPORTAR BOLETOS"
+2. **Sistema abre** seletor de arquivos diretamente (sem modal)
+3. **Administrador seleciona** múltiplos PDFs dos boletos
+4. **Sistema processa** automaticamente em background:
+   - Extrai dados (valor, vencimento, morador)
+   - Cria boletos no banco de dados
+   - Anexa PDFs permanentemente
+   - Mostra progresso em tempo real
+5. **Moradores veem** os boletos em suas interfaces
+6. **Moradores podem** baixar os PDFs dos boletos
+
+### **Vantagens do Novo Sistema:**
+
+- ✅ **Fluxo direto**: Sem modais intermediários
+- ✅ **Processamento em lote**: Múltiplos PDFs simultaneamente
+- ✅ **Feedback visual**: Barra de progresso em tempo real
+- ✅ **Integração completa**: PDFs ficam associados permanentemente
+- ✅ **Experiência fluida**: Do upload à visualização do morador
 
 ## 🚀 **Como Executar os Scripts**
 
@@ -32,7 +56,25 @@ Versão otimizada com consultas individuais para copiar e colar no SQL Editor do
 
 ## 🚀 **Como Executar no Supabase**
 
-### **Opção 1: SQL Editor do Supabase (Recomendado)**
+### **Opção 1: Interface Web da Aplicação (Recomendado)**
+1. **Logue como Administrador:**
+   - Faça login com usuário Síndico ou Porteiro
+
+2. **Acesse Boletos:**
+   - Vá para **Financeiro → Boletos**
+   - Clique no botão **"IMPORTAR BOLETOS"**
+
+3. **Selecione os PDFs:**
+   - Clique na área de upload
+   - Selecione múltiplos arquivos PDF
+   - O sistema processará automaticamente
+
+4. **Confirme Importação:**
+   - Aguarde processamento inteligente
+   - Verifique boletos extraídos
+   - Clique em "Importar" para finalizar
+
+### **Opção 2: SQL Editor do Supabase (Diagnóstico)**
 1. **Acesse o Supabase Dashboard:**
    - Vá para: https://supabase.com/dashboard
    - Selecione seu projeto

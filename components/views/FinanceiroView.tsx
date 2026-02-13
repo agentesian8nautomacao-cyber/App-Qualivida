@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Receipt,
   TrendingUp,
@@ -22,7 +22,10 @@ import { useAppConfig } from '../../contexts/AppConfigContext';
 import BoletosView from './BoletosView';
 import DetailedChartsModal from '../modals/DetailedChartsModal';
 import FinancialEntryModal from '../modals/FinancialEntryModal';
+import { importBoletosFromPdfFiles, type ImportItem } from '../../services/boletoPdfImportService';
 import { useFinancialEntries } from '../../hooks/useFinancialEntries';
+import { saveBoleto, getBoletos } from '../../services/dataService';
+import { useToast } from '../../contexts/ToastContext';
 
 interface FinanceiroViewProps {
   allBoletos: Boleto[];
@@ -32,11 +35,12 @@ interface FinanceiroViewProps {
   onViewBoleto?: (boleto: Boleto) => void;
   onDownloadBoleto?: (boleto: Boleto) => void;
   onDeleteBoleto?: (boleto: Boleto) => void;
-  onImportClick?: () => void;
   showImportButton?: boolean;
   currentResident?: Resident | null;
   role: 'MORADOR' | 'PORTEIRO' | 'SINDICO';
   isLoadingBoletos?: boolean;
+  onImportSuccess?: () => void; // Callback quando importação for bem-sucedida
+  onImportClick?: () => void; // Callback para importação (removido pois não é usado)
 }
 
 type FinancialTab = 'boletos' | 'balancete';
@@ -195,18 +199,65 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   onViewBoleto,
   onDownloadBoleto,
   onDeleteBoleto,
-  onImportClick,
   showImportButton = true,
   currentResident,
   role,
-  isLoadingBoletos = false
+  isLoadingBoletos = false,
+  onImportSuccess
 }) => {
   const { config } = useAppConfig();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<FinancialTab>('boletos');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('mes');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [isDetailedChartsOpen, setIsDetailedChartsOpen] = useState(false);
+  const importPdfPickerRef = useRef<HTMLInputElement>(null);
+  const [importItems, setImportItems] = useState<ImportItem[]>([]);
+  const [isImportingPdfs, setIsImportingPdfs] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+
+  const importSummary = useMemo(() => {
+    const total = importItems.length;
+    const ok = importItems.filter((i) => i.status === 'sucesso').length;
+    const err = importItems.filter((i) => i.status === 'erro').length;
+    const processing = importItems.filter((i) => i.status === 'processando').length;
+    return { total, ok, err, processing };
+  }, [importItems]);
+
+  const runPdfImport = async (files: File[]) => {
+    const list = (files || []).filter(Boolean);
+    if (!list.length) return;
+
+    setShowImportPanel(true);
+    setIsImportingPdfs(true);
+    setImportItems(list.map((f) => ({ key: `${f.name}::${f.size}::${f.lastModified}`, file: f, status: 'pendente' } as ImportItem)));
+
+    const { successCount, errorCount } = await importBoletosFromPdfFiles({
+      files: list,
+      allResidents,
+      existingBoletos: allBoletos,
+      onProgress: (item) => {
+        setImportItems((prev) => {
+          const idx = prev.findIndex((p) => p.key === item.key);
+          if (idx < 0) return prev;
+          const next = [...prev];
+          next[idx] = item;
+          return next;
+        });
+      }
+    });
+
+    setIsImportingPdfs(false);
+
+    if (successCount > 0) {
+      toast.success(`${successCount} boleto(s) importado(s) com sucesso.`);
+      onImportSuccess?.();
+    }
+    if (errorCount > 0) {
+      toast.error(`${errorCount} arquivo(s) com erro na importação. Veja os detalhes no painel.`);
+    }
+  };
 
   // Estados para entradas manuais
   const [isReceitaModalOpen, setIsReceitaModalOpen] = useState(false);
@@ -217,11 +268,52 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   const {
     entries: financialEntries,
     loading: loadingEntries,
+    error: financialEntriesError,
     addEntry,
     updateEntry,
     deleteEntry,
     getTotalsByPeriod
   } = useFinancialEntries();
+
+  // Debug: monitorar mudanças no estado da importação PDF (não-modal)
+  React.useEffect(() => {
+    console.log('[FinanceiroView] Importação PDFs:', {
+      isImportingPdfs,
+      total: importSummary.total,
+      ok: importSummary.ok,
+      err: importSummary.err,
+      processing: importSummary.processing
+    });
+  }, [isImportingPdfs, importSummary.total, importSummary.ok, importSummary.err, importSummary.processing]);
+
+  // Log de inicialização do componente
+  console.log('[FinanceiroView] Inicializando componente:', {
+    role,
+    allBoletosCount: allBoletos?.length || 0,
+    financialEntriesCount: financialEntries?.length || 0,
+    loadingEntries,
+    financialEntriesError,
+    activeTab
+  });
+
+  // Verificar se há erro crítico no carregamento das entradas financeiras
+  if (financialEntriesError) {
+    console.error('[FinanceiroView] Erro crítico no carregamento das entradas financeiras:', financialEntriesError);
+    throw new Error(`Erro ao carregar dados financeiros: ${financialEntriesError}`);
+  }
+
+  // Verificar se os dados necessários estão disponíveis
+  if (!allBoletos || !Array.isArray(allBoletos)) {
+    console.error('[FinanceiroView] allBoletos não é um array válido:', allBoletos);
+    throw new Error('Dados de boletos não disponíveis');
+  }
+
+  if (!allResidents || !Array.isArray(allResidents)) {
+    console.error('[FinanceiroView] allResidents não é um array válido:', allResidents);
+    throw new Error('Dados de moradores não disponíveis');
+  }
+
+  console.log('[FinanceiroView] Dados validados com sucesso, renderizando componente');
 
   // Função para exportar relatório financeiro
   // Funções para gerenciar entradas manuais
@@ -255,6 +347,38 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         console.error('Erro ao excluir entrada:', error);
         alert('Erro ao excluir entrada. Tente novamente.');
       }
+    }
+  };
+
+  const handleImportBoletos = async (boletosToImport: Boleto[]) => {
+    console.log('[FinanceiroView] Iniciando importação de', boletosToImport.length, 'boletos');
+
+    // Importar boletos um por um
+    const importedIds: string[] = [];
+    for (const boleto of boletosToImport) {
+      try {
+        console.log('[FinanceiroView] Importando boleto:', boleto.unit, boleto.referenceMonth);
+        const result = await saveBoleto(boleto);
+        if (result.success && result.id) {
+          importedIds.push(result.id);
+        } else {
+          console.error('[FinanceiroView] Falha ao importar boleto:', result.error);
+        }
+      } catch (error) {
+        console.error('[FinanceiroView] Erro ao importar boleto:', error);
+      }
+    }
+
+    if (importedIds.length > 0) {
+      console.log('[FinanceiroView] Importação concluída:', importedIds.length, 'boletos importados');
+      toast.success(`${importedIds.length} boleto(s) importado(s) com sucesso!`);
+
+      // Chamar callback se fornecido
+      if (onImportSuccess) {
+        onImportSuccess();
+      }
+    } else {
+      toast.error('Nenhum boleto foi importado. Verifique os logs para mais detalhes.');
     }
   };
 
@@ -395,20 +519,121 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           </div>
         </div>
 
-        {/* Conteúdo dos Boletos */}
-        <BoletosView
-          allBoletos={allBoletos}
-          boletoSearch={boletoSearch}
-          setBoletoSearch={setBoletoSearch}
-          allResidents={allResidents}
-          onViewBoleto={onViewBoleto}
-          onDownloadBoleto={onDownloadBoleto}
-          onDeleteBoleto={onDeleteBoleto}
-          onImportClick={onImportClick}
-          showImportButton={showImportButton}
-          isResidentView={role === 'MORADOR'}
-          currentResident={role === 'MORADOR' ? currentResident : null}
-          isLoading={isLoadingBoletos}
+        {/* Painel inline de status (não-modal)
+            OBS: Quando o painel está aberto, ocultamos a lista de boletos para evitar "cards duplicados"
+            (o painel já mostra o resultado da importação). */}
+        {showImportPanel && (
+          <div className="premium-glass rounded-2xl p-4 border border-[var(--border-color)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest opacity-60">Importação de PDFs</p>
+                <p className="text-sm font-bold mt-1">
+                  {isImportingPdfs ? 'Processando...' : 'Finalizado'}
+                  {importSummary.total ? ` • ${importSummary.ok} OK • ${importSummary.err} erro(s)` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {!isImportingPdfs && showImportButton && (
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--border-color)] hover:bg-[var(--border-color)] text-xs font-black uppercase tracking-widest"
+                    style={{ color: 'var(--text-primary)' }}
+                    onClick={() => {
+                      try {
+                        importPdfPickerRef.current?.click();
+                      } catch {}
+                    }}
+                    title="Importar mais PDFs"
+                  >
+                    Importar mais
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--border-color)] hover:bg-[var(--border-color)] text-xs font-black uppercase tracking-widest"
+                  style={{ color: 'var(--text-primary)' }}
+                  onClick={() => setShowImportPanel(false)}
+                  disabled={isImportingPdfs}
+                  title={isImportingPdfs ? 'Aguarde terminar para fechar' : 'Fechar'}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            {importItems.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {importItems.map((it) => (
+                  <div
+                    key={it.key}
+                    className="rounded-xl border border-[var(--border-color)] p-3 flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-black truncate">{it.file.name}</p>
+                      <p className="text-xs opacity-60 mt-1">
+                        {it.extracted?.unidade ? `Unidade: ${it.extracted.unidade}` : 'Unidade: —'} •{' '}
+                        {it.extracted?.referencia ? `Ref: ${it.extracted.referencia}` : 'Ref: —'} •{' '}
+                        {it.resident ? `Morador: ${it.resident.name}` : 'Morador: —'}
+                      </p>
+                      {it.message && (
+                        <p className={`text-xs mt-1 ${it.status === 'erro' ? 'text-red-400' : 'opacity-70'}`}>{it.message}</p>
+                      )}
+                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-70">
+                      {it.status}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conteúdo dos Boletos (oculto enquanto o painel de importação estiver aberto) */}
+        {!showImportPanel && (
+          <BoletosView
+            allBoletos={allBoletos}
+            boletoSearch={boletoSearch}
+            setBoletoSearch={setBoletoSearch}
+            allResidents={allResidents}
+            onViewBoleto={onViewBoleto}
+            onDownloadBoleto={onDownloadBoleto}
+            onDeleteBoleto={onDeleteBoleto}
+            showImportButton={showImportButton}
+            isResidentView={role === 'MORADOR'}
+            currentResident={role === 'MORADOR' ? currentResident : null}
+            isLoading={isLoadingBoletos}
+            role={role}
+            onImportPdfsSelected={(files) => {
+              // legado (não usamos mais modal). Mantém compatibilidade.
+              if (files?.length) runPdfImport(files);
+            }}
+            onImportBoletos={() => {
+              // Fluxo solicitado: abrir direto o explorador do SO (sem modal).
+              try {
+                importPdfPickerRef.current?.click();
+              } catch {}
+            }}
+          />
+        )}
+
+        {/* File picker oculto (acionado pelo botão "Importar Boletos") */}
+        <input
+          ref={importPdfPickerRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []).filter(Boolean);
+            try {
+              e.currentTarget.value = '';
+            } catch {}
+            if (files.length > 0) {
+              console.log('[FinanceiroView] PDFs selecionados no file picker:', files.length);
+              runPdfImport(files);
+            }
+          }}
         />
       </div>
     );
@@ -1236,6 +1461,25 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         onSave={handleSaveEntry}
         type="despesa"
         editEntry={editingEntry?.type === 'despesa' ? editingEntry : null}
+      />
+
+      {/* File picker oculto também disponível na aba Balancete */}
+      <input
+        ref={importPdfPickerRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files || []).filter(Boolean);
+          try {
+            e.currentTarget.value = '';
+          } catch {}
+          if (files.length > 0) {
+            console.log('[FinanceiroView] PDFs selecionados no file picker:', files.length);
+            runPdfImport(files);
+          }
+        }}
       />
     </div>
   );

@@ -27,11 +27,16 @@ const MoradorDashboardView: React.FC<MoradorDashboardViewProps> = ({
   onViewPackage,
   onViewNotice
 }) => {
-  // Filtrar apenas dados do morador logado (compareUnits para aceitar "BL 03 / APTO 005" e "03/005")
+  // Filtrar apenas dados do morador logado.
+  // Regra: boletos devem estar associados ao morador_id (resident_id). Fallback por unidade para legado.
   const residentUnit = currentResident.unit;
+  const residentId = currentResident.id;
   const myBoletos = useMemo(() => 
-    allBoletos.filter(b => compareUnits(b.unit, residentUnit)),
-    [allBoletos, residentUnit]
+    allBoletos.filter((b) => {
+      if (b.resident_id && residentId) return b.resident_id === residentId;
+      return compareUnits(b.unit, residentUnit);
+    }),
+    [allBoletos, residentId, residentUnit]
   );
 
   const myPackages = useMemo(() => 
@@ -139,7 +144,7 @@ const MoradorDashboardView: React.FC<MoradorDashboardViewProps> = ({
                     <p className="text-sm font-black">
                       {formatCurrency(boleto.amount)}
                     </p>
-                    {boleto.pdfUrl && (
+                    {(boleto.pdf_original_path || boleto.pdfUrl) && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onViewBoleto && (
                           <button

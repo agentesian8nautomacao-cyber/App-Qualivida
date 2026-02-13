@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   AlertCircle,
   Building2,
@@ -24,6 +24,7 @@ import { Boleto, BoletoType, Resident } from '../../types';
 import { formatUnit, compareUnits } from '../../utils/unitFormatter';
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import { downloadBoletoOriginalPdf } from '../../services/dataService';
+import { useToast } from '../../contexts/ToastContext';
 
 const BOLETO_TYPE_LABELS: Record<BoletoType, string> = {
   condominio: 'Taxa/Condomínio',
@@ -45,13 +46,13 @@ interface BoletosViewProps {
   onViewBoleto?: (boleto: Boleto) => void;
   onDownloadBoleto?: (boleto: Boleto) => void;
   onDeleteBoleto?: (boleto: Boleto) => void;
-  onImportClick?: () => void;
-  onProcessPDFClick?: () => void;
   showImportButton?: boolean;
-  showProcessPDFButton?: boolean;
   isResidentView?: boolean;
   currentResident?: Resident | null; // Para filtrar boletos do morador logado
   isLoading?: boolean;
+  role?: 'MORADOR' | 'PORTEIRO' | 'SINDICO';
+  onImportBoletos?: () => void; // Callback para abrir modal de importação
+  onImportPdfsSelected?: (files: File[]) => void; // PDFs selecionados no file picker do SO
 }
 
 const BoletosView: React.FC<BoletosViewProps> = ({
@@ -62,24 +63,116 @@ const BoletosView: React.FC<BoletosViewProps> = ({
   onViewBoleto,
   onDownloadBoleto,
   onDeleteBoleto,
-  onImportClick,
-  onProcessPDFClick,
   showImportButton = true,
-  showProcessPDFButton = true,
   isResidentView = false,
   currentResident = null,
-  isLoading = false
+  isLoading = false,
+  role,
+  onImportBoletos,
+  onImportPdfsSelected
 }) => {
   const { config } = useAppConfig();
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useState<'all' | 'Pendente' | 'Pago' | 'Vencido'>('all');
   const [typeFilter, setTypeFilter] = useState<BoletoType | 'all'>('all');
   const [selectedBoleto, setSelectedBoleto] = useState<Boleto | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
+  // Verificar se estamos no lado do cliente
+  const isClient = typeof window !== 'undefined';
+
+  // Monitor simples de localização (não interfere com navegação)
+  useEffect(() => {
+    if (!isClient) return;
+
+    // Apenas log de localização inicial para debug
+    console.log('[BoletosView] Componente montado na rota:', window.location.pathname);
+
+    // Listener simples para mudanças de rota (não interfere)
+    const handleLocationChange = () => {
+      console.log('[BoletosView] Mudança de localização detectada:', window.location.pathname);
+    };
+
+    // Usar MutationObserver para detectar mudanças no pathname
+    const observer = new MutationObserver(() => {
+      if (window.location.pathname !== '/financeiro') {
+        console.warn('[BoletosView] Localização mudou para rota diferente:', window.location.pathname);
+      }
+    });
+
+    // Observar mudanças no elemento que contém o pathname
+    if (document.querySelector('[data-pathname]')) {
+      observer.observe(document.querySelector('[data-pathname]')!, {
+        attributes: true,
+        attributeFilter: ['data-pathname']
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isClient]);
+
+  // Função ISOLADA para importar boletos - NÃO deve causar nenhum side-effect
+  const handleImportClick = useCallback((e?: React.MouseEvent) => {
+    console.log('[BoletosView] ======= INÍCIO handleImportClick (ISOLADO) =======');
+    console.log('[BoletosView] Timestamp:', Date.now());
+    console.log('[BoletosView] Event:', e);
+    console.log('[BoletosView] Role:', role);
+    console.log('[BoletosView] Current location:', window?.location?.pathname);
+
+    // CRÍTICO: Prevenir QUALQUER propagação ou comportamento padrão
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      // stopImmediatePropagation não existe no tipo do SyntheticEvent do React; usar nativeEvent com cast seguro
+      try {
+        (e.nativeEvent as any)?.stopImmediatePropagation?.();
+      } catch {
+        // ignore
+      }
+      console.log('[BoletosView] Evento completamente prevenido');
+    }
+
+    // Verificar ambiente - apenas client-side
+    if (typeof window === 'undefined') {
+      console.log('[BoletosView] Ambiente não é client-side');
+      return;
+    }
+
+    // Verificar permissões - apenas administradores
+    if (role === 'MORADOR') {
+      console.log('[BoletosView] Acesso negado: usuário MORADOR');
+      toast.error('Acesso restrito. Apenas síndicos e porteiros podem importar boletos.');
+      return;
+    }
+
+    console.log('[BoletosView] Usuário autorizado, abrindo modal de importação');
+
+    // Abrir modal de importação (abrir modal NÃO é importação)
+    if (onImportBoletos) {
+      onImportBoletos();
+      console.log('[BoletosView] Modal de importação aberto com sucesso');
+    } else {
+      console.warn('[BoletosView] Callback onImportBoletos não fornecido');
+      toast.error('Funcionalidade de importação não disponível no momento.');
+      return;
+    }
+
+    console.log('[BoletosView] ======= FIM handleImportClick (MODAL ABERTO) =======');
+  }, [role, toast, onImportBoletos]);
+
   // Filtrar boletos do morador logado quando for vista de morador
   const residentBoletos = useMemo(() => {
     if (!isResidentView || !currentResident) return allBoletos;
-    return allBoletos.filter(boleto => compareUnits(boleto.unit, currentResident.unit));
+    // Regra: morador deve ver boletos associados ao seu morador_id (resident_id).
+    // Fallback: para boletos antigos sem resident_id, usa comparação por unidade.
+    return allBoletos.filter((boleto) => {
+      if (boleto.resident_id && currentResident.id) {
+        return boleto.resident_id === currentResident.id;
+      }
+      return compareUnits(boleto.unit, currentResident.unit);
+    });
   }, [allBoletos, isResidentView, currentResident]);
 
   // Usar os boletos filtrados para moradores, ou todos para administradores
@@ -247,6 +340,7 @@ const BoletosView: React.FC<BoletosViewProps> = ({
     }
   };
 
+
   const handleShareBoleto = async (boleto: Boleto) => {
     const shareText = `🏢 BOLETO - ${config.condominiumName?.toUpperCase() || 'CONDOMÍNIO'}\n\n📍 Unidade: ${formatUnit(boleto.unit)}\n📅 Referência: ${boleto.referenceMonth}\n💰 Valor: ${formatCurrency(boleto.amount)}\n📆 Vencimento: ${formatDate(boleto.dueDate)}\n📊 Status: ${boleto.status}`;
     const barcode = (boleto.barcode || '').trim();
@@ -312,10 +406,48 @@ const BoletosView: React.FC<BoletosViewProps> = ({
       return Number.isNaN(dueT) ? 0 : dueT;
     };
 
-    const sortedBoletos = [...allBoletos].sort((a, b) => {
+    const sortedBoletos = [...boletosToShow].sort((a, b) => {
       // Ordenar por referência (mais recente primeiro); fallback para vencimento
       return toRefTime(b.referenceMonth, b.dueDate) - toRefTime(a.referenceMonth, a.dueDate);
     });
+
+    const handleQuickDownload = async (boleto: Boleto) => {
+      try {
+        let downloadUrl = '';
+        const fileName = `boleto_${String(boleto.referenceMonth || '').replace('/', '_')}_${formatUnit(boleto.unit).replace('/', '_')}.pdf`;
+
+        if (boleto.pdf_original_path) {
+          const result = await downloadBoletoOriginalPdf(boleto.pdf_original_path, boleto.checksum_pdf);
+          if (!result.url) {
+            toast.error(result.error || 'Erro ao baixar PDF original.');
+            return;
+          }
+          downloadUrl = result.url;
+        } else if (boleto.pdfUrl) {
+          downloadUrl = boleto.pdfUrl;
+        } else {
+          toast.error('Este boleto não possui PDF disponível.');
+          return;
+        }
+
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        if (downloadUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(downloadUrl);
+        }
+      } catch (e) {
+        console.error('[BoletosView] Erro ao baixar boleto:', e);
+        toast.error('Erro ao baixar o boleto.');
+      } finally {
+        if (onDownloadBoleto) onDownloadBoleto(boleto);
+      }
+    };
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -341,6 +473,24 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                 key={boleto.id}
                 className="relative premium-glass rounded-2xl p-6 border border-[var(--border-color)] hover:border-[var(--text-primary)]/30 transition-all group"
               >
+                {/* Ação rápida: baixar PDF (obrigatório para morador) */}
+                {(boleto.pdf_original_path || boleto.pdfUrl) && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleQuickDownload(boleto);
+                    }}
+                    className="absolute top-3 right-3 px-3 py-2 rounded-xl bg-[var(--glass-bg)] border border-[var(--border-color)] hover:bg-[var(--border-color)] transition-all opacity-90"
+                    style={{ color: 'var(--text-primary)' }}
+                    title="Baixar boleto (PDF original)"
+                  >
+                    <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                      <Download className="w-4 h-4" />
+                      Baixar
+                    </span>
+                  </button>
+                )}
                 {/* Botão de exclusão no canto superior direito - apenas para administradores */}
                 {!isResidentView && onDeleteBoleto && (
                   <button
@@ -612,15 +762,21 @@ const BoletosView: React.FC<BoletosViewProps> = ({
           <h3 className="text-3xl font-black uppercase tracking-tighter">Boletos</h3>
           <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1">Condomínio, Água e Luz</p>
         </div>
-        {showImportButton && onImportClick && (
-          <button
-            onClick={onImportClick}
-            className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 hover:bg-[var(--border-color)]"
-          >
-            <Upload className="w-4 h-4" /> Importar Boletos
-          </button>
+        {showImportButton && (
+          <>
+            <button
+              type="button"
+              onClick={handleImportClick}
+              data-import-button="boletos"
+              className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center gap-2 hover:bg-[var(--border-color)]"
+            >
+              <Upload className="w-4 h-4" />
+              Importar Boletos
+            </button>
+          </>
         )}
       </header>
+
 
       {/* Estatísticas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

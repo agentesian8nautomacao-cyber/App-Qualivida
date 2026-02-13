@@ -113,15 +113,16 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       openBrowserPlugin(),
-      VitePWA({
-        injectRegister: 'inline',
-        registerType: 'autoUpdate',
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          navigateFallback: '/index.html'
-        },
-        devOptions: { enabled: false }
-      })
+      // TEMPORARIAMENTE DESABILITADO PARA DEBUG
+      // VitePWA({
+      //   injectRegister: 'inline',
+      //   registerType: 'autoUpdate',
+      //   workbox: {
+      //     globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      //     navigateFallback: '/index.html'
+      //   },
+      //   devOptions: { enabled: false }
+      // })
     ],
     publicDir: 'public',
     optimizeDeps: {

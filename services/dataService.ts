@@ -326,7 +326,8 @@ export const getResidents = async (): Promise<GetResidentsResult> => {
       fetchRemote: async () => {
         const { data, error } = await supabase
           .from('residents')
-          .select('id, name, unit, email, phone, whatsapp')
+          // extra_data é necessário para identificação por CPF (importação de boletos)
+          .select('id, name, unit, email, phone, whatsapp, extra_data')
           .order('name', { ascending: true });
         if (error) throw error;
         return data || [];
@@ -339,7 +340,8 @@ export const getResidents = async (): Promise<GetResidentsResult> => {
       unit: r.unit,
       email: r.email || '',
       phone: r.phone || '',
-      whatsapp: r.whatsapp || ''
+      whatsapp: r.whatsapp || '',
+      extraData: r.extra_data ?? undefined
     }));
     
     return { data: list, error: result.error };
@@ -643,9 +645,19 @@ export const saveBoleto = async (boleto: Boleto): Promise<{ success: boolean; er
   }
 
   try {
-    // Buscar resident_id
+    const explicitId =
+      typeof (boleto as any)?.id === 'string' &&
+      (boleto as any).id.trim() &&
+      !(boleto as any).id.startsWith('temp-')
+        ? (boleto as any).id.trim()
+        : null;
+
+    // Buscar resident_id (prioridade: payload já informado)
     let residentId: string | null = null;
-    if (boleto.residentName) {
+    if (boleto.resident_id && typeof boleto.resident_id === 'string' && boleto.resident_id.trim() && !boleto.resident_id.startsWith('temp-')) {
+      residentId = boleto.resident_id;
+    }
+    if (!residentId && boleto.residentName) {
       try {
         const { data: resident } = await supabase
           .from('residents')
@@ -660,6 +672,8 @@ export const saveBoleto = async (boleto: Boleto): Promise<{ success: boolean; er
     }
 
     const payload: any = {
+      // Permite forçar UUID (ex.: upload do PDF antes do INSERT)
+      ...(explicitId ? { id: explicitId } : {}),
       resident_id: residentId,
       resident_name: boleto.residentName,
       unit: boleto.unit,
@@ -726,21 +740,14 @@ export const deleteBoleto = async (id: string): Promise<{ success: boolean; erro
 
 export type GetBoletosResult = { data: Boleto[]; error?: string };
 
-export const getBoletos = async (): Promise<GetBoletosResult> => {
+export const getBoletos = async (options?: {
+  /**
+   * Callback chamado quando o Supabase retornar dados mais recentes.
+   * Útil porque `getData` é offline-first e retorna cache imediatamente.
+   */
+  onRemoteUpdate?: (rows: Boleto[]) => void;
+}): Promise<GetBoletosResult> => {
   try {
-    const result = await getData<any>('boletos', {
-      fetchRemote: async () => {
-        // Limitar a 1000 registros mais recentes para performance
-        const { data, error } = await supabase
-          .from('boletos')
-          .select('id, resident_name, unit, reference_month, due_date, amount, status, boleto_type, barcode, pdf_url, paid_date, description, pdf_original_path, checksum_pdf')
-          .order('due_date', { ascending: false })
-          .limit(1000);
-        if (error) throw error;
-        return data || [];
-      }
-    });
-
     const toDateStr = (v: any) => {
       if (!v) return '';
       if (typeof v === 'string') return v;
@@ -748,7 +755,7 @@ export const getBoletos = async (): Promise<GetBoletosResult> => {
       return d.toISOString().slice(0, 10);
     };
 
-    const list: Boleto[] = result.data.map((b: any) => ({
+    const mapRow = (b: any): Boleto => ({
       id: b.id,
       residentName: b.resident_name,
       unit: b.unit,
@@ -761,10 +768,33 @@ export const getBoletos = async (): Promise<GetBoletosResult> => {
       pdfUrl: b.pdf_url ?? undefined, // LEGACY
       paidDate: b.paid_date ? toDateStr(b.paid_date) : undefined,
       description: b.description ?? undefined,
+      resident_id: b.resident_id ?? undefined,
       // Campos para PDF original (documento imutável)
       pdf_original_path: b.pdf_original_path ?? undefined,
       checksum_pdf: b.checksum_pdf ?? undefined
-    }));
+    });
+
+    const result = await getData<any>('boletos', {
+      fetchRemote: async () => {
+        // Limitar a 1000 registros mais recentes para performance
+        const { data, error } = await supabase
+          .from('boletos')
+          .select('id, resident_id, resident_name, unit, reference_month, due_date, amount, status, boleto_type, barcode, pdf_url, paid_date, description, pdf_original_path, checksum_pdf')
+          .order('due_date', { ascending: false })
+          .limit(1000);
+        if (error) throw error;
+        return data || [];
+      },
+      onRemoteUpdate: (remote) => {
+        try {
+          options?.onRemoteUpdate?.((remote || []).map(mapRow));
+        } catch (e) {
+          console.warn('[getBoletos] Falha em onRemoteUpdate:', e);
+        }
+      }
+    });
+
+    const list: Boleto[] = (result.data || []).map(mapRow);
     return { data: list, error: result.error };
   } catch (err: any) {
     console.error('Erro ao buscar boletos:', err);
@@ -794,6 +824,17 @@ export const uploadBoletoOriginalPdf = async (
   boletoId: string
 ): Promise<{ path: string; checksum: string; error?: string }> => {
   try {
+    // Storage geralmente exige sessão Auth (role=authenticated) quando RLS está ativo.
+    // Se não houver sessão, o upload vai falhar com RLS; preferimos retornar um erro claro.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      return {
+        path: '',
+        checksum: '',
+        error: 'Sessão inválida/expirada. Faça login novamente antes de importar boletos (upload do PDF requer autenticação).'
+      };
+    }
+
     // Calcular hash SHA-256 do arquivo original para garantia de integridade
     const checksum = await calculateFileSHA256(file);
 
@@ -1319,7 +1360,10 @@ const createUserFromStaff = async (staff: Staff, passwordPlain?: string, authUse
       .insert(insertPayload);
 
     if (userError) {
-      if (userError.code === '23505' || (userError.message && userError.message.toLowerCase().includes('duplicate'))) {
+      const status = (userError as any)?.status;
+      const code = String((userError as any)?.code || '');
+      const msg = String((userError as any)?.message || '').toLowerCase();
+      if (status === 409 || code === '23505' || msg.includes('duplicate') || msg.includes('already exists') || msg.includes('conflict')) {
         const updatePayload: Record<string, unknown> = {
           name: staff.name,
           email: staff.email || null,

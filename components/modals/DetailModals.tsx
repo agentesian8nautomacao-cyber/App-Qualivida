@@ -411,6 +411,23 @@ export const ResidentFormModal = ({ isOpen, onClose, data, setData, onSave, role
                 <div className="col-span-1 sm:col-span-2"><label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Nome Completo</label><input type="text" value={data.name || ''} onChange={e => setData({...data, name: e.target.value})} className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10" placeholder="Ex: Carlos Silva" /></div>
                 <div><label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Unidade</label><input type="text" value={data.unit || ''} onChange={e => setData({...data, unit: e.target.value})} className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10" placeholder="Ex: 03/005" /></div>
                 <div><label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Telefone</label><input type="text" value={data.phone} onChange={e => setData({...data, phone: e.target.value})} className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10" placeholder="Apenas números" /></div>
+                <div className="col-span-1 sm:col-span-2">
+                  <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">
+                    CPF (Obrigatório para associação automática de boletos)
+                  </label>
+                  <input
+                    type="text"
+                    value={data.cpf || ''}
+                    onChange={e => setData({ ...data, cpf: e.target.value })}
+                    className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10"
+                    placeholder="Ex: 003.641.765-39 (aceita com ou sem pontuação)"
+                  />
+                  {!String(data.cpf || '').trim() && (
+                    <p className="text-[10px] mt-1 text-amber-700 opacity-80">
+                      Sem CPF, o sistema não consegue associar boletos importados (PDF) ao morador.
+                    </p>
+                  )}
+                </div>
                 <div className="col-span-1 sm:col-span-2"><label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">WhatsApp (Opcional)</label><input type="text" value={data.whatsapp} onChange={e => setData({...data, whatsapp: e.target.value})} className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10" placeholder="5511999999999" /></div>
                 <div className="col-span-1 sm:col-span-2"><label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Email {!data.id ? '(Obrigatório para login e recuperação de senha)' : '(Opcional)'}</label><input type="email" value={data.email} onChange={e => setData({...data, email: e.target.value})} className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10" placeholder="email@exemplo.com" /></div>
                 {/* Campo de senha - apenas para síndico */}

@@ -354,23 +354,11 @@ export const loginUser = async (
       };
     }
 
-    // Tentar criar perfil mínimo na tabela `users` se não existir (não deve bloquear o login).
-    try {
-      await supabase
-        .from('users')
-        .insert({
-          auth_user_id: authUser.id,
-          username: profile.username || authUser.email || '',
-          role: profile.role || 'MORADOR',
-          name: profile.name ?? null,
-          email: profile.email ?? null,
-          phone: profile.phone ?? null,
-          is_active: profile.is_active ?? true
-        });
-    } catch (e) {
-      // Ignorar erros (ex.: duplicidade, RLS) — o login não deve falhar por causa disso.
-      console.warn('[userAuth] Não foi possível criar perfil automático (não crítico):', e);
-    }
+    // IMPORTANTE:
+    // Não criar/sincronizar automaticamente registros em `public.users` durante o login.
+    // Isso gerava POST /rest/v1/users com 409 (Conflict) como efeito colateral em fluxos não relacionados
+    // (ex.: ao abrir modal/acionar importação de boletos). O provisionamento do perfil deve ser explícito
+    // (ex.: via fluxo administrativo) e não uma escrita automática no client.
 
     // Salvar sessão e retornar
     try { saveUserSession(profile); } catch {}

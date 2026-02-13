@@ -12,4 +12,20 @@ Para que os PDFs importados na página **Boletos** fiquem disponíveis para visu
    - **Public bucket:** marque como **Sim** (público), para que as URLs dos PDFs funcionem para visualização e download.
 5. Salve.
 
-Após criar o bucket `boletos` como público, a importação de boletos com PDF anexado passará a enviar os arquivos para o Storage e a salvar a URL pública no boleto. O síndico poderá visualizar e o morador terá acesso ao PDF na sua área de boletos.
+## Passo obrigatório: liberar upload (RLS do Storage)
+
+Mesmo com bucket público, o **upload** pode falhar com:
+
+`StorageApiError: new row violates row-level security policy`
+
+Isso acontece porque o Supabase Storage usa a tabela `storage.objects` com **RLS** e, por padrão, não permite `INSERT/UPDATE`.
+
+Execute no **SQL Editor** o arquivo:
+
+- `supabase_storage_boletos_policies.sql`
+
+Após aplicar as policies, a importação de boletos com PDF anexado passa a:
+
+- enviar o PDF original para o Storage (`boletos/original/{uuid}.pdf`)
+- salvar o caminho (`pdf_original_path`) e checksum no registro do boleto
+- permitir que síndico/morador baixem exatamente o PDF original

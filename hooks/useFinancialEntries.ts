@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import Dexie from 'dexie';
 import { FinancialEntry } from '../types';
 
-// Database setup
+// Database setup com tratamento de erro
+let db: FinancialDatabase | null = null;
+
 class FinancialDatabase extends Dexie {
   financialEntries: Dexie.Table<FinancialEntry, string>;
 
@@ -15,11 +17,23 @@ class FinancialDatabase extends Dexie {
   }
 }
 
-const db = new FinancialDatabase();
+// Função para obter instância do banco de dados com tratamento de erro
+const getDatabase = (): FinancialDatabase => {
+  if (!db) {
+    try {
+      db = new FinancialDatabase();
+    } catch (error) {
+      console.error('Erro ao criar instância do banco de dados FinancialDatabase:', error);
+      throw new Error('Não foi possível inicializar o banco de dados local');
+    }
+  }
+  return db;
+};
 
 export const useFinancialEntries = () => {
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load entries from database
   useEffect(() => {
@@ -29,10 +43,16 @@ export const useFinancialEntries = () => {
   const loadEntries = async () => {
     try {
       setLoading(true);
-      const allEntries = await db.financialEntries.orderBy('date').reverse().toArray();
+      setError(null);
+      const database = getDatabase();
+      const allEntries = await database.financialEntries.orderBy('date').reverse().toArray();
       setEntries(allEntries);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao carregar entradas';
       console.error('Error loading financial entries:', error);
+      setError(errorMessage);
+      // Em caso de erro, definir array vazio para evitar crash
+      setEntries([]);
     } finally {
       setLoading(false);
     }
@@ -40,38 +60,44 @@ export const useFinancialEntries = () => {
 
   const addEntry = async (entryData: Omit<FinancialEntry, 'id' | 'createdAt'>) => {
     try {
+      const database = getDatabase();
       const newEntry: FinancialEntry = {
         ...entryData,
         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         createdAt: new Date().toISOString()
       };
 
-      await db.financialEntries.add(newEntry);
+      await database.financialEntries.add(newEntry);
       await loadEntries(); // Reload to get updated data
       return newEntry;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao adicionar entrada';
       console.error('Error adding financial entry:', error);
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
   const updateEntry = async (id: string, updates: Partial<Omit<FinancialEntry, 'id' | 'createdAt'>>) => {
     try {
-      await db.financialEntries.update(id, updates);
+      const database = getDatabase();
+      await database.financialEntries.update(id, updates);
       await loadEntries();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao atualizar entrada';
       console.error('Error updating financial entry:', error);
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
   const deleteEntry = async (id: string) => {
     try {
-      await db.financialEntries.delete(id);
+      const database = getDatabase();
+      await database.financialEntries.delete(id);
       await loadEntries();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao excluir entrada';
       console.error('Error deleting financial entry:', error);
-      throw error;
+      throw new Error(errorMessage);
     }
   };
 
@@ -100,6 +126,7 @@ export const useFinancialEntries = () => {
   return {
     entries,
     loading,
+    error,
     addEntry,
     updateEntry,
     deleteEntry,

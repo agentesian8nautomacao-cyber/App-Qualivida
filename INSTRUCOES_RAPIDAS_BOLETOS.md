@@ -1,166 +1,86 @@
-# 🚀 **INSTRUÇÕES RÁPIDAS - Correção de Boletos PDF (Supabase)**
+# 🚀 **INSTRUÇÕES RÁPIDAS - Importação de Boletos PDF**
 
 ## ⚡ **Problema Resolvido**
 Moradores não conseguiam baixar boletos porque os PDFs não estavam anexados.
 
 ## ✅ **Solução Implementada**
-Sistema agora importa boletos com PDFs automaticamente + scripts de correção para Supabase.
+**Sistema direto de importação:** Botão abre seletor de arquivos e processa PDFs automaticamente!
 
 ---
 
-## 🎯 **EXECUÇÃO NO SUPABASE (Método Recomendado)**
+## 🎯 **IMPORTAÇÃO DIRETA (Novo Sistema)**
 
-### **Passo 1: Acessar SQL Editor**
-1. Vá para: https://supabase.com/dashboard
-2. Selecione seu projeto
-3. Clique em "SQL Editor" → "New Query"
+### **Passo 1: Acesse a Aplicação**
+- Logue como **Síndico** ou **Porteiro**
+- Vá para **Financeiro → Boletos**
 
-### **Passo 2: Executar Diagnóstico**
-Abra o arquivo `scripts/supabase_sql_editor_queries.sql` e execute:
+### **Passo 2: Clique "IMPORTAR BOLETOS"**
+- Sistema abre **seletor de arquivos** diretamente
+- Sem modais intermediários
 
-#### **Query 1.1 - Contagem Geral:**
+### **Passo 3: Selecione os PDFs**
+- Escolha **múltiplos arquivos PDF** dos boletos
+- Sistema identifica automaticamente:
+  - ✅ Valor do boleto
+  - ✅ Data de vencimento
+  - ✅ Morador por unidade
+  - ✅ Código de barras
+
+### **Passo 4: Processamento Automático**
+- Sistema processa em background
+- Mostra barra de progresso
+- Cria boletos e anexa PDFs
+
+### **Passo 5: Resultado**
+- Boletos aparecem para moradores
+- Moradores podem baixar PDFs
+- Tudo automático e transparente
+
+---
+
+## 🔍 **VERIFICAÇÃO NO SUPABASE (Opcional)**
+
+### **Para verificar status atual:**
+1. Vá para: https://supabase.com/dashboard → SQL Editor
+2. Execute:
+
 ```sql
-SELECT
-    'BOLETOS SEM PDF - NECESSITAM CORREÇÃO' as status,
-    COUNT(*) as total_boletos_sem_pdf,
-    COUNT(CASE WHEN status = 'Pago' THEN 1 END) as pagos_sem_pdf,
-    COUNT(CASE WHEN status = 'Pendente' THEN 1 END) as pendentes_sem_pdf,
-    COUNT(CASE WHEN status = 'Vencido' THEN 1 END) as vencidos_sem_pdf
+-- Contagem de boletos sem PDF
+SELECT COUNT(*) as boletos_sem_pdf
 FROM public.boletos
 WHERE pdf_original_path IS NULL AND pdf_url IS NULL;
-```
 
-#### **Query 1.2 - Lista Detalhada (TOP 20):**
-```sql
-SELECT
-    id,
-    unit,
-    resident_name,
-    reference_month,
-    due_date,
-    amount,
-    status,
-    CASE
-        WHEN status = 'Pago' THEN '🔴 CRÍTICO'
-        WHEN status = 'Vencido' THEN '🟠 IMPORTANTE'
-        WHEN status = 'Pendente' THEN '🟡 NORMAL'
-    END as prioridade_correcao
+-- Lista de boletos sem PDF
+SELECT id, unit, resident_name, reference_month, amount
 FROM public.boletos
 WHERE pdf_original_path IS NULL AND pdf_url IS NULL
-ORDER BY
-    CASE status
-        WHEN 'Pago' THEN 1
-        WHEN 'Vencido' THEN 2
-        WHEN 'Pendente' THEN 3
-    END,
-    due_date DESC
-LIMIT 20;
+ORDER BY due_date DESC
+LIMIT 5;
 ```
-
-### **Passo 3: Corrigir Boletos**
-Para cada boleto sem PDF identificado:
-
-1. **Logar como Administrador** no sistema
-2. **Ir para Financeiro → Boletos**
-3. **Localizar boleto** (usar ID da query)
-4. **Clicar botão "Anexar PDF"**
-5. **Selecionar arquivo PDF**
-6. **Confirmar upload**
-
----
-
-## 🎯 **EXECUÇÃO LOCAL (Desenvolvimento)**
-
-### **Scripts Windows (se usar PostgreSQL local):**
-```cmd
-# Script Batch:
-scripts\executar_scripts_windows.bat
-
-# OU PowerShell:
-.\scripts\executar_scripts_windows.ps1
-```
-
----
-
-## 🔧 **EXECUÇÃO MANUAL (se necessário)**
-
-### **Se PostgreSQL estiver no PATH:**
-```powershell
-# Diagnóstico
-psql -h localhost -U postgres -d gestao_qualivida -f scripts/correcao_boletos_sem_pdf.sql
-
-# Validação
-psql -h localhost -U postgres -d gestao_qualivida -f scripts/validacao_importacao_boletos_com_pdf.sql
-```
-
-### **Se PostgreSQL NÃO estiver no PATH:**
-```powershell
-# Ajuste o caminho conforme sua instalação
-& "C:\Program Files\PostgreSQL\15\bin\psql.exe" -h localhost -U postgres -d gestao_qualivida -f scripts/correcao_boletos_sem_pdf.sql
-```
-
----
-
-## 📊 **O QUE OS SCRIPTS FAZEM**
-
-### **Script 1 - Diagnóstico:**
-- ✅ Conta boletos sem PDF
-- ✅ Lista quais precisam de correção
-- ✅ Mostra estatísticas por status
-
-### **Script 2 - Validação:**
-- ✅ Verifica importações recentes
-- ✅ Calcula % de sucesso
-- ✅ Gera relatório final
-
----
-
-## 🔨 **CORREÇÃO MANUAL VIA INTERFACE**
-
-Após executar diagnóstico:
-
-1. **Logar como Administrador** (Síndico/Porteiro)
-2. **Ir para: Financeiro → Boletos**
-3. **Encontrar boleto sem PDF**
-4. **Clicar botão laranja "Anexar PDF"**
-5. **Selecionar arquivo PDF**
-6. **Confirmar upload**
 
 ---
 
 ## 🎯 **RESULTADO ESPERADO**
 
-**Antes:** ❌ Boletos visíveis mas sem download
-**Depois:** ✅ Moradores podem baixar todos os PDFs
+**Antes:** ❌ Boletos importados sem PDF → Moradores não baixavam
+**Agora:** ✅ Upload múltiplo de PDFs → Extração automática → Moradores baixam PDFs
 
 ---
 
-## ❓ **PROBLEMAS COMUNS**
+## ❓ **DÚVIDAS?**
 
-### **"psql não encontrado"**
-```cmd
-# Execute diagnóstico automático:
-scripts\executar_scripts_windows.bat
-# Escolha opção [4]
-```
+**Q: Como funciona a extração automática?**
+A: O sistema lê o conteúdo do PDF e identifica: valor, vencimento, unidade, morador.
 
-### **"Banco não existe"**
-- Verifique nome do banco: `gestao_qualivida`
-- Ou ajuste no comando: `-d nome_correto_do_banco`
+**Q: E se o PDF não for reconhecido?**
+A: Aparecerá erro na lista - verifique se o PDF contém dados legíveis.
 
-### **"Erro de permissão"**
-- Verifique usuário/senha
-- Use: `-U nome_do_usuario`
+**Q: Posso importar PDFs de diferentes tipos de boleto?**
+A: Sim! Sistema identifica condomínio, água, luz automaticamente.
+
+**Q: Os PDFs ficam salvos permanentemente?**
+A: Sim, são armazenados no Supabase Storage com checksum de integridade.
 
 ---
 
-## 📞 **SUPORTE**
-1. Execute primeiro o diagnóstico
-2. Verifique resultados
-3. Corrija via interface web
-4. Execute validação final
-
-**Precisa de ajuda?** Verifique o arquivo `SCRIPTS_BOLETOS_README.md` para instruções completas.
-
----
-**⚡ Versão Rápida - Fevereiro 2026**
+**🎉 Teste o novo sistema de importação agora!**

@@ -36,7 +36,7 @@ import { ConnectivityProvider } from './contexts/ConnectivityContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Utils
-import { normalizeUnit, compareUnits } from './utils/unitFormatter';
+import { normalizeUnit, compareUnits, formatUnit } from './utils/unitFormatter';
 import { openWhatsApp } from './utils/phoneNormalizer';
 
 // Services
@@ -58,7 +58,6 @@ import { supabase, isSupabasePlaceholder } from './services/supabase';
 import { NewReservationModal, NewVisitorModal, NewPackageModal, StaffFormModal, AdminUserModal, type StaffFormData } from './components/modals/ActionModals';
 import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, OccurrenceDetailModal, ResidentFormModal, NewOccurrenceModal, NoticeEditModal } from './components/modals/DetailModals';
 import ImportResidentsModal from './components/modals/ImportResidentsModal';
-import ImportBoletosModal from './components/modals/ImportBoletosModal';
 // Temporariamente comentado até resolver dependências
 // import BoletoPDFModal from './components/modals/BoletoPDFModal';
 import ImportPackagesModal from './components/modals/ImportPackagesModal';
@@ -95,7 +94,7 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<UserRole>('PORTEIRO');
   const [currentResident, setCurrentResident] = useState<Resident | null>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, _setActiveTab] = useState('dashboard');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
   const [residentAvatar, setResidentAvatar] = useState<string | null>(null);
@@ -104,6 +103,50 @@ const App: React.FC = () => {
   const [showResidentRegister, setShowResidentRegister] = useState(false);
   // Controle de áudio do vídeo (legacy – mantido por compatibilidade, mesmo sem vídeo)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
+
+  // ============================================================
+  // TRACE DE NAVEGAÇÃO (CRÍTICO PARA DEBUG DE REDIRECT INDEVIDO)
+  // ============================================================
+  const activeTabRef = useRef(activeTab);
+  const roleRef = useRef<UserRole>(role);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
+  /**
+   * Wrapper para capturar origem de redirecionamentos indevidos.
+   * Mantém a mesma assinatura do setState padrão: (tab: string) => void
+   */
+  const setActiveTab = useCallback((nextTab: string) => {
+    const prevTab = activeTabRef.current;
+    // Guardrail: Síndico não tem permissão para o módulo Encomendas.
+    // Evita "redirect" indevido para uma tela que sempre será restrita.
+    if (nextTab === 'packages' && roleRef.current === 'SINDICO') {
+      console.error('[NAV][setActiveTab] Bloqueado: tentativa de navegação para Encomendas por usuário SÍNDICO.', {
+        from: prevTab,
+        to: nextTab,
+        role: roleRef.current,
+        timestamp: new Date().toISOString()
+      });
+      try { console.trace('[NAV][setActiveTab] Stack trace (bloqueado)'); } catch {}
+      return;
+    }
+    // Logar apenas mudanças relevantes para evitar poluir o console
+    if (nextTab === 'packages' || prevTab === 'packages') {
+      console.warn('[NAV][setActiveTab] Mudança de aba detectada', {
+        from: prevTab,
+        to: nextTab,
+        role: roleRef.current,
+        timestamp: new Date().toISOString()
+      });
+      // Stack trace explícito para identificar o chamador
+      try { console.trace('[NAV][setActiveTab] Stack trace'); } catch {}
+    }
+    _setActiveTab(nextTab);
+  }, []);
 
   // Carregar dados do usuário administrador (síndico/porteiro) e avatar local
   useEffect(() => {
@@ -190,6 +233,7 @@ const App: React.FC = () => {
     email: '',
     phone: '',
     whatsapp: '',
+    cpf: '',
     vehiclePlate: '',
     vehicleModel: '',
     vehicleColor: ''
@@ -331,8 +375,7 @@ const App: React.FC = () => {
     const result = await changeUserPassword(
       currentAdminUser.username,
       '123456',
-      pwdFirst,
-      { storePlain: true }
+      pwdFirst
     );
     if (result.success) {
       setShowFirstLoginChangePasswordModal(false);
@@ -346,10 +389,31 @@ const App: React.FC = () => {
   // Handlers para perfil do morador
   const handleStartEditResidentProfile = () => {
     if (currentResident) {
+      const onlyDigitsLocal = (v: string) => (v || '').replace(/\\D+/g, '');
+      const extra = (currentResident as any)?.extraData || {};
+      const cpfCandidates = [
+        extra?.cpf,
+        extra?.CPF,
+        extra?.cpf_cnpj,
+        extra?.cpfCnpj,
+        extra?.['CPF/CNPJ'],
+        extra?.['cpf/cnpj'],
+        extra?.documento,
+        extra?.document
+      ].filter(Boolean);
+      let cpfDigits = '';
+      for (const c of cpfCandidates) {
+        const d = onlyDigitsLocal(String(c));
+        if (d.length >= 11) {
+          cpfDigits = d;
+          break;
+        }
+      }
       setResidentProfileData({
         email: currentResident.email || '',
         phone: currentResident.phone || '',
         whatsapp: currentResident.whatsapp || '',
+        cpf: cpfDigits,
         vehiclePlate: currentResident.vehiclePlate || '',
         vehicleModel: currentResident.vehicleModel || '',
         vehicleColor: currentResident.vehicleColor || ''
@@ -360,11 +424,27 @@ const App: React.FC = () => {
 
   const handleSaveResidentProfile = async () => {
     if (!currentResident) return;
+    const cpfDigits = String(residentProfileData.cpf || '').replace(/\\D+/g, '');
+    if (cpfDigits && cpfDigits.length !== 11) {
+      toast.error('CPF inválido. Informe 11 dígitos (com ou sem pontuação).');
+      return;
+    }
+
+    const nextExtraData: Record<string, any> = { ...((currentResident as any)?.extraData || {}) };
+    if (cpfDigits) {
+      nextExtraData.cpf = cpfDigits;
+    } else {
+      // se usuário apagar o CPF, remover (melhor esforço)
+      if ('cpf' in nextExtraData) {
+        try { delete nextExtraData.cpf; } catch {}
+      }
+    }
     const updatedResident: Resident = {
       ...currentResident,
       email: residentProfileData.email,
       phone: residentProfileData.phone,
       whatsapp: residentProfileData.whatsapp,
+      extraData: Object.keys(nextExtraData).length ? nextExtraData : undefined,
       vehiclePlate: residentProfileData.vehiclePlate,
       vehicleModel: residentProfileData.vehicleModel,
       vehicleColor: residentProfileData.vehicleColor
@@ -373,7 +453,11 @@ const App: React.FC = () => {
     if (result.success) {
       setCurrentResident(updatedResident);
       setIsEditingResidentProfile(false);
-      toast.success('Perfil atualizado com sucesso!');
+      if (!cpfDigits) {
+        toast.info('Perfil salvo. Dica: informe seu CPF para que boletos importados sejam associados automaticamente.');
+      } else {
+        toast.success('Perfil atualizado com sucesso!');
+      }
     } else {
       toast.error(result.error || 'Erro ao atualizar perfil');
     }
@@ -505,7 +589,13 @@ const App: React.FC = () => {
   // Função para carregar boletos (lazy)
   const loadBoletos = useCallback(async () => {
     if (boletosLoaded || !isAuthenticated) return;
-    const res = await getBoletos();
+    const res = await getBoletos({
+      onRemoteUpdate: (remote) => {
+        // Importante: `getBoletos` retorna cache imediatamente.
+        // Quando o remoto chegar, atualizamos a UI.
+        setAllBoletos(remote);
+      }
+    });
     if (res.data) setAllBoletos(res.data);
     setBoletosLoaded(true);
   }, [isAuthenticated, boletosLoaded]);
@@ -522,12 +612,16 @@ const App: React.FC = () => {
       case 'occurrences':
         loadOccurrences();
         break;
+      case 'dashboard':
+        // Morador vê boletos no Dashboard, então precisamos carregá-los aqui também.
+        if (role === 'MORADOR') loadBoletos();
+        break;
       case 'financeiro':
         loadBoletos();
         break;
       // Outras abas podem carregar seus dados conforme necessário
     }
-  }, [activeTab, isAuthenticated, loadVisitors, loadOccurrences, loadBoletos]);
+  }, [activeTab, isAuthenticated, role, loadVisitors, loadOccurrences, loadBoletos]);
 
   // Carregar avisos, chat, staff do Supabase
   useEffect(() => {
@@ -586,6 +680,8 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   // Refetch avisos e chat ao abrir o Mural (garante visibilidade e mensagens atualizadas)
+  // TEMPORARIAMENTE DESABILITADO PARA DEBUG
+  /*
   useEffect(() => {
     if (!isAuthenticated || activeTab !== 'notices') return;
     getNotices((data) => setAllNotices(data || [])).then((res) => {
@@ -601,6 +697,7 @@ const App: React.FC = () => {
       }
     });
   }, [isAuthenticated, activeTab]);
+  */
 
   const [allOccurrences, setAllOccurrences] = useState<Occurrence[]>([]);
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
@@ -642,7 +739,8 @@ const App: React.FC = () => {
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  // NoticesView espera RefObject<HTMLDivElement> (não-null). Ref inicia null, mas o tipo pode ser tratado com non-null assertion.
+  const chatEndRef = useRef<HTMLDivElement>(null!);
 
   // Sempre que o usuário autenticar, marcamos o início da sessão
   // de chat. Ao deslogar, limpamos o estado e o marcador.
@@ -890,14 +988,35 @@ const App: React.FC = () => {
   const [selectedOccurrenceForDetail, setSelectedOccurrenceForDetail] = useState<Occurrence | null>(null);
   const [isResidentModalOpen, setIsResidentModalOpen] = useState(false);
   const [isImportResidentsModalOpen, setIsImportResidentsModalOpen] = useState(false);
-  const [isImportBoletosModalOpen, setIsImportBoletosModalOpen] = useState(false);
   // const [isBoletoPDFModalOpen, setIsBoletoPDFModalOpen] = useState(false);
   const [isImportPackagesModalOpen, setIsImportPackagesModalOpen] = useState(false);
   const [isCameraScanModalOpen, setIsCameraScanModalOpen] = useState(false);
   const [pendingPackageImage, setPendingPackageImage] = useState<string | null>(null);
   const [pendingPackageQrData, setPendingPackageQrData] = useState<string | null>(null);
   const [packageSaving, setPackageSaving] = useState(false);
-  const [residentFormData, setResidentFormData] = useState({ id: '', name: '', unit: '', email: '', phone: '', whatsapp: '' });
+  type ResidentFormData = {
+    id: string;
+    name: string;
+    unit: string;
+    email: string;
+    phone: string;
+    whatsapp: string;
+    /** CPF do morador (apenas dígitos, salvo em residents.extra_data.cpf). */
+    cpf: string;
+    /** Campos extras preservados (residents.extra_data). */
+    extraData?: Record<string, any>;
+  };
+
+  const [residentFormData, setResidentFormData] = useState<ResidentFormData>({
+    id: '',
+    name: '',
+    unit: '',
+    email: '',
+    phone: '',
+    whatsapp: '',
+    cpf: '',
+    extraData: undefined
+  });
   const [selectedResidentProfile, setSelectedResidentProfile] = useState<Resident | null>(null);
   const [residentPassword, setResidentPassword] = useState<string | null>(null);
 
@@ -988,107 +1107,21 @@ const App: React.FC = () => {
     loadNotifications();
     loadPackages();
 
-    // Configurar Realtime listener para notificações
-    console.log('[Realtime] Configurando listener para morador:', currentResident.id);
-    
+    // TEMPORARIAMENTE DESABILITADO: Configurar Realtime listener para notificações
+    // Problema: está causando chamada para /rest/v1/users com erro 409
+    console.log('[Realtime] Listener de notificações DESABILITADO temporariamente');
+
+    // TODO: Reabilitar quando o problema for resolvido
+    /*
     const channel = supabase
-      .channel(`notifications-${currentResident.id}`) // Canal único por morador
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `morador_id=eq.${currentResident.id}`
-        },
-        (payload) => {
-          console.log('[Realtime] ✅ Nova notificação recebida via Realtime:', payload);
-          
-          const newNotification: Notification = {
-            id: payload.new.id,
-            morador_id: payload.new.morador_id,
-            title: payload.new.title,
-            message: payload.new.message,
-            type: payload.new.type || 'package',
-            related_id: payload.new.related_id || undefined,
-            image_url: payload.new.image_url ?? undefined,
-            read: payload.new.read || false,
-            created_at: payload.new.created_at
-          };
-          
-          // Adicionar nova notificação no início da lista
-          setAllNotifications(prev => {
-            // Evitar duplicatas
-            const exists = prev.find(n => n.id === newNotification.id);
-            if (exists) {
-              console.log('[Realtime] Notificação já existe, ignorando duplicata');
-              return prev;
-            }
-            return [newNotification, ...prev];
-          });
-          setUnreadNotificationCount(prev => prev + 1);
-          toast.success(newNotification.title || 'Nova notificação');
-          console.log('[Realtime] ✅ Notificação adicionada à lista:', newNotification);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `morador_id=eq.${currentResident.id}`
-        },
-        (payload) => {
-          const id = payload.new?.id;
-          const nowRead = payload.new?.read === true;
-          if (recentlyMarkedAsReadIds.current.has(id)) return;
-          let shouldDecrement = false;
-          setAllNotifications(prev => {
-            const n = prev.find(x => x.id === id);
-            shouldDecrement = Boolean(n && !n.read && nowRead);
-            return prev.map(x => x.id === id ? { ...x, read: nowRead || false } : x);
-          });
-          if (shouldDecrement) {
-            queueMicrotask(() => setUnreadNotificationCount(c => Math.max(0, c - 1)));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `morador_id=eq.${currentResident.id}`
-        },
-        (payload) => {
-          const id = (payload as { old?: { id?: string } }).old?.id;
-          if (!id) return;
-          if (recentlyDeletedNotificationIds.current.has(id)) {
-            recentlyDeletedNotificationIds.current.delete(id);
-            return;
-          }
-          const wasUnread = (payload as { old?: { read?: boolean } }).old?.read === false;
-          setAllNotifications(prev => prev.filter(n => n.id !== id));
-          if (wasUnread) {
-            setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Realtime] Status da conexão:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('[Realtime] ✅ Conectado ao Realtime com sucesso');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[Realtime] ❌ Erro ao conectar ao Realtime');
-        }
-      });
+      .channel(`notifications-${currentResident.id}`)
+      .on('postgres_changes', { ... })
+      .subscribe((status) => { ... });
 
     return () => {
-      console.log('[Realtime] Removendo listener de notificações');
       supabase.removeChannel(channel);
     };
+    */
   }, [isAuthenticated, role, currentResident]);
 
   // Refetch notificações quando o morador volta à aba/janela do app (fallback se Realtime não entregar)
@@ -1452,9 +1485,38 @@ const App: React.FC = () => {
   };
   const handleAddPkgCategory = () => { if (!newPkgCatName.trim()) return; setPackageCategories([...packageCategories, newPkgCatName.trim()]); setPackageType(newPkgCatName.trim()); setNewPkgCatName(''); setIsAddingPkgCategory(false); };
   const handleAcknowledgeNotice = (id: string) => { setAllNotices(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); };
+  const onlyDigits = (v: string) => (v || '').replace(/\D+/g, '');
+  const getResidentCpfDigits = (r?: Resident | null): string => {
+    const extra = (r as any)?.extraData || {};
+    const candidates = [
+      extra?.cpf,
+      extra?.CPF,
+      extra?.cpf_cnpj,
+      extra?.cpfCnpj,
+      extra?.['CPF/CNPJ'],
+      extra?.['cpf/cnpj'],
+      extra?.documento,
+      extra?.document
+    ].filter(Boolean);
+    for (const c of candidates) {
+      const d = onlyDigits(String(c));
+      if (d.length >= 11) return d;
+    }
+    return '';
+  };
+
   const handleOpenResidentModal = async (resident?: Resident) => { 
     if (resident) { 
-      setResidentFormData(resident);
+      setResidentFormData({
+        id: resident.id || '',
+        name: resident.name || '',
+        unit: resident.unit || '',
+        email: resident.email || '',
+        phone: resident.phone || '',
+        whatsapp: resident.whatsapp || '',
+        cpf: getResidentCpfDigits(resident),
+        extraData: resident.extraData || undefined
+      });
       // Buscar senha do morador apenas se for síndico
       if (role === 'SINDICO' && resident.id) {
         try {
@@ -1477,7 +1539,16 @@ const App: React.FC = () => {
         setResidentPassword(null);
       }
     } else { 
-      setResidentFormData({ id: '', name: '', unit: '', email: '', phone: '', whatsapp: '' });
+      setResidentFormData({
+        id: '',
+        name: '',
+        unit: '',
+        email: '',
+        phone: '',
+        whatsapp: '',
+        cpf: '',
+        extraData: undefined
+      });
       setResidentPassword(null);
     } 
     setIsResidentModalOpen(true); 
@@ -1492,6 +1563,15 @@ const App: React.FC = () => {
     // Normalizar unidade antes de salvar
     const normalizedData = { ...residentFormData, unit: normalizeUnit(residentFormData.unit) };
     
+    // Montar extraData preservando o que já existia e atualizando CPF
+    const cpfDigits = onlyDigits(residentFormData.cpf || '');
+    const nextExtraData: Record<string, any> = { ...(residentFormData.extraData || {}) };
+    if (cpfDigits) nextExtraData.cpf = cpfDigits;
+    // se o usuário apagar o CPF, remover do extraData (melhor esforço)
+    if (!cpfDigits && 'cpf' in nextExtraData) {
+      try { delete nextExtraData.cpf; } catch {}
+    }
+
     // Criar objeto Resident completo
     const resident: Resident = {
       id: normalizedData.id || `temp-${Date.now()}`,
@@ -1499,7 +1579,8 @@ const App: React.FC = () => {
       unit: normalizedData.unit,
       email: normalizedData.email || '',
       phone: normalizedData.phone || '',
-      whatsapp: normalizedData.whatsapp || ''
+      whatsapp: normalizedData.whatsapp || '',
+      extraData: Object.keys(nextExtraData).length ? nextExtraData : undefined
     };
     
     // Salvar no Supabase (senha padrão 123456 para novo; morador pode trocar via Esqueci minha senha)
@@ -1555,7 +1636,7 @@ const App: React.FC = () => {
         throw new Error(msg);
       }
     }
-    const { data } = await getBoletos();
+    const { data } = await getBoletos({ onRemoteUpdate: (remote) => setAllBoletos(remote) });
     if (data) setAllBoletos(data);
   };
 
@@ -1578,7 +1659,7 @@ const App: React.FC = () => {
 
       const res = await saveBoleto(boleto);
       if (res.success) {
-        const { data } = await getBoletos();
+        const { data } = await getBoletos({ onRemoteUpdate: (remote) => setAllBoletos(remote) });
         if (data) setAllBoletos(data);
         toast.success('Boleto processado e salvo com sucesso!');
       } else {
@@ -1718,6 +1799,22 @@ const App: React.FC = () => {
   };
 
   const handleCameraScanSuccess = (data: { resident?: Resident; qrData?: string; image?: string; fromMode?: 'qr' | 'photo' }) => {
+    // Guardrail: câmera/Encomendas é fluxo exclusivo da Portaria.
+    // Isso impede redirects indevidos (ex.: síndico/admin caindo em Encomendas → "Acesso Restrito").
+    const currentRole = roleRef.current;
+    if (currentRole !== 'PORTEIRO') {
+      console.error('[CameraScan] onScanSuccess chamado fora do contexto permitido. IGNORANDO para evitar redirecionamento indevido.', {
+        role: currentRole,
+        activeTab: activeTabRef.current,
+        dataKeys: Object.keys(data || {}),
+        timestamp: new Date().toISOString()
+      });
+      try { console.trace('[CameraScan] Stack trace (onScanSuccess)'); } catch {}
+      // Garantir fechamento do modal caso tenha sido aberto por engano
+      setIsCameraScanModalOpen(false);
+      return;
+    }
+
     const hasCapture = Boolean(data.qrData || data.image);
     if (!hasCapture) return;
 
@@ -2058,7 +2155,31 @@ const App: React.FC = () => {
 
       if (dbError) {
         console.error('Erro ao salvar na tabela users:', dbError);
-        toast.error('Usuário criado, mas houve erro no registro interno');
+        const status = (dbError as any)?.status;
+        const code = String((dbError as any)?.code || '');
+        const msg = String((dbError as any)?.message || '').toLowerCase();
+        const isConflict =
+          status === 409 ||
+          code === '23505' ||
+          msg.includes('duplicate') ||
+          msg.includes('already exists') ||
+          msg.includes('conflict');
+
+        if (isConflict) {
+          console.warn('[App.tsx] Conflito ao criar registro em users (já existe). Ignorando 409 e seguindo.');
+          toast.success('Usuário administrativo criado (registro interno já existia).');
+          setAdminUserData({
+            name: '',
+            email: '',
+            role: '',
+            password: '',
+            confirmPassword: ''
+          });
+          console.log('[App.tsx] Fechando modal de admin user');
+          setIsAdminUserModalOpen(false);
+        } else {
+          toast.error('Usuário criado, mas houve erro no registro interno');
+        }
       } else {
         toast.success('Usuário administrativo criado com sucesso!');
         setAdminUserData({
@@ -2068,6 +2189,7 @@ const App: React.FC = () => {
           password: '',
           confirmPassword: ''
         });
+        console.log('[App.tsx] Fechando modal de admin user');
         setIsAdminUserModalOpen(false);
       }
     } catch (error) {
@@ -2139,9 +2261,27 @@ const App: React.FC = () => {
             allNotices={allNotices}
             allPackages={allPackages}
             allReservations={dayReservations}
-            onViewBoleto={(boleto) => {
-              if (boleto.pdfUrl) {
-                window.open(boleto.pdfUrl, '_blank');
+            onViewBoleto={async (boleto) => {
+              try {
+                // Preferir PDF original (novo sistema). Fallback: pdfUrl (legado).
+                if (boleto.pdf_original_path) {
+                  const { downloadBoletoOriginalPdf } = await import('./services/dataService');
+                  const result = await downloadBoletoOriginalPdf(boleto.pdf_original_path, boleto.checksum_pdf);
+                  if (result.url) {
+                    window.open(result.url, '_blank');
+                    return;
+                  }
+                  toast.error(result.error || 'Erro ao abrir PDF original.');
+                  return;
+                }
+                if (boleto.pdfUrl) {
+                  window.open(boleto.pdfUrl, '_blank');
+                  return;
+                }
+                toast.error('Este boleto não possui PDF disponível.');
+              } catch (e) {
+                console.error('[Dashboard Morador] Erro ao visualizar boleto:', e);
+                toast.error('Erro ao abrir o boleto.');
               }
             }}
             onDownloadBoleto={async (boleto) => {
@@ -2300,6 +2440,24 @@ const App: React.FC = () => {
                 {isEditingResidentProfile ? (
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
+                          CPF (necessário para associação automática de boletos)
+                        </label>
+                        <input
+                          type="text"
+                          value={residentProfileData.cpf}
+                          onChange={(e) => setResidentProfileData({ ...residentProfileData, cpf: e.target.value })}
+                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
+                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
+                          placeholder="003.641.765-39"
+                        />
+                        {!String(residentProfileData.cpf || '').trim() && (
+                          <p className="text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
+                            Sem CPF, o sistema não consegue associar boletos importados (PDF) ao seu perfil.
+                          </p>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
                           E-mail
@@ -2403,6 +2561,7 @@ const App: React.FC = () => {
                             email: '',
                             phone: '',
                             whatsapp: '',
+                            cpf: '',
                             vehiclePlate: '',
                             vehicleModel: '',
                             vehicleColor: ''
@@ -2824,16 +2983,40 @@ const App: React.FC = () => {
           boletoSearch={boletoSearch}
           setBoletoSearch={setBoletoSearch}
           allResidents={allResidents}
-          onViewBoleto={(boleto) => { if (boleto.pdfUrl) window.open(boleto.pdfUrl, '_blank'); }}
-          onDownloadBoleto={(boleto) => { if (boleto.pdfUrl) { const link = document.createElement('a'); link.href = boleto.pdfUrl; link.download = `boleto-${boleto.unit}-${boleto.referenceMonth}.pdf`; link.click(); } }}
+          onViewBoleto={async (boleto) => {
+            try {
+              // Preferir PDF original (novo sistema). Fallback: pdfUrl (legado).
+              if (boleto.pdf_original_path) {
+                const { downloadBoletoOriginalPdf } = await import('./services/dataService');
+                const result = await downloadBoletoOriginalPdf(boleto.pdf_original_path, boleto.checksum_pdf);
+                if (result.url) {
+                  window.open(result.url, '_blank');
+                  return;
+                }
+                toast.error(result.error || 'Erro ao abrir PDF original.');
+                return;
+              }
+              if (boleto.pdfUrl) {
+                window.open(boleto.pdfUrl, '_blank');
+                return;
+              }
+              toast.error('Este boleto não possui PDF disponível.');
+            } catch (e) {
+              console.error('[Financeiro] Erro ao visualizar boleto:', e);
+              toast.error('Erro ao abrir o boleto.');
+            }
+          }}
+          onDownloadBoleto={handleDownloadBoleto}
           onDeleteBoleto={handleDeleteBoleto}
-          onImportClick={() => setIsImportBoletosModalOpen(true)}
-          // onProcessPDFClick={() => setIsBoletoPDFModalOpen(true)}
           showImportButton={role !== 'MORADOR'}
-          // showProcessPDFButton={role !== 'MORADOR'}
           currentResident={currentResident}
           role={role}
           isLoadingBoletos={!boletosLoaded}
+          onImportSuccess={async () => {
+            // Recarregar boletos após importação
+            const { data } = await getBoletos({ onRemoteUpdate: (remote) => setAllBoletos(remote) });
+            if (data) setAllBoletos(data);
+          }}
         />;
       case 'visitors': 
         return <VisitorsView visitorLogs={visitorLogs} visitorSearch={visitorSearch} setVisitorSearch={setVisitorSearch} setIsVisitorModalOpen={setIsVisitorModalOpen} visitorTab={visitorTab} setVisitorTab={setVisitorTab} handleVisitorCheckOut={handleVisitorCheckOut} calculatePermanence={calculatePermanence} role={role} />;
@@ -2912,7 +3095,7 @@ const App: React.FC = () => {
             </div>
           );
         }
-        return <PackagesView allPackages={allPackages} allResidents={allResidents} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onDeletePackage={handleDeletePackage} onCameraScan={() => setIsCameraScanModalOpen(true)} onImportClick={() => setIsImportPackagesModalOpen(true)} />;
+        return <PackagesView allPackages={allPackages} allResidents={allResidents} packageSearch={packageSearch} setPackageSearch={setPackageSearch} setIsNewPackageModalOpen={handleOpenNewPackageModal} setSelectedPackageForDetail={setSelectedPackageForDetail} onDeletePackage={handleDeletePackage} onCameraScan={() => setIsCameraScanModalOpen(true)} />;
       case 'settings': 
         if (role === 'MORADOR') {
           return (
@@ -3262,7 +3445,6 @@ const App: React.FC = () => {
         residentPassword={residentPassword}
       />
       <ImportResidentsModal isOpen={isImportResidentsModalOpen} onClose={() => setIsImportResidentsModalOpen(false)} onImport={handleImportResidents} existingResidents={allResidents} />
-      <ImportBoletosModal isOpen={isImportBoletosModalOpen} onClose={() => setIsImportBoletosModalOpen(false)} onImport={handleImportBoletos} existingBoletos={allBoletos} allResidents={allResidents} />
 
       {/* Temporariamente comentado até resolver dependências */}
       {/*

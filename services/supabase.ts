@@ -37,9 +37,18 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true
+    },
+    global: {
+      headers: {
+        'x-client-info': 'gestao-qualivida-residence'
+      }
     }
   }
 );
+
+// Interceptador global removido temporariamente para debug
+// Se o erro 409 parar de aparecer no console, significa que era apenas log do interceptor
+// TODO: Reimplementar interceptor sem causar logs desnecessários
 
 // Tipos para as tabelas do Supabase
 export type Database = {
