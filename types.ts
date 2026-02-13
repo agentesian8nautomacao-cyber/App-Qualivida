@@ -54,6 +54,15 @@ export interface Resident {
   extraData?: Record<string, any>; // Campos adicionais do arquivo de importação
 }
 
+export interface OccurrenceMessage {
+  id: string;
+  text: string;
+  senderRole: 'MORADOR' | 'SINDICO' | 'PORTEIRO';
+  senderName: string;
+  timestamp: string;
+  read: boolean;
+}
+
 export interface Occurrence {
   id: string;
   residentName: string;
@@ -63,6 +72,7 @@ export interface Occurrence {
   date: string;
   reportedBy: string; // Nome ou cargo de quem reportou
   imageUrl?: string | null; // Foto/anexo opcional da ocorrência
+  messages?: OccurrenceMessage[]; // Sistema de chat para comunicação
 }
 
 export interface Staff {

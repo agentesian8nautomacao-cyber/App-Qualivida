@@ -2813,6 +2813,7 @@ const App: React.FC = () => {
               setIsOccurrenceModalOpen={setIsOccurrenceModalOpen}
               handleResolveOccurrence={handleResolveOccurrence}
               handleDeleteOccurrence={handleDeleteOccurrence}
+              onOccurrenceClick={setSelectedOccurrenceForDetail}
             />
           );
         }
@@ -2824,6 +2825,7 @@ const App: React.FC = () => {
             setIsOccurrenceModalOpen={setIsOccurrenceModalOpen}
             handleResolveOccurrence={handleResolveOccurrence}
             handleDeleteOccurrence={handleDeleteOccurrence}
+            onOccurrenceClick={setSelectedOccurrenceForDetail}
           />
         );
       case 'sentinela':
@@ -2898,16 +2900,18 @@ const App: React.FC = () => {
   } else {
     content = (
       <>
-        <Layout 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        role={role} 
-        setRole={setRole} 
-        onLogout={handleLogout} 
-        theme={theme} 
+        <Layout
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        role={role}
+        setRole={setRole}
+        onLogout={handleLogout}
+        theme={theme}
         toggleTheme={toggleTheme}
         notificationCount={role === 'MORADOR' ? unreadNotificationCount : 0}
         onOpenNotifications={role === 'MORADOR' ? () => setActiveTab('notifications') : undefined}
+        currentAdminUser={currentAdminUser}
+        currentResident={currentResident}
       >
         {renderContent()}
       </Layout>
@@ -3091,7 +3095,15 @@ const App: React.FC = () => {
         currentResident={currentResident}
       />
       <VisitorDetailModal visitor={selectedVisitorForDetail} onClose={() => setSelectedVisitorForDetail(null)} onCheckout={handleVisitorCheckOut} calculatePermanence={calculatePermanence} />
-      <OccurrenceDetailModal occurrence={selectedOccurrenceForDetail} onClose={() => setSelectedOccurrenceForDetail(null)} onSave={handleSaveOccurrenceDetails} setOccurrence={setSelectedOccurrenceForDetail} />
+      <OccurrenceDetailModal
+        occurrence={selectedOccurrenceForDetail}
+        onClose={() => setSelectedOccurrenceForDetail(null)}
+        onSave={handleSaveOccurrenceDetails}
+        setOccurrence={setSelectedOccurrenceForDetail}
+        currentRole={role}
+        currentResident={currentResident}
+        currentAdminUser={currentAdminUser}
+      />
       <ResidentFormModal 
         isOpen={isResidentModalOpen} 
         onClose={() => {

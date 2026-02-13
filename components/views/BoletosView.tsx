@@ -70,6 +70,7 @@ const BoletosView: React.FC<BoletosViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'Pendente' | 'Pago' | 'Vencido'>('all');
   const [typeFilter, setTypeFilter] = useState<BoletoType | 'all'>('all');
   const [selectedBoleto, setSelectedBoleto] = useState<Boleto | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Funções de filtro otimizadas com useCallback
   const filterByType = useCallback((boletos: Boleto[]) => {
@@ -225,6 +226,8 @@ const BoletosView: React.FC<BoletosViewProps> = ({
     if (!value) return false;
     try {
       await navigator.clipboard.writeText(value);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
       return true;
     } catch {
       return false;
@@ -232,16 +235,16 @@ const BoletosView: React.FC<BoletosViewProps> = ({
   };
 
   const handleShareBoleto = async (boleto: Boleto) => {
-    const shareText = `Boleto - ${formatUnit(boleto.unit)} - ${boleto.referenceMonth}`;
-    const url = boleto.pdfUrl;
+    const shareText = `🏢 BOLETO - ${config.condominiumName?.toUpperCase() || 'CONDOMÍNIO'}\n\n📍 Unidade: ${formatUnit(boleto.unit)}\n📅 Referência: ${boleto.referenceMonth}\n💰 Valor: ${formatCurrency(boleto.amount)}\n📆 Vencimento: ${formatDate(boleto.dueDate)}\n📊 Status: ${boleto.status}`;
     const barcode = (boleto.barcode || '').trim();
+    const fullText = barcode ? `${shareText}\n\n📋 Código de barras:\n${barcode}` : shareText;
 
     try {
       if (navigator.share) {
         await navigator.share({
           title: 'Boleto',
-          text: barcode ? `${shareText}\nCódigo de barras: ${barcode}` : shareText,
-          url: url || undefined
+          text: fullText,
+          url: boleto.pdfUrl || undefined
         });
         return;
       }
@@ -249,7 +252,16 @@ const BoletosView: React.FC<BoletosViewProps> = ({
       // ignore
     }
 
-    await copyToClipboard(barcode || url || shareText);
+    // Fallback: tentar abrir WhatsApp se for mobile
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(fullText)}`;
+      window.open(whatsappUrl, '_blank');
+      return;
+    }
+
+    // Último fallback: copiar para clipboard
+    await copyToClipboard(fullText);
   };
 
   const calculateStats = useCallback((boletos: Boleto[]) => {
@@ -429,12 +441,31 @@ const BoletosView: React.FC<BoletosViewProps> = ({
 
                   <div className="mt-4 grid gap-3">
                     <button
-                      onClick={() => copyToClipboard(selectedBoleto.barcode || '')}
-                      disabled={!selectedBoleto.barcode}
-                      className="w-full px-6 py-4 rounded-2xl bg-[var(--glass-bg)] border border-[var(--border-color)] hover:bg-[var(--border-color)] transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{ color: 'var(--text-primary)' }}
+                      onClick={() => {
+                        if (selectedBoleto.barcode) {
+                          copyToClipboard(selectedBoleto.barcode);
+                        } else {
+                          // Se não há código de barras, copiar as informações básicas para pagamento
+                          const infoText = `BOLETO - ${formatUnit(selectedBoleto.unit)}\nValor: ${formatCurrency(selectedBoleto.amount)}\nVencimento: ${formatDate(selectedBoleto.dueDate)}\nReferência: ${selectedBoleto.referenceMonth}\n\n*Código de barras não disponível. Entre em contato com a administração.*`;
+                          copyToClipboard(infoText);
+                        }
+                      }}
+                      className={`w-full px-6 py-4 rounded-2xl border transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider ${
+                        copySuccess
+                          ? 'bg-green-500 text-white border-green-500'
+                          : 'bg-[var(--glass-bg)] border-[var(--border-color)] hover:bg-[var(--border-color)]'
+                      }`}
+                      style={copySuccess ? {} : { color: 'var(--text-primary)' }}
                     >
-                      <Copy className="w-5 h-5" /> Copiar código de barras
+                      {copySuccess ? (
+                        <>
+                          <CheckCircle2 className="w-5 h-5" /> COPIADO!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-5 h-5" /> {selectedBoleto.barcode ? 'COPIAR CÓDIGO DE BARRAS' : 'COPIAR INFORMAÇÕES'}
+                        </>
+                      )}
                     </button>
 
                     <button
@@ -442,19 +473,47 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                       className="w-full px-6 py-4 rounded-2xl bg-[var(--glass-bg)] border border-[var(--border-color)] hover:bg-[var(--border-color)] transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      <Share2 className="w-5 h-5" /> Compartilhar boleto
+                      <Share2 className="w-5 h-5" /> COMPARTILHAR BOLETO
                     </button>
 
                     <button
                       onClick={() => {
-                        if (onDownloadBoleto) onDownloadBoleto(selectedBoleto);
-                        else if (selectedBoleto.pdfUrl) window.open(selectedBoleto.pdfUrl, '_blank');
+                        // Tentar download direto primeiro
+                        if (selectedBoleto.pdfUrl) {
+                          try {
+                            // Se for uma URL blob, tentar download direto
+                            if (selectedBoleto.pdfUrl.startsWith('blob:')) {
+                              const link = document.createElement('a');
+                              link.href = selectedBoleto.pdfUrl;
+                              link.download = `boleto_${selectedBoleto.unit}_${selectedBoleto.referenceMonth}.pdf`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            } else {
+                              // Para URLs normais, abrir em nova aba
+                              window.open(selectedBoleto.pdfUrl, '_blank');
+                            }
+                          } catch (error) {
+                            console.error('Erro ao baixar PDF:', error);
+                            // Fallback: tentar copiar informações do boleto
+                            const boletoInfo = `BOLETO\nUnidade: ${formatUnit(selectedBoleto.unit)}\nReferência: ${selectedBoleto.referenceMonth}\nValor: ${formatCurrency(selectedBoleto.amount)}\nVencimento: ${formatDate(selectedBoleto.dueDate)}\n${selectedBoleto.barcode ? `Código: ${selectedBoleto.barcode}` : ''}`;
+                            copyToClipboard(boletoInfo);
+                          }
+                        } else {
+                          // Se não há PDF, copiar as informações do boleto para facilitar o pagamento
+                          const boletoInfo = `BOLETO\nUnidade: ${formatUnit(selectedBoleto.unit)}\nReferência: ${selectedBoleto.referenceMonth}\nValor: ${formatCurrency(selectedBoleto.amount)}\nVencimento: ${formatDate(selectedBoleto.dueDate)}\n${selectedBoleto.barcode ? `Código de Barras: ${selectedBoleto.barcode}` : 'Código de barras não disponível'}`;
+                          copyToClipboard(boletoInfo);
+                        }
+
+                        // Chamar callback adicional se disponível
+                        if (onDownloadBoleto) {
+                          onDownloadBoleto(selectedBoleto);
+                        }
                       }}
-                      disabled={!selectedBoleto.pdfUrl}
-                      className="w-full px-6 py-4 rounded-2xl bg-[var(--text-primary)] text-[var(--bg-color)] border border-[var(--text-primary)] hover:opacity-90 transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={selectedBoleto.pdfUrl ? 'Baixar PDF' : 'PDF não disponível'}
+                      className="w-full px-6 py-4 rounded-2xl bg-[var(--text-primary)] text-[var(--bg-color)] border border-[var(--text-primary)] hover:opacity-90 transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider"
+                      title={selectedBoleto.pdfUrl ? 'Baixar PDF do boleto' : 'Copiar informações do boleto (PDF não disponível)'}
                     >
-                      <Download className="w-5 h-5" /> Baixar boleto
+                      <Download className="w-5 h-5" /> {selectedBoleto.pdfUrl ? 'BAIXAR BOLETO' : 'COPIAR INFORMAÇÕES'}
                     </button>
 
                     {selectedBoleto.pdfUrl && onViewBoleto && (

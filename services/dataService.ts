@@ -545,7 +545,8 @@ export const saveOccurrence = async (occurrence: Occurrence): Promise<{ success:
       status: occurrence.status,
       date: occurrence.date,
       reported_by: occurrence.reportedBy,
-      image_url: occurrence.imageUrl || null
+      image_url: occurrence.imageUrl || null,
+      messages: occurrence.messages || []
     };
 
     const result = await createData('occurrences', payload);
@@ -577,7 +578,8 @@ export const updateOccurrence = async (occurrence: Occurrence): Promise<{ succes
     const result = await updateData('occurrences', {
       id: occurrence.id,
       description: occurrence.description,
-      status: occurrence.status
+      status: occurrence.status,
+      messages: occurrence.messages || []
     });
     return { success: result.success, error: result.error };
   } catch (err: any) {
@@ -604,7 +606,7 @@ export const getOccurrences = async (): Promise<GetOccurrencesResult> => {
       fetchRemote: async () => {
         const { data, error } = await supabase
           .from('occurrences')
-          .select('id, resident_name, unit, description, status, date, reported_by')
+          .select('id, resident_name, unit, description, status, date, reported_by, image_url, messages')
           .order('date', { ascending: false });
         if (error) throw error;
         return data || [];
@@ -619,7 +621,8 @@ export const getOccurrences = async (): Promise<GetOccurrencesResult> => {
       status: o.status as 'Aberto' | 'Em Andamento' | 'Resolvido',
       date: typeof o.date === 'string' ? o.date : new Date(o.date).toISOString(),
       reportedBy: o.reported_by,
-      imageUrl: o.image_url || null
+      imageUrl: o.image_url || null,
+      messages: o.messages || []
     }));
     return { data: list, error: result.error };
   } catch (err: any) {

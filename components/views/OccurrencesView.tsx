@@ -11,6 +11,7 @@ interface OccurrencesViewProps {
   setIsOccurrenceModalOpen: (val: boolean) => void;
   handleResolveOccurrence: (id: string) => void;
   handleDeleteOccurrence: (id: string) => void;
+  onOccurrenceClick?: (occurrence: Occurrence) => void;
 }
 
 const OccurrencesView: React.FC<OccurrencesViewProps> = ({
@@ -19,7 +20,8 @@ const OccurrencesView: React.FC<OccurrencesViewProps> = ({
   setOccurrenceSearch,
   setIsOccurrenceModalOpen,
   handleResolveOccurrence,
-  handleDeleteOccurrence
+  handleDeleteOccurrence,
+  onOccurrenceClick
 }) => {
   const displayOccurrences = allOccurrences.filter(occ => 
     occ.residentName.toLowerCase().includes(occurrenceSearch.toLowerCase()) ||
@@ -48,39 +50,66 @@ const OccurrencesView: React.FC<OccurrencesViewProps> = ({
         </div>
       </header>
       <div className="space-y-4">
-        {displayOccurrences.map(occ => (
-          <div key={occ.id} className="premium-glass p-6 rounded-[32px]">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-black text-lg uppercase">{occ.residentName} - {formatUnit(occ.unit)}</h4>
-              <span className="text-[10px] font-black uppercase opacity-40">{occ.date}</span>
-            </div>
-            <p className="text-sm opacity-70 mb-4">{occ.description}</p>
-            <div className="flex justify-between items-center">
-              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase ${occ.status === 'Aberto' ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
-                {occ.status}
-              </span>
-              <div className="flex items-center gap-2">
-                {occ.status === 'Aberto' && (
-                  <button 
-                    onClick={() => handleResolveOccurrence(occ.id)}
-                    className="px-4 py-1.5 bg-zinc-100 text-black rounded-xl text-[9px] font-black uppercase hover:bg-zinc-200 transition-all flex items-center gap-2 shadow-sm border border-black/5"
-                  >
-                    <Check className="w-3 h-3" /> Resolver
-                  </button>
-                )}
-                {occ.status === 'Resolvido' && (
-                  <button 
-                    onClick={() => handleDeleteOccurrence(occ.id)}
-                    className="p-1.5 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all flex items-center justify-center shadow-sm border border-red-500/20"
-                    title="Excluir ocorrência"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
+        {displayOccurrences.map(occ => {
+          const unreadMessages = occ.messages?.filter(msg => !msg.read && msg.senderRole !== 'MORADOR') || [];
+          const hasUnreadMessages = unreadMessages.length > 0;
+
+          return (
+            <button
+              key={occ.id}
+              onClick={() => onOccurrenceClick && onOccurrenceClick(occ)}
+              className="text-left premium-glass p-6 rounded-[32px] hover:border-[var(--text-primary)]/30 transition-all group"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-black text-lg uppercase">{occ.residentName} - {formatUnit(occ.unit)}</h4>
+                <div className="flex items-center gap-2">
+                  {hasUnreadMessages && (
+                    <span className="w-3 h-3 bg-blue-500 rounded-full animate-pulse" title={`${unreadMessages.length} mensagem(ns) não lida(s)`} />
+                  )}
+                  <span className="text-[10px] font-black uppercase opacity-40">{occ.date}</span>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
+              <p className="text-sm opacity-70 mb-4 line-clamp-2">{occ.description}</p>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase ${occ.status === 'Aberto' ? 'bg-red-500/10 text-red-500' : occ.status === 'Em Andamento' ? 'bg-amber-500/10 text-amber-500' : 'bg-green-500/10 text-green-500'}`}>
+                    {occ.status}
+                  </span>
+                  {occ.messages && occ.messages.length > 0 && (
+                    <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[8px] font-black uppercase">
+                      {occ.messages.length} MSG
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {occ.status === 'Aberto' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResolveOccurrence(occ.id);
+                      }}
+                      className="px-4 py-1.5 bg-zinc-100 text-black rounded-xl text-[9px] font-black uppercase hover:bg-zinc-200 transition-all flex items-center gap-2 shadow-sm border border-black/5"
+                    >
+                      <Check className="w-3 h-3" /> Resolver
+                    </button>
+                  )}
+                  {occ.status === 'Resolvido' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteOccurrence(occ.id);
+                      }}
+                      className="p-1.5 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all flex items-center justify-center shadow-sm border border-red-500/20"
+                      title="Excluir ocorrência"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
         {displayOccurrences.length === 0 && (
           <div className="py-20 text-center opacity-20 font-black uppercase text-sm tracking-widest border-2 border-dashed border-white/5 rounded-[48px]">
              Nenhuma ocorrência encontrada

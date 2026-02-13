@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Package, 
-  Calendar, 
-  Users, 
-  AlertCircle, 
-  Bell, 
-  ClipboardList, 
-  BarChart3, 
+import {
+  Package,
+  Calendar,
+  Users,
+  AlertCircle,
+  Bell,
+  ClipboardList,
+  BarChart3,
   UserCircle,
   LogOut,
   Settings,
@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Receipt
 } from 'lucide-react';
-import { UserRole } from '../types';
+import { UserRole, Resident } from '../types';
+import { User as AdminUser } from '../services/userAuth';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { useConnectivity } from '../contexts/ConnectivityContext';
 
@@ -35,19 +36,23 @@ interface LayoutProps {
   toggleTheme: () => void;
   notificationCount?: number;
   onOpenNotifications?: () => void;
+  currentAdminUser?: AdminUser | null;
+  currentResident?: Resident | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ 
-  children, 
-  activeTab, 
-  setActiveTab, 
-  role, 
-  setRole, 
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  activeTab,
+  setActiveTab,
+  role,
+  setRole,
   onLogout,
   theme,
   toggleTheme,
   notificationCount = 0,
-  onOpenNotifications
+  onOpenNotifications,
+  currentAdminUser,
+  currentResident
 }) => {
   const { config } = useAppConfig();
   const { isOnline, isSyncing } = useConnectivity();
@@ -197,19 +202,55 @@ const Layout: React.FC<LayoutProps> = ({
         <div className={`flex items-center rounded-2xl border transition-all duration-500 overflow-hidden ${
           isDesktopCollapsed ? 'flex-col p-2 gap-2' : 'gap-3 p-3'
         }`} style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)' }}>
-          <div className={`rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-bold flex-shrink-0 transition-all duration-500 ${
+          <div className={`rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-bold flex-shrink-0 transition-all duration-500 overflow-hidden ${
             isDesktopCollapsed ? 'w-8 h-8 text-xs' : 'w-10 h-10'
           }`}>
-            {role[0]}
+            {(() => {
+              // Determinar se há avatar disponível
+              let userAvatar: string | null = null;
+              if (role === 'MORADOR' && currentResident) {
+                userAvatar = localStorage.getItem(`resident_avatar_${currentResident.id}`);
+              } else if (currentAdminUser) {
+                userAvatar = localStorage.getItem(`admin_avatar_${currentAdminUser.id}`);
+              }
+
+              if (userAvatar) {
+                return (
+                  <img
+                    src={userAvatar}
+                    alt="Foto do usuário"
+                    className="w-full h-full object-cover"
+                  />
+                );
+              }
+
+              // Fallback para inicial
+              if (role === 'MORADOR' && currentResident) {
+                return currentResident.name.substring(0, 1).toUpperCase();
+              } else if (currentAdminUser) {
+                return currentAdminUser.name?.substring(0, 1).toUpperCase() || role[0];
+              }
+              return role[0];
+            })()}
           </div>
           {!isDesktopCollapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black truncate uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                {role === 'SINDICO' ? 'Admin' : role === 'MORADOR' ? 'Morador' : 'Portaria'}
+                {(() => {
+                  if (role === 'MORADOR' && currentResident) {
+                    // Para moradores, mostrar apenas o primeiro nome
+                    const firstName = currentResident.name.split(' ')[0];
+                    return firstName;
+                  } else if (currentAdminUser?.name) {
+                    return currentAdminUser.name;
+                  }
+                  // Fallback para os textos antigos
+                  return role === 'SINDICO' ? 'Admin' : role === 'MORADOR' ? 'Morador' : 'Portaria';
+                })()}
               </p>
             </div>
           )}
-          <button 
+          <button
             onClick={onLogout}
             className={`opacity-50 hover:opacity-100 transition-colors rounded-xl ${isDesktopCollapsed ? 'p-1' : 'p-2'}`}
             style={{ color: 'var(--text-primary)' }}

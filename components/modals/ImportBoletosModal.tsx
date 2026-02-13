@@ -199,7 +199,8 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
           extractedMonth,
           extractedType,
           extractedAmount,
-          extractedDueDate
+          extractedDueDate,
+          fileNameAnalysis: fileName
         });
 
         // Se faltou algum dado importante, tentar extrair do CONTEÚDO do PDF (texto)
@@ -222,10 +223,17 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         // Se não conseguiu extrair unidade, tentar padrões mais simples
         if (!extractedUnit) {
           // Tentar encontrar qualquer número que possa ser unidade
+          // Mas só usar se for claramente uma unidade (não apenas um número isolado)
           const simpleNumberMatch = fileName.match(/(\d{1,3})/);
           if (simpleNumberMatch) {
-            extractedUnit = simpleNumberMatch[1];
-            console.log(`[PDF Processing] Usando padrão simples para unidade: ${extractedUnit}`);
+            const possibleUnit = simpleNumberMatch[1];
+            // Só aceitar se o número for maior que 3 dígitos (ex: 03005 -> 03/005) ou se for precedido por palavras chave
+            if (possibleUnit.length > 3 || fileName.toLowerCase().includes('unidade') || fileName.toLowerCase().includes('apt') || fileName.toLowerCase().includes('apto')) {
+              extractedUnit = possibleUnit;
+              console.log(`[PDF Processing] Usando padrão simples para unidade: ${extractedUnit}`);
+            } else {
+              console.warn(`[PDF Processing] Número encontrado mas não usado como unidade (muito curto ou sem contexto): ${possibleUnit} em "${fileName}"`);
+            }
           }
         }
 
@@ -251,6 +259,14 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         console.warn(`[ImportBoletos] ${invalidBoletos.length} PDFs não tiveram unidade extraída:`, invalidBoletos.map(b => b.pdf_associado));
         setErrors(prev => [...prev, `Atenção: ${invalidBoletos.length} PDF(s) não puderam ter a unidade extraída automaticamente. Verifique os nomes dos arquivos e tente renomeá-los seguindo o padrão: unidade_mes_ano.pdf (ex: 101A_01_2025.pdf)`]);
       }
+
+      // Log detalhado das unidades extraídas
+      console.log(`[ImportBoletos] Resumo da extração:`, {
+        totalPDFs: pdfFiles.length,
+        validBoletos: validBoletos.length,
+        invalidBoletos: invalidBoletos.length,
+        unidadesExtraidas: validBoletos.map(b => ({ arquivo: b.pdf_associado, unidade: b.unidade }))
+      });
 
       // Processar apenas boletos válidos
       if (validBoletos.length > 0) {
@@ -489,14 +505,21 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
     if (!unit || !unit.trim()) return undefined;
 
     const trimmed = unit.trim();
+    console.log(`[Resident Lookup] Procurando morador para unidade: "${trimmed}"`);
 
     // 1. Match exato
     let found = getResidentByUnit(trimmed);
-    if (found) return found;
+    if (found) {
+      console.log(`[Resident Lookup] Encontrado por match exato: ${found.name} (${found.unit})`);
+      return found;
+    }
 
     // 2. Match normalizado (03/005, 03 / 005, 03-005)
     found = residentsPool.find(r => compareUnits(r.unit, trimmed));
-    if (found) return found;
+    if (found) {
+      console.log(`[Resident Lookup] Encontrado por match normalizado: ${found.name} (${found.unit})`);
+      return found;
+    }
 
     // 3. Match por bloco/apartamento: "03" → "03/005"; "03/005" ou "03-005"
     const blockMatch = trimmed.match(/^(\d{1,3})(?:\s*[\/\-]\s*(\d{1,3}))?$/);
@@ -508,7 +531,10 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         // Tem bloco e apt: "03/005" ou "03-005"
         const target = `${block}/${apt}`;
         found = residentsPool.find(r => compareUnits(r.unit, target) || normalizeUnit(r.unit) === target);
-        if (found) return found;
+        if (found) {
+          console.log(`[Resident Lookup] Encontrado por bloco/apartamento completo: ${found.name} (${found.unit}) para target: ${target}`);
+          return found;
+        }
       }
 
       // Só bloco: "03" → busca residentes com bloco 03 (ex: 03/005)
@@ -516,40 +542,67 @@ const ImportBoletosModal: React.FC<ImportBoletosModalProps> = ({
         const n = normalizeUnit(r.unit);
         return n.startsWith(`${block}/`) || n === block;
       });
-      if (blockCandidates.length >= 1) return blockCandidates[0];
-    }
-
-    // 4. NOVO: Match apenas por apartamento (quando só tem número como "005")
-    // Procura moradores onde o apartamento seja igual ao número fornecido
-    if (/^\d+$/.test(trimmed)) {
-      const aptNumber = trimmed.padStart(3, '0'); // "005"
-
-      // Procura exato: */005
-      found = residentsPool.find(r => {
-        const n = normalizeUnit(r.unit);
-        return n.endsWith(`/${aptNumber}`) || n === aptNumber;
-      });
-      if (found) return found;
-
-      // Procura por padrões similares (ex: se "005" não encontra, tenta "05")
-      if (aptNumber.startsWith('0')) {
-        const shortApt = aptNumber.replace(/^0+/, ''); // "5"
-        found = residentsPool.find(r => {
-          const n = normalizeUnit(r.unit);
-          return n.endsWith(`/${shortApt}`) || n === shortApt;
-        });
-        if (found) return found;
+      if (blockCandidates.length === 1) {
+        console.log(`[Resident Lookup] Encontrado único morador do bloco: ${blockCandidates[0].name} (${blockCandidates[0].unit})`);
+        return blockCandidates[0];
+      } else if (blockCandidates.length > 1) {
+        console.warn(`[Resident Lookup] Múltiplos moradores encontrados para bloco "${block}": ${blockCandidates.map(r => `${r.name} (${r.unit})`).join(', ')}`);
+        // Não retorna automaticamente para evitar associação incorreta
       }
     }
 
-    // 5. Última tentativa: busca fuzzy por similaridade
+    // 4. Match apenas por apartamento (quando só tem número como "005") - MAIS RESTRITIVO
+    // Só usar se o número for claramente um apartamento (mínimo 3 dígitos) e não houver ambiguidade
+    if (/^\d{3,}$/.test(trimmed)) {
+      const aptNumber = trimmed; // Não padronizar aqui
+
+      // Procura exato: */005
+      const exactMatches = residentsPool.filter(r => {
+        const n = normalizeUnit(r.unit);
+        return n.endsWith(`/${aptNumber}`);
+      });
+
+      if (exactMatches.length === 1) {
+        console.log(`[Resident Lookup] Encontrado único morador por apartamento exato: ${exactMatches[0].name} (${exactMatches[0].unit})`);
+        return exactMatches[0];
+      } else if (exactMatches.length > 1) {
+        console.warn(`[Resident Lookup] Múltiplos moradores encontrados para apartamento "${aptNumber}": ${exactMatches.map(r => `${r.name} (${r.unit})`).join(', ')}`);
+        return undefined; // Não associar automaticamente para evitar erro
+      }
+
+      // Tentar sem padding se não encontrou
+      if (aptNumber.startsWith('0')) {
+        const shortApt = aptNumber.replace(/^0+/, ''); // "5" de "005"
+        const shortMatches = residentsPool.filter(r => {
+          const n = normalizeUnit(r.unit);
+          return n.endsWith(`/${shortApt}`);
+        });
+
+        if (shortMatches.length === 1) {
+          console.log(`[Resident Lookup] Encontrado único morador por apartamento curto: ${shortMatches[0].name} (${shortMatches[0].unit})`);
+          return shortMatches[0];
+        }
+      }
+    }
+
+    // 5. Última tentativa: busca fuzzy por similaridade - APENAS SE FOR MUITO SIMILAR
     const trimmedUpper = trimmed.toUpperCase();
-    found = residentsPool.find(r => {
+    const fuzzyMatches = residentsPool.filter(r => {
       const unitUpper = r.unit.toUpperCase();
-      return unitUpper.includes(trimmedUpper) || trimmedUpper.includes(unitUpper);
+      // Só considerar fuzzy se for substring significativo (não apenas números isolados)
+      return (unitUpper.includes(trimmedUpper) && trimmedUpper.length > 2) ||
+             (trimmedUpper.includes(unitUpper) && unitUpper.length > 2);
     });
 
-    return found;
+    if (fuzzyMatches.length === 1) {
+      console.log(`[Resident Lookup] Encontrado por busca fuzzy: ${fuzzyMatches[0].name} (${fuzzyMatches[0].unit})`);
+      return fuzzyMatches[0];
+    } else if (fuzzyMatches.length > 1) {
+      console.warn(`[Resident Lookup] Múltiplos matches fuzzy encontrados para "${trimmed}": ${fuzzyMatches.map(r => `${r.name} (${r.unit})`).join(', ')}`);
+    }
+
+    console.warn(`[Resident Lookup] Nenhum morador encontrado para unidade "${trimmed}"`);
+    return undefined;
   };
 
   const processCSV = async (file: File) => {
@@ -689,7 +742,7 @@ Baixe o template CSV para ver o formato correto.`;
       }
 
       const resident = getResidentByUnitFlexible(unit);
-      console.log(`🔍 Procurando morador para unidade "${unit}":`, resident ? `✅ Encontrado: ${resident.name} (${resident.unit})` : '❌ Não encontrado');
+      console.log(`🔍 Procurando morador para unidade "${unit}":`, resident ? `✅ Encontrado: ${resident.name} (${resident.unit})` : `❌ Não encontrado. Moradores disponíveis: ${allResidents.slice(0, 5).map(r => `${r.name} (${r.unit})`).join(', ')}${allResidents.length > 5 ? '...' : ''}`);
       if (!resident) {
         // Busca moradores com unidades similares para sugerir
         const similarUnits = allResidents.filter(r => {
@@ -1353,6 +1406,15 @@ Exemplos de nomes de arquivos PDF que o sistema reconhece:
                   {previewData.length} boleto(s) pronto(s) para importar
                 </p>
               </div>
+              {previewData.some(boleto => {
+                const resident = allResidents.find(r => r.name === boleto.residentName);
+                return resident && !compareUnits(boleto.unit, resident.unit);
+              }) && (
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  <p className="text-xs font-bold">Atenção: Verifique associações de unidade</p>
+                </div>
+              )}
             </div>
             <div className="max-h-72 overflow-y-auto border border-[var(--border-color)] rounded-xl">
               <table className="w-full text-xs">
@@ -1369,10 +1431,22 @@ Exemplos de nomes de arquivos PDF que o sistema reconhece:
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.map((boleto, index) => (
-                    <tr key={boleto.id} className="border-t border-[var(--border-color)]">
-                      <td className="p-3">{boleto.unit}</td>
-                      <td className="p-3">{boleto.residentName}</td>
+                  {previewData.map((boleto, index) => {
+                    // Verificar se a unidade do boleto corresponde exatamente à unidade do morador
+                    const resident = allResidents.find(r => r.name === boleto.residentName);
+                    const unitMismatch = resident && !compareUnits(boleto.unit, resident.unit);
+
+                    return (
+                      <tr key={boleto.id} className={`border-t border-[var(--border-color)] ${unitMismatch ? 'bg-red-500/10' : ''}`}>
+                        <td className="p-3">
+                          {boleto.unit}
+                          {unitMismatch && (
+                            <div className="text-xs text-red-400 mt-1">
+                              ⚠️ Unidade do boleto ≠ unidade do morador ({resident?.unit})
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3">{boleto.residentName}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10">
                           {boleto.boletoType === 'agua' ? 'Água' : boleto.boletoType === 'luz' ? 'Luz' : 'Taxa/Condomínio'}
@@ -1409,7 +1483,8 @@ Exemplos de nomes de arquivos PDF que o sistema reconhece:
                         </select>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

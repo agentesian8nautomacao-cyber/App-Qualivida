@@ -238,36 +238,87 @@ export const VisitorDetailModal = ({ visitor, onClose, onCheckout, calculatePerm
 };
 
 // --- MODAL DETALHE OCORRENCIA ---
-export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, setOccurrence }: any) => {
+export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, setOccurrence, currentRole, currentResident, currentAdminUser }: any) => {
+  const [newMessage, setNewMessage] = React.useState('');
+  const [messages, setMessages] = React.useState(occurrence?.messages || []);
+
+  React.useEffect(() => {
+    setMessages(occurrence?.messages || []);
+  }, [occurrence]);
+
+  const handleSendMessage = () => {
+    if (!newMessage.trim()) return;
+
+    const message = {
+      id: Date.now().toString(),
+      text: newMessage.trim(),
+      senderRole: currentRole,
+      senderName: currentRole === 'MORADOR' && currentResident ? currentResident.name :
+                  currentAdminUser ? currentAdminUser.name : 'Sistema',
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+
+    const updatedMessages = [...messages, message];
+    const updatedOccurrence = { ...occurrence, messages: updatedMessages };
+
+    setMessages(updatedMessages);
+    setOccurrence(updatedOccurrence);
+    setNewMessage('');
+  };
+
+  const formatMessageTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 24) {
+      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
+  };
+
   if (!occurrence) return null;
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-2xl" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white text-black rounded-[32px] sm:rounded-[48px] shadow-2xl p-4 sm:p-6 md:p-8 lg:p-12 animate-in zoom-in duration-300">
-         <header className="flex justify-between items-start gap-3 sm:gap-4 mb-6 sm:mb-8">
+      <div className="relative w-full max-w-2xl bg-white text-black rounded-[32px] sm:rounded-[48px] shadow-2xl p-4 sm:p-6 md:p-8 lg:p-12 animate-in zoom-in duration-300 max-h-[90vh] overflow-hidden flex flex-col">
+         <header className="flex justify-between items-start gap-3 sm:gap-4 mb-6 sm:mb-8 flex-shrink-0">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-               <div className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl flex-shrink-0 ${occurrence.status === 'Aberto' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}><AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" /></div>
-               <div className="min-w-0"><h4 className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-tight leading-none">Ocorrência</h4><p className="text-[9px] sm:text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">Detalhes & Edição</p></div>
+               <div className={`p-3 sm:p-4 rounded-2xl sm:rounded-3xl flex-shrink-0 ${occurrence.status === 'Aberto' ? 'bg-red-100 text-red-600' : occurrence.status === 'Em Andamento' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}`}><AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+               <div className="min-w-0"><h4 className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-tight leading-none">Ocorrência</h4><p className="text-[9px] sm:text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">Detalhes & Comunicação</p></div>
             </div>
             <button onClick={onClose} className="p-2 sm:p-3 bg-zinc-100 rounded-xl sm:rounded-2xl hover:bg-zinc-200 flex-shrink-0"><X className="w-4 h-4 sm:w-5 sm:h-5"/></button>
          </header>
-         <div className="space-y-4 sm:space-y-6">
+         <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pr-2">
             <div className="p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] border border-black/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                <div className="min-w-0"><p className="text-[9px] font-black uppercase opacity-30 mb-1">Unidade Afetada</p><p className="text-xs sm:text-sm font-bold uppercase break-words">{occurrence.unit} - {occurrence.residentName}</p></div>
                <div className="text-left sm:text-right"><p className="text-[9px] font-black uppercase opacity-30 mb-1">Data</p><p className="text-[10px] sm:text-xs font-bold uppercase opacity-60">{occurrence.date}</p></div>
             </div>
-            <div>
-               <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Status Atual</label>
-               <div className="flex gap-2">
-                  {['Aberto', 'Em Andamento', 'Resolvido'].map(status => (
-                     <button key={status} onClick={() => setOccurrence({...occurrence, status: status as any})} className={`flex-1 py-2.5 sm:py-3 rounded-[12px] sm:rounded-[16px] text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all border ${occurrence.status === status ? (status === 'Aberto' ? 'bg-red-500 text-white border-red-500' : status === 'Resolvido' ? 'bg-green-500 text-white border-green-500' : 'bg-amber-500 text-white border-amber-500') : 'bg-white border-zinc-100 text-zinc-400 hover:bg-zinc-50'}`}>{status}</button>
-                  ))}
-               </div>
-            </div>
+
+            {(currentRole === 'SINDICO' || currentRole === 'PORTEIRO') && (
+              <div>
+                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Status Atual</label>
+                 <div className="flex gap-2">
+                    {['Aberto', 'Em Andamento', 'Resolvido'].map(status => (
+                       <button key={status} onClick={() => setOccurrence({...occurrence, status: status as any})} className={`flex-1 py-2.5 sm:py-3 rounded-[12px] sm:rounded-[16px] text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all border ${occurrence.status === status ? (status === 'Aberto' ? 'bg-red-500 text-white border-red-500' : status === 'Resolvido' ? 'bg-green-500 text-white border-green-500' : 'bg-amber-500 text-white border-amber-500') : 'bg-white border-zinc-100 text-zinc-400 hover:bg-zinc-50'}`}>{status}</button>
+                    ))}
+                 </div>
+              </div>
+            )}
+
             <div className="space-y-3">
                <div>
-                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Descrição (Editável)</label>
-                 <textarea value={occurrence.description} onChange={(e) => setOccurrence({...occurrence, description: e.target.value})} className="w-full h-28 sm:h-32 p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] font-medium text-xs sm:text-sm outline-none border-2 border-transparent focus:border-black/5 resize-none shadow-inner" />
+                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Descrição {(currentRole === 'SINDICO' || currentRole === 'PORTEIRO') ? '(Editável)' : ''}</label>
+                 {(currentRole === 'SINDICO' || currentRole === 'PORTEIRO') ? (
+                   <textarea value={occurrence.description} onChange={(e) => setOccurrence({...occurrence, description: e.target.value})} className="w-full h-28 sm:h-32 p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] font-medium text-xs sm:text-sm outline-none border-2 border-transparent focus:border-black/5 resize-none shadow-inner" />
+                 ) : (
+                   <div className="w-full h-28 sm:h-32 p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] font-medium text-xs sm:text-sm border-2 border-transparent shadow-inner overflow-y-auto">
+                     {occurrence.description}
+                   </div>
+                 )}
                </div>
                {occurrence.imageUrl && (
                  <div className="mt-1 rounded-[20px] sm:rounded-[24px] overflow-hidden border border-zinc-100">
@@ -279,8 +330,65 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, setOccurren
                  </div>
                )}
             </div>
-            <button onClick={onSave} className="w-full py-4 sm:py-5 md:py-6 bg-black text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-2 sm:gap-3"><Save className="w-4 h-4" /> <span className="whitespace-nowrap">Salvar Alterações</span></button>
+
+            {/* Sistema de Mensagens */}
+            <div className="space-y-3">
+              <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Comunicação</label>
+
+              {/* Área de mensagens */}
+              <div className="bg-zinc-50 rounded-[20px] sm:rounded-[24px] border border-black/5 p-4 max-h-64 overflow-y-auto">
+                {messages.length === 0 ? (
+                  <p className="text-xs opacity-60 text-center py-4">Nenhuma mensagem ainda. Use este espaço para se comunicar sobre a ocorrência.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {messages.map((message) => (
+                      <div key={message.id} className={`flex ${message.senderRole === currentRole ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${
+                          message.senderRole === currentRole
+                            ? 'bg-blue-500 text-white'
+                            : message.senderRole === 'MORADOR'
+                              ? 'bg-zinc-200 text-black'
+                              : 'bg-green-100 text-black'
+                        }`}>
+                          <p className="text-xs font-medium">{message.text}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[9px] opacity-70">{message.senderName}</span>
+                            <span className="text-[9px] opacity-70 ml-2">{formatMessageTime(message.timestamp)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Campo para nova mensagem */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 p-3 bg-zinc-50 rounded-xl font-medium text-xs outline-none border-2 border-transparent focus:border-black/5"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim()}
+                  className="px-4 py-3 bg-blue-500 text-white rounded-xl font-bold text-xs hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
          </div>
+
+         {/* Botão de salvar - apenas para síndico/porteiro */}
+         {(currentRole === 'SINDICO' || currentRole === 'PORTEIRO') && (
+           <div className="flex-shrink-0 mt-6 pt-4 border-t border-zinc-100">
+             <button onClick={onSave} className="w-full py-4 sm:py-5 md:py-6 bg-black text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-2 sm:gap-3"><Save className="w-4 h-4" /> <span className="whitespace-nowrap">Salvar Alterações</span></button>
+           </div>
+         )}
       </div>
     </div>
   );
