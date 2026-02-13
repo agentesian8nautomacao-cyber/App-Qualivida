@@ -1,0 +1,28 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "gestao_qualivida",
+    "username": "postgres",
+    "password": null
+  },
+  "postgresql": {
+    "version": "15",
+    "bin_path": "C:\\Program Files\\PostgreSQL\\15\\bin\\psql.exe",
+    "alternative_paths": [
+      "C:\\Program Files\\PostgreSQL\\14\\bin\\psql.exe",
+      "C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe",
+      "C:\\Program Files\\PostgreSQL\\13\\bin\\psql.exe"
+    ]
+  },
+  "scripts": {
+    "diagnostic": "correcao_boletos_sem_pdf.sql",
+    "validation": "validacao_importacao_boletos_com_pdf.sql",
+    "examples": "exemplo_execucao_boletos.sql"
+  },
+  "settings": {
+    "auto_detect_postgresql": true,
+    "show_commands": true,
+    "timeout_seconds": 30
+  }
+}

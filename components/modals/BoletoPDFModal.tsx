@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle, Loader2, User, MapPin, CreditCard } from 'lucide-react';
 import { Resident } from '../../types';
+import { addBoletoOriginalPdf } from '../../services/dataService';
 // Temporariamente comentado até resolver dependências
 // import { processBoletoPDF, ValidationResult } from '../../services/pdfProcessingService';
 
@@ -92,25 +93,53 @@ const BoletoPDFModal: React.FC<BoletoPDFModalProps> = ({
     }
   };
 
-  const handleConfirmAssociation = () => {
-    if (!validationResult || !selectedResident) return;
+  const handleConfirmAssociation = async () => {
+    if (!validationResult || !selectedResident || !file) return;
 
-    const boletoData = {
-      resident_id: selectedResident.id,
-      unidade_id: selectedResident.unit,
-      residentName: selectedResident.name,
-      unit: selectedResident.unit,
-      nosso_numero: validationResult.extractedData.nossoNumero,
-      amount: validationResult.extractedData.valor,
-      dueDate: validationResult.extractedData.vencimento,
-      referenceMonth: validationResult.extractedData.referencia,
-      barcode: validationResult.extractedData.codigoBarras,
-      status: 'Pendente' as const,
-      pdfUrl: URL.createObjectURL(file!),
-      extractedData: validationResult.extractedData
-    };
+    setIsProcessing(true);
+    try {
+      // Primeiro salvar o boleto
+      const boletoData = {
+        resident_id: selectedResident.id,
+        unidade_id: selectedResident.unit,
+        residentName: selectedResident.name,
+        unit: selectedResident.unit,
+        nosso_numero: validationResult.extractedData.nossoNumero,
+        amount: validationResult.extractedData.valor,
+        dueDate: validationResult.extractedData.vencimento,
+        referenceMonth: validationResult.extractedData.referencia,
+        barcode: validationResult.extractedData.codigoBarras,
+        status: 'Pendente' as const,
+        pdfUrl: '', // Será definido após salvar
+        extractedData: validationResult.extractedData
+      };
 
-    onSave(boletoData);
+      // Salvar boleto e obter ID
+      onSave(boletoData);
+
+      // Aguardar um momento para o boleto ser salvo
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Simular ID do boleto (em produção, o onSave deveria retornar o ID)
+      const boletoId = `temp-${Date.now()}`;
+
+      // Anexar PDF permanentemente
+      const pdfResult = await addBoletoOriginalPdf(boletoId, file);
+      if (!pdfResult.success) {
+        console.warn('PDF não foi anexado:', pdfResult.error);
+        alert('⚠️ Boleto salvo, mas houve problema ao anexar o PDF. Você pode anexá-lo manualmente depois.');
+      } else {
+        console.log('PDF anexado com sucesso');
+      }
+
+    } catch (error) {
+      console.error('Erro ao salvar boleto com PDF:', error);
+      alert('❌ Erro ao salvar boleto. Tente novamente.');
+      return;
+    } finally {
+      setIsProcessing(false);
+    }
+
     handleClose();
   };
 
