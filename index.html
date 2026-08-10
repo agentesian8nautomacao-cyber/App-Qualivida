@@ -1,0 +1,372 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Qualivida Gestão</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Preload logo da splash para exibir sem delay -->
+    <link rel="preload" href="/1024.png" as="image" />
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/1024.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/1024.png" />
+    <link rel="shortcut icon" href="/1024.png" />
+    
+    <!-- Apple Touch Icons (iOS) – ícone Qualivida na tela inicial -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="72x72" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="60x60" href="/1024.png" />
+    <link rel="apple-touch-icon" sizes="57x57" href="/1024.png" />
+    
+    <!-- Apple Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Qualivida" />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#0b7a4b" />
+    <meta name="msapplication-TileColor" content="#0b7a4b" />
+    <meta name="msapplication-TileImage" content="/1024.png" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Qualivida Gestão" />
+    <style>
+      :root {
+        /* Paleta inspirada na marca QualiVida (verdes) */
+        --bg-color: #0c1a13;
+        --sidebar-bg: rgba(12, 26, 19, 0.9);
+        --header-bg: rgba(12, 26, 19, 0.8);
+        --text-primary: #f9fff9;
+        --text-secondary: #b6d6c2;
+        --border-color: rgba(182, 214, 194, 0.25);
+        --glass-bg: rgba(12, 26, 19, 0.6);
+
+        /* Destaques */
+        --highlight-card: #0b7a4b;
+        --highlight-text: #ffffff;
+
+        /* Cards secundários */
+        --secondary-card-bg: #0f2219;
+        --secondary-card-text: #f9fff9;
+        --secondary-card-btn-bg: #7fcf6b;
+        --secondary-card-btn-text: #0c1a13;
+
+        --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        --hover-scale: 1.02;
+      }
+
+      /* Tema Alternative - Design em verde claro */
+      [data-theme="alternative"] {
+        --bg-color: #f8f9fa;
+        --sidebar-bg: rgba(255, 255, 255, 0.98);
+        --header-bg: rgba(255, 255, 255, 0.95);
+        --text-primary: #0b7a4b;
+        --text-secondary: #3c5f4a;
+        --border-color: rgba(11, 122, 75, 0.15);
+        --glass-bg: rgba(255, 255, 255, 0.9);
+
+        --highlight-card: #0b7a4b;
+        --highlight-text: #ffffff;
+        --secondary-card-bg: #f5fbf6;
+        --secondary-card-text: #0a0a0a;
+        --secondary-card-btn-bg: #1e9f63;
+        --secondary-card-btn-text: #ffffff;
+
+        --card-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0,0,0,0.12);
+        --hover-scale: 1.02;
+      }
+
+      [data-theme="alternative"] .light-mode {
+        --bg-color: #ffffff;
+        --sidebar-bg: rgba(255, 255, 255, 1);
+        --header-bg: rgba(255, 255, 255, 1);
+        --text-primary: #000000;
+        --text-secondary: #404040;
+        --border-color: rgba(0, 0, 0, 0.15);
+        --glass-bg: rgba(248, 249, 250, 0.9);
+      }
+
+      .light-mode {
+        --bg-color: #f8f9fa; 
+        --sidebar-bg: rgba(255, 255, 255, 0.98);
+        --header-bg: rgba(255, 255, 255, 0.95);
+        --text-primary: #0a0a0a;
+        --text-secondary: #525252;
+        --border-color: rgba(0, 0, 0, 0.12);
+        --glass-bg: rgba(255, 255, 255, 0.85);
+        
+        /* Card de Destaque (Gigante) - Light Mode */
+        --highlight-card: #ffffff;
+        --highlight-text: #0a0a0a;
+
+        /* Cards Secundários (Visitantes, Ocorrências, Moradores) */
+        /* Light Mode: Fundo Branco, Texto Escuro, Botão Preto */
+        --secondary-card-bg: #ffffff;
+        --secondary-card-text: #0a0a0a;
+        --secondary-card-btn-bg: #0a0a0a;
+        --secondary-card-btn-text: #ffffff;
+
+        --card-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0,0,0,0.15);
+      }
+
+      body {
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        transition: background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1), color 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+      }
+      
+      .aurora-bg {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background: radial-gradient(circle at 20% 30%, var(--border-color) 0%, transparent 40%),
+                    radial-gradient(circle at 80% 70%, var(--border-color) 0%, transparent 40%),
+                    var(--bg-color);
+        overflow: hidden;
+        transition: background 0.6s ease;
+      }
+      
+      .dot-grid {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(var(--text-secondary) 0.5px, transparent 0.5px);
+        background-size: 30px 30px;
+        opacity: 0.15;
+        mask-image: linear-gradient(to bottom, black, transparent);
+      }
+
+      .shimmer-text {
+        background: linear-gradient(
+          to right, 
+          #999 0%, 
+          #fff 45%, 
+          #fff 55%, 
+          #999 100%
+        );
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 4s linear infinite;
+        display: inline-block;
+        text-shadow: 0 0 20px rgba(255,255,255,0.1);
+      }
+
+      .light-mode .shimmer-text {
+        background: linear-gradient(
+          to right, 
+          #52525b 0%, 
+          #000 45%, 
+          #000 55%, 
+          #52525b 100%
+        );
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: none;
+      }
+
+      @keyframes shimmer {
+        to { background-position: 200% center; }
+      }
+
+      .reveal-teaser {
+        animation: reveal-blur 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+
+      @keyframes reveal-blur {
+        0% { opacity: 0; filter: blur(20px); letter-spacing: 2em; transform: scale(1.1); }
+        100% { opacity: 1; filter: blur(0px); letter-spacing: 0.8em; transform: scale(1); }
+      }
+
+      @keyframes soft-pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(0.99); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      .animate-soft-pulse {
+        animation: soft-pulse 2s ease-in-out infinite;
+      }
+
+      .premium-glass {
+        background: var(--glass-bg);
+        backdrop-filter: blur(25px);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05);
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .premium-glass:hover {
+        transform: translateY(-4px) scale(1.01);
+        border-color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.05);
+        box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+      }
+
+      .light-mode .premium-glass {
+        background: var(--glass-bg);
+        border-color: var(--border-color);
+      }
+      
+      .light-mode .premium-glass:hover {
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15);
+        border-color: rgba(0, 0, 0, 0.2);
+      }
+
+      .contrast-card {
+        background: var(--highlight-card);
+        color: var(--highlight-text);
+        box-shadow: var(--card-shadow);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      
+      .light-mode .contrast-card {
+        border: 1px solid rgba(0,0,0,0.04);
+      }
+
+      .contrast-card:hover {
+        transform: translateY(-6px) scale(1.015);
+        box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.6);
+      }
+
+      .light-mode .contrast-card:hover {
+        box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Nova classe para os cards que devem ser escuros no Dark Mode e claros no Light Mode */
+      .secondary-card {
+        background: var(--secondary-card-bg);
+        color: var(--secondary-card-text);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--card-shadow);
+        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      
+      .light-mode .secondary-card {
+        border: 1px solid rgba(0,0,0,0.04);
+      }
+
+      .secondary-card:hover {
+        transform: translateY(-6px) scale(1.015);
+        box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.5);
+        border-color: var(--text-secondary);
+      }
+      
+      .light-mode .secondary-card:hover {
+        box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.1);
+        border-color: rgba(0,0,0,0.1);
+      }
+
+      /* Botão dentro do Secondary Card */
+      .secondary-btn {
+        background-color: var(--secondary-card-btn-bg);
+        color: var(--secondary-card-btn-text);
+        transition: all 0.3s ease;
+      }
+      .secondary-btn:hover {
+        transform: scale(1.05);
+      }
+
+      @keyframes card-land {
+        0% { transform: translateY(20px); opacity: 0; filter: blur(10px); }
+        100% { transform: translateY(0); opacity: 1; filter: blur(0); }
+      }
+
+      .stagger-card {
+        opacity: 0;
+        animation: card-land 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--text-secondary); border-radius: 10px; opacity: 0.3; }
+      
+      .theme-transition * {
+        transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+      }
+
+      .text-contrast-high {
+        color: var(--text-primary);
+        opacity: 0.9;
+      }
+      .text-contrast-low {
+        color: var(--text-secondary);
+      }
+
+      /* Hover states for interactive elements */
+      .interactive-hover {
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .interactive-hover:hover {
+        opacity: 0.8;
+        transform: scale(1.05);
+      }
+      .interactive-hover:active {
+        transform: scale(0.95);
+      }
+
+      /* Responsividade do vídeo de introdução */
+      .video-intro-responsive {
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+      }
+
+      /* Em telas maiores, limitar o tamanho do vídeo para manter proporção e permitir visualização do texto */
+      @media (min-width: 768px) {
+        .video-intro-responsive {
+          max-width: 90vw;
+          max-height: 90vh;
+          object-fit: contain;
+        }
+      }
+
+      @media (min-width: 1024px) {
+        .video-intro-responsive {
+          max-width: 80vw;
+          max-height: 80vh;
+          object-fit: contain;
+        }
+      }
+
+      @media (min-width: 1440px) {
+        .video-intro-responsive {
+          max-width: 70vw;
+          max-height: 70vh;
+          object-fit: contain;
+        }
+      }
+
+      @media (min-width: 1920px) {
+        .video-intro-responsive {
+          max-width: 60vw;
+          max-height: 60vh;
+          object-fit: contain;
+        }
+      }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+</head>
+  <body class="theme-transition">
+    <div id="root">
+      <!-- Fundo escuro até o React montar a tela de Login (Controle de Acesso) -->
+      <div style="position:fixed;inset:0;background:#0c1a13;" aria-hidden="true"></div>
+    </div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

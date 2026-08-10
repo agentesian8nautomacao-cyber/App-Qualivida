@@ -1,0 +1,55 @@
+# Dependências – instaladas no build pela Vercel
+node_modules
+
+# Build local – a Vercel gera um novo
+dist
+dist-ssr
+*.local
+
+# Controle de versão
+.git
+.gitignore
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Logs e cache
+*.log
+.cache
+.parcel-cache
+.vite
+coverage
+.nyc_output
+
+# IDE e sistema
+.vscode
+.idea
+.DS_Store
+*.suo
+Thumbs.db
+
+# Cursor / agent (muitos arquivos)
+.cursor
+agent-transcripts
+mcps
+
+# Documentação e extras (não necessários no deploy)
+docs
+*.md
+!README.md
+
+# Testes – não precisam ir para o deploy
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__
+**/__mocks__
+e2e
+playwright
+cypress
+
+# Scripts de dev local (não usados no build; reduzem upload)
+scripts

@@ -1,0 +1,7 @@
+{
+  "name": "Copy of 19 Qualivida Gestão",
+  "description": "Sistema premium de gestão condominial focado em encomendas, reservas e comunicação interna para portaria e administração.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

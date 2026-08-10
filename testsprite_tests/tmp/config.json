@@ -1,0 +1,27 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3008",
+  "executionArgs": {
+    "projectName": "GestaoQualividaResidence",
+    "projectPath": "d:\\GestaoQualividaResidence",
+    "testIds": [
+      "TC001",
+      "TC003",
+      "TC012",
+      "TC015",
+      "TC033",
+      "TC038",
+      "TC041",
+      "TC052",
+      "TC054"
+    ],
+    "additionalInstruction": "Execute testes E2E frontend em http://localhost:3008/. Critérios de falha: qualquer erro uncaught no console, tela branca, loop de redirect, e violações de permissão (SINDICO não pode acessar Encomendas por menu/URL/refresh/redirect; MORADOR não pode ver dados de outra unidade em Boletos/Encomendas/Notificações). Capture evidências (screenshot + console) nas falhas. Priorize smoke + permissões + fluxos críticos.",
+    "envs": {
+      "API_KEY": "sk-user-NSZxThUJnagv3tN74vViwskL3YKTWD_K3LBbsdkUoG3glAHq4CHb7HRNZgYiyN-na8aQ0xdWqWuecd3SvwBCb_3KMW2rU4w3Lj60ywE7r1xM77Lo7GZzFOyzmI33LUiZNNM"
+    }
+  },
+  "serverPort": 51116,
+  "proxy": "http://296b85f9-dcc3-4848-9096-ebea338ad831:IHwsG4m0t7bENSNewfPfM0YRnbOU5Oc2@tun.testsprite.com:8080"
+}

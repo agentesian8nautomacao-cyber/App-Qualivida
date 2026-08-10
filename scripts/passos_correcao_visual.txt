@@ -1,0 +1,51 @@
+=========================================
+CORREÇÃO VISUAL: BOLETO 03/005 SEM PDF
+=========================================
+
+INTERFACE DE ADMINISTRADOR - PASSO A PASSO:
+
+1. LOGIN ADMINISTRADOR:
+   - Abra o app como SÍNDICO ou PORTEIRO
+   - Use suas credenciais de admin
+
+2. NAVEGAÇÃO:
+   - Menu lateral → FINANCEIRO
+   - Na aba "Boletos" (já deve estar selecionada)
+
+3. LOCALIZAR BOLETO PROBLEMÁTICO:
+   - Procure na lista: "03/005 - ELEN DE OLIVEIRA CUNHA - 12/2025"
+   - Este boleto NÃO terá ícone de download (✓) na coluna da direita
+   - Em vez disso, terá um botão LARANJA com ícone de UPLOAD (⬆️)
+
+4. CORREÇÃO:
+   - Clique no botão LARANJA "Anexar PDF" do boleto 03/005
+   - Uma janela de seleção de arquivo abrirá
+   - Selecione o arquivo PDF FÍSICO do boleto de dezembro/2025
+   - Clique "Abrir" ou "Selecionar"
+
+5. CONFIRMAÇÃO:
+   - O botão laranja será substituído por botão de download normal
+   - Uma mensagem de sucesso aparecerá: "✅ PDF anexado com sucesso"
+
+6. TESTE MORADOR:
+   - Peça ao morador testar o download
+   - Deve funcionar normalmente agora
+
+=========================================
+VISUAL ESPERADO APÓS CORREÇÃO:
+=========================================
+
+[coluna da direita da tabela]
+ANTES: [botão laranja ⬆️ "Anexar PDF"]
+DEPOIS: [botão normal ⬇️ "Download"]
+
+=========================================
+IMPORTANTE:
+=========================================
+
+- Só anexe o PDF CORRETO do boleto certo
+- O arquivo será validado com hash SHA-256
+- Se errar o arquivo, pode anexar novamente
+- O morador baixará exatamente o PDF anexado
+
+=========================================
