@@ -14,6 +14,7 @@ dist-ssr
 # Environment variables - NUNCA commitar arquivos .env!
 .env
 .env.local
+.env.localnet
 .env.*.local
 .ENV
 *.env
