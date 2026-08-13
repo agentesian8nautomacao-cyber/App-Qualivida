@@ -1,0 +1,46 @@
+================================================================================
+D1 — RLS LIVE — RESULTADO INTEGRAL
+================================================================================
+Script:              docs/evidence/D1-RLS-LIVE.sql
+Modo:                READ-ONLY
+Project ref:         zaemlxjwhzrfmowbckmk
+Timestamp UTC:       2026-08-12T20:49:00Z (coleta operador; arquivado no repo)
+Executor:            operador (SQL Editor produção) / arquivamento assistente
+Status da execução:  EXECUTADO
+
+--------------------------------------------------------------------------------
+RESULTADO
+--------------------------------------------------------------------------------
+| table_name       | rls_enabled | rls_forced |
+| ---------------- | ----------- | ---------- |
+| admin_audit_logs | true        | false      |
+| app_config       | true        | false      |
+| areas            | true        | false      |
+| boletos          | true        | false      |
+| notice_reads     | true        | false      |
+| notices          | true        | false      |
+| notifications    | true        | false      |
+| occurrences      | true        | false      |
+| package_items    | true        | false      |
+| packages         | true        | false      |
+| permissions      | true        | false      |
+| reservations     | true        | false      |
+| resident_invites | true        | false      |
+| residents        | true        | false      |
+| role_permissions | true        | false      |
+| roles            | true        | false      |
+| staff            | true        | false      |
+| staff_invites    | true        | false      |
+| users            | true        | false      |
+
+Tabelas analisadas: 19 (lista prioritária D1)
+relrowsecurity: true em todas
+relforcerowsecurity: false em todas
+
+--------------------------------------------------------------------------------
+CLASSIFICAÇÃO D1 (flag RLS ON)
+--------------------------------------------------------------------------------
+PASS — todas as tabelas prioritárias têm RLS habilitado (rls_enabled=true).
+
+NOTA: RLS ON ≠ isolamento efetivo. Ver D2 para policies (qual/with_check).
+================================================================================

@@ -1,0 +1,49 @@
+================================================================================
+D2 — STORAGE LIVE / POLICIES — PÓS-R2A-MIN (operador)
+================================================================================
+Script:              docs/evidence/D2-STORAGE-LIVE.sql
+Modo:                READ-ONLY (esta coleta)
+Project ref:         zaemlxjwhzrfmowbckmk
+Timestamp UTC:       2026-08-13T13:48:00Z (arquivamento da entrega do operador)
+Executor:            operador (SQL Editor produção)
+Status da execução:  EXECUTADO (operador)
+
+Arquivo histórico NÃO substituído:
+  docs/evidence/results/D2-STORAGE-LIVE-2026-08-12.txt
+
+--------------------------------------------------------------------------------
+DISTINÇÃO OBRIGATÓRIA
+--------------------------------------------------------------------------------
+public.boletos     = tabela PostgREST (CRUD). Policies {public} NÃO são Storage.
+storage.objects    = policies do bucket (R2A-MIN). Este PASS refere-se a ESTE objeto
+                     para o gate Storage (boletos).
+
+Não remediar public.boletos nesta etapa.
+
+--------------------------------------------------------------------------------
+storage.objects — LIVE 2026-08-13 (entrega operador)
+--------------------------------------------------------------------------------
+| policyname                     | roles              | cmd    | condição          |
+| ------------------------------ | ------------------ | ------ | ----------------- |
+| boletos_insert_authenticated   | {authenticated}    | INSERT | bucket_id='boletos' |
+| boletos_select_authenticated   | {authenticated}    | SELECT | bucket_id='boletos' |
+| boletos_update_authenticated   | {authenticated}    | UPDATE | bucket_id='boletos' |
+
+boletos_read_all (SELECT {public}): AUSENTE — confirmado pelo operador.
+
+INSERT/UPDATE: presentes, mesmo padrão pré-R2A-MIN (qualquer authenticated + bucket).
+
+--------------------------------------------------------------------------------
+CLASSIFICAÇÃO D2 (Storage / objetivo R2A-MIN)
+--------------------------------------------------------------------------------
+PASS — leitura pública do bucket boletos encerrada; SELECT autenticado presente;
+INSERT/UPDATE preservados.
+
+Residual (NÃO Storage; NÃO reabre este PASS Storage):
+  policies {public} na TABELA public.boletos e demais tabelas D2-2026-08-12
+  (users/staff/… USING true). Fora do escopo R2A-MIN.
+
+R1 packages: R2A-MIN não altera public.packages — R1 PASS permanece válido.
+
+READ-ONLY nesta documentação. Agente não reexecutou SQL.
+================================================================================

@@ -1,8 +1,10 @@
 # Fase 1 — Especificação de arquitetura multi-tenant
 
 **Status do gate:** direção arquitetural **APROVADA** — implementação **NÃO AUTORIZADA**  
-**Pré-implementação (gates M1):** RLS live **PENDENTE** | Storage live **PENDENTE** | Backup **PENDENTE** | Git baseline **PENDENTE** | Plano M1–M16 **OK** ([FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md))  
-**Última revisão:** 2026-08-08 (fechamento gates pré-M1)  
+**Pré-implementação (gates M1):** RLS live **PENDENTE** | Storage live **PENDENTE** | Backup **PENDENTE** | Git baseline **OK** | Plano M1–M16 **OK (revisado Operaut)** | Addendum Operaut **OK (publicado)**  
+**Evidências:** [docs/evidence/](./evidence/README.md) · [PRE-M1-GATE-STATUS.md](./evidence/PRE-M1-GATE-STATUS.md)  
+**Addendum:** [OPERAUT-ARCHITECTURE-ADDENDUM.md](./OPERAUT-ARCHITECTURE-ADDENDUM.md)  
+**Última revisão:** 2026-08-12 (ponte Operaut + M1–M16 revisados)  
 **Baseline (Fase 0 + RBAC):** 5 roles, 50 permissions, 187 role_permissions; 4 residents, 4 users, 1 staff, 9 packages; 0 boletos, 0 occurrences; sem tenant formal hoje.
 
 **Escopo:** especificação exclusiva. Proibido nesta entrega: DDL/DML, migrations, RLS, Storage, Auth, RBAC, frontend.
@@ -10,6 +12,11 @@
 ---
 
 ## Hierarquia canônica (obrigatória)
+
+> **Operaut:** a hierarquia abaixo permanece válida para a **vertical condomínios**.  
+> A generalização PLATFORM → ORGANIZATION → VERTICAL → OPERATIONAL_SITE → UNIT está em  
+> **[OPERAUT-ARCHITECTURE-ADDENDUM.md](./OPERAUT-ARCHITECTURE-ADDENDUM.md)**.  
+> No piloto, `condominiums` = Operational Site (`vertical=condominium`); `condominium_id` ≡ `site_id`.
 
 ### Espacial / produto
 
@@ -472,29 +479,32 @@ Repetir para: residents, units, occurrences, notices, notifications, boletos, re
 
 ## 18. Ordem exata das migrations futuras (proposta)
 
-Detalhamento completo (objetivo, dependências, rollback, testes): **[FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)**.
+Detalhamento completo (objetivo, dependências, rollback, testes, **revisão Operaut**): **[FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)**.  
+Contrato de produto: **[OPERAUT-ARCHITECTURE-ADDENDUM.md](./OPERAUT-ARCHITECTURE-ADDENDUM.md)**.
 
-| # | Migration | Conteúdo |
-|---|-----------|----------|
-| M1 | `001_platform_org_condo` | `organizations`, `condominiums` |
-| M2 | `002_units` | `units` + FK condo |
-| M3 | `003_tenant_memberships` | tabela + índices únicos (auth_user_id, condominium_id) |
-| M4 | `004_pilot_seed` | INSERT org piloto + condo Qualivida (**dados prod em transação controlada**) |
-| M5 | `005_residents_condo_id` | nullable → backfill → NOT NULL |
-| M6 | `006_packages_condo_id` | idem |
-| M7 | `007_staff_areas_app_config` | condo_id |
-| M8 | `008_operational_rest` | occurrences, notices, visitors, boletos, reservations, chat, audit, invites |
-| M9 | `009_notifications_transitive_rls` | policies via residents/notices |
-| M10 | `010_package_items_transitive` | RLS via packages |
-| M11 | `011_memberships_backfill` | a partir users/staff/residents auth |
-| M12 | `012_rls_helpers` | `current_condominium_id()`, `has_permission()`, `is_member()` |
-| M13 | `013_rls_policies_core` | packages, residents, notifications |
-| M14 | `014_rls_policies_extended` | demais tenant-owned |
-| M15 | `015_storage_policies_paths` | buckets + prefix org/condo |
-| M16 | `016_realtime_publication` | filter condo (se aplicável) |
+| # | Migration | Conteúdo | Operaut |
+|---|-----------|----------|---------|
+| M1 | `001_platform_org_condo` | `organizations`, `condominiums` (+ vertical/site) | **AJUSTE** |
+| M2 | `002_units` | `units` + FK site (`condominium_id`) | **AJUSTE** doc |
+| M3 | `003_tenant_memberships` | memberships no site | **AJUSTE** |
+| M4 | `004_pilot_seed` | INSERT org + site Qualivida | **IGUAL** |
+| M5 | `005_residents_condo_id` | nullable → backfill → NOT NULL | **AJUSTE** doc |
+| M6 | `006_packages_condo_id` | idem | **AJUSTE** doc |
+| M7 | `007_staff_areas_app_config` | condo_id (= site) | **AJUSTE** doc |
+| M8 | `008_operational_rest` | demais tabelas + condo_id | **AJUSTE** doc |
+| M9 | `009_notifications_transitive_rls` | inbox como canal | **IGUAL** + nota |
+| M10 | `010_package_items_transitive` | RLS via packages | **IGUAL** |
+| M11 | `011_memberships_backfill` | a partir users/staff/residents | **IGUAL** |
+| M12 | `012_rls_helpers` | helpers + alias `site_id` | **AJUSTE** |
+| M13 | `013_rls_policies_core` | packages, residents, notifications | **IGUAL** |
+| M14 | `014_rls_policies_extended` | demais tenant-owned | **IGUAL** |
+| M15 | `015_storage_policies_paths` | prefix org/site | **AJUSTE** |
+| M16 | `016_realtime_publication` | filter site / alias canal | **AJUSTE** |
+| — | Operations Core (futuro) | eventos, n8n, canais, audit ops | **pós-M16** |
 
-**Entre M4–M11:** app ainda pode operar com fallback single condo.  
-**App changes** (contexto tenant, offline, realtime) **após M11–M13**, em release coordenado.
+**Entre M4–M11:** app ainda pode operar com fallback single site.  
+**App changes** (contexto tenant, offline, realtime) **após M11–M13**, em release coordenado.  
+**Eventos / automações / Central Operaut:** **após** isolamento (não misturar em M1).
 
 ---
 
@@ -507,119 +517,97 @@ Sem alteração nesta entrega — ver critérios de aceitação e mitigações e
 ## 20. Gates antes de autorizar implementação
 
 - [x] Direção arquitetural aprovada  
+- [x] Addendum Operaut publicado — [OPERAUT-ARCHITECTURE-ADDENDUM.md](./OPERAUT-ARCHITECTURE-ADDENDUM.md)  
+- [ ] Addendum Operaut **aceito** explicitamente pela equipe  
 - [ ] Implementação explicitamente autorizada  
 - [ ] Export **live** RLS (`pg_policies`, `relrowsecurity`) documentado no repositório ou anexo seguro  
 - [ ] Export **live** Storage (`storage.buckets`, policies `storage.objects`) documentado  
 - [ ] Backup verificável (schema + dados + policies + funções + triggers + Storage conforme possível)  
-- [ ] Git baseline `pre-multitenant-baseline`  
-- [x] Plano M1–M16 detalhado — [FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)  
+- [x] Git baseline `pre-multitenant-baseline`  
+- [x] Plano M1–M16 detalhado e **revisado Operaut** — [FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)  
 
 ---
 
-## 21. Pré-implementação — fechamento dos gates (2026-08-08)
+## 21. Pré-implementação — fechamento dos gates (atualizado 2026-08-12)
 
-Esta seção registra o checkpoint **antes de M1**. Nenhum DDL/DML/policies foi executado nesta etapa.
+Esta seção registra o checkpoint **antes de M1**. Nenhum DDL/DML/policies foi executado nesta etapa.  
+Status resumido: [docs/evidence/PRE-M1-GATE-STATUS.md](./evidence/PRE-M1-GATE-STATUS.md).
 
 ### GATE 1 — RLS live
 
 | Verificação | Resultado |
 |-------------|-----------|
-| Relatório real `pg_policies` anexado | **NÃO** — apenas instruções em [FASE-0-DIAGNOSTICO-PRODUCAO.md](./FASE-0-DIAGNOSTICO-PRODUCAO.md) **Anexo D** (D1–D2) |
-| `relrowsecurity` por tabela | **NÃO** exportado |
-| Policies `storage.objects` | **NÃO** exportado (D2 inclui storage quando executado) |
+| Script read-only D1 | **OK** — [docs/evidence/D1-RLS-LIVE.sql](./evidence/D1-RLS-LIVE.sql) |
+| Resultado da execução D1 anexado | **PENDENTE — aguardando execução manual** |
+| Relatório real `pg_policies` / `relrowsecurity` | **PENDENTE** |
 
 **Status:** **PENDENTE**
 
-**Ação operador (SQL Editor — project `zaemlxjwhzrfmowbckmk`, somente leitura):** executar blocos **D1** e **D2** do Anexo D; opcionalmente D3–D6 no mesmo arquivo. Copiar resultado para `docs/evidence/YYYY-MM-DD-rls-storage-live.sql` ou repositório seguro **fora** do Git público se contiver dados sensíveis. **Não alterar policies.**
+**Ação operador:** no SQL Editor do project `zaemlxjwhzrfmowbckmk`, executar **somente** [D1-RLS-LIVE.sql](./evidence/D1-RLS-LIVE.sql). Exportar saída para `docs/evidence/results/`. **Não alterar policies.**
 
-Referência rápida D1–D2:
+### GATE 1b / Storage — D2 + D5
 
-```sql
--- D1) RLS por tabela prioritária
-SELECT c.relname AS table_name,
-       c.relrowsecurity AS rls_enabled,
-       c.relforcerowsecurity AS rls_forced
-FROM pg_class c
-JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'public'
-  AND c.relkind = 'r'
-  AND c.relname IN (
-    'users','staff','residents','packages','package_items','occurrences',
-    'notices','notice_reads','notifications','reservations','areas','boletos',
-    'roles','permissions','role_permissions','staff_invites','resident_invites',
-    'admin_audit_logs','app_config'
-  )
-ORDER BY 1;
+| Verificação | Resultado |
+|-------------|-----------|
+| Script D2 (policies + `storage.objects`) | **OK** — [docs/evidence/D2-STORAGE-LIVE.sql](./evidence/D2-STORAGE-LIVE.sql) |
+| Script D5 (`storage.buckets`) | **OK** — [docs/evidence/D5-STORAGE-EVIDENCE.sql](./evidence/D5-STORAGE-EVIDENCE.sql) |
+| Resultados D2/D5 anexados | **PENDENTE — aguardando execução manual** |
 
--- D2) Policies (public + storage.objects)
-SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
-FROM pg_policies
-WHERE (schemaname = 'public' AND tablename IN (
-    'users','staff','residents','packages','package_items','occurrences',
-    'notices','notice_reads','notifications','reservations','areas','boletos',
-    'roles','permissions','role_permissions','staff_invites','resident_invites',
-    'admin_audit_logs','app_config'
-  ))
-   OR (schemaname = 'storage' AND tablename = 'objects')
-ORDER BY schemaname, tablename, policyname;
-```
+**Storage live:** **PENDENTE**
+
+**Ação operador:** executar D2 e D5 no mesmo projeto; não criar/alterar buckets nem policies.
 
 ### GATE 2 — Backup
 
 | Item | Status |
 |------|--------|
-| Evidência no repositório (dump, checksum, print Dashboard) | **Ausente** |
-| Restore test | **Não executado** |
+| Evidência concreta (dump/snapshot + hash ou ID) | **Ausente** |
+| Restore test (ambiente separado) | **Não executado** |
+| Procedimento documentado | **OK** — [docs/evidence/BACKUP-VERIFICAVEL.md](./evidence/BACKUP-VERIFICAVEL.md) |
 
-**BACKUP = PENDENTE**
-
-Procedimento recomendado (sem DROP/RESET no banco):
-
-1. **PostgreSQL:** Supabase Dashboard → Database → Backups (confirmar snapshot/PITR) **ou** `pg_dump` com connection string (schema + dados + `--no-owner` documentado).  
-2. **RLS/policies/funções/triggers:** resultado Anexo D D1–D4 + `pg_dump --schema-only` ou dump completo.  
-3. **Storage:** sync buckets com objetos (`boletos`, etc.) via CLI/conta com permissão.  
-4. Arquivar caminho + data + responsável em runbook interno.
+**BACKUP VERIFICÁVEL = PENDENTE**
 
 ### GATE 3 — Git baseline
 
-| Item | Valor (2026-08-08) |
+| Item | Valor (2026-08-12) |
 |------|---------------------|
-| Repositório `.git` | **Não inicializado** no workspace |
-| Branch | — |
-| Commit atual | — |
-| Tag `pre-multitenant-baseline` | **Não existe** |
-| Arquivos modificados | N/A (sem Git) |
+| Repositório `.git` | **Sim** |
+| Branch | `master` |
+| Commit atual (auditoria) | `f630726` — `chore: establish pre-multitenant baseline` |
+| Tag `pre-multitenant-baseline` | **OK** (existe) |
+| Working tree | **CLEAN** na auditoria |
+| Arquivos modificados | Nenhum no momento da confirmação do baseline |
 
-**Status:** **PENDENTE**
+**Status:** **OK**
 
-**Instruções (não apagar/mover arquivos do projeto):**
+**Não** refazer `git init`. **Não** criar outra tag. **Não** alterar o baseline.
 
-```powershell
-cd "d:\Gestao-Qualivida-Residence-main"
-git init
-git add .
-git commit -m "Baseline pré multi-tenant (Fase 1 gates)"
-git tag -a pre-multitenant-baseline -m "Ponto antes das migrations M1-M16"
-```
+### GATE 3b — Segurança do repositório (auditoria 2026-08-12)
 
-Antes do `git add`, revisar `.gitignore` para **não** commitar `.env`, secrets ou dumps de backup. Se o remoto já existir, adicionar `origin` e push conforme política da equipe.
+| Item | Resultado |
+|------|-----------|
+| Possível secret versionado | **BLOCKER:** possível secret versionado em `.env.localnet` |
+| `node_modules.bak` | **PRESENTE** (disco + versionado; ~7851 paths; **não** removido nesta etapa) |
+
+Tratar o BLOCKER operacionalmente antes de ampliar exposição do repo; **não** faz parte da implementação M1.
 
 ### GATE 4 — Plano de migrations M1–M16
 
-Documento dedicado: **[FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)** — cada Mi com objetivo, dependências, impacto/tabelas, risco, rollback, testes e critério de sucesso.
+Documento dedicado: **[FASE-1-MIGRATION-PLAN.md](./FASE-1-MIGRATION-PLAN.md)** (revisão Operaut 2026-08-12).  
+Addendum: **[OPERAUT-ARCHITECTURE-ADDENDUM.md](./OPERAUT-ARCHITECTURE-ADDENDUM.md)**.
 
-**Nota de ordem de execução:** manter numeração M1–M16; na prática **executar M12 (helpers RLS) antes de M9, M10, M13 e M14** (detalhado no plano).
+**Nota de ordem de execução:** manter numeração M1–M16; na prática **executar M12 (helpers RLS) antes de M9, M10, M13 e M14**. Eventos/n8n = Operations Core **após** M16.
 
-**Status:** **OK** (documentação)
+**Status:** **OK** (documentação revisada) — aceite explícito do addendum ainda **pendente**
 
 ### Checkpoint pré-M1
 
 | Item | Valor |
 |------|--------|
 | Banco alterado nesta etapa | **NÃO** |
-| Código funcional alterado | **NÃO** (apenas docs) |
+| Código funcional alterado | **NÃO** (apenas docs / scripts read-only de evidência) |
 | Migrations executadas | **NÃO** |
-| Podemos executar M1? | **NÃO** (gates 1–3 pendentes) |
+| Podemos executar M1? | **NÃO** (RLS/Storage/Backup pendentes; aceite Operaut pendente) |
 
 ---
 

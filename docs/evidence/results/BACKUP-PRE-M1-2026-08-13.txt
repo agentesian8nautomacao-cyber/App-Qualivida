@@ -1,0 +1,68 @@
+================================================================================
+BACKUP PRE-M1 — EVIDÊNCIA GATE 2
+================================================================================
+Projeto:             zaemlxjwhzrfmowbckmk
+Timestamp UTC:       2026-08-13T14:57:35Z (TOC do dump: 2026-08-13 11:57:35 local)
+Método:              pg_dump -Fc --no-owner --no-acl
+Host (sem senha):    db.zaemlxjwhzrfmowbckmk.supabase.co
+Porta:               5432
+Database:            postgres
+User:                postgres
+sslmode:             require
+Executor:            agente
+M1:                  NÃO EXECUTADA
+
+Nenhuma migration / ALTER / RLS / Storage / restore / DROP / TRUNCATE / DELETE.
+Senha NÃO registrada neste arquivo.
+
+--------------------------------------------------------------------------------
+VALIDAÇÃO DE CONEXÃO (somente leitura)
+--------------------------------------------------------------------------------
+SQL: SELECT current_database() AS db, inet_server_port() AS port;
+Resultado: postgres|5432
+psql_exit: 0
+
+--------------------------------------------------------------------------------
+ARQUIVO
+--------------------------------------------------------------------------------
+nome:     backup-pre-m1-2026-08-13-115734.dump
+caminho:  docs/evidence/backups/backup-pre-m1-2026-08-13-115734.dump
+tamanho:  495736 bytes
+SHA-256:  435b322410fa417856d00a1b7ad751eb0c3155b073a49244e07ff8027e80eb1a
+gitignore: docs/evidence/backups/*.dump (não commitar)
+
+--------------------------------------------------------------------------------
+pg_restore --list
+--------------------------------------------------------------------------------
+exit: 0
+linhas TOC: 850
+TOC Entries (cabeçalho): 841
+Format: CUSTOM
+Compression: gzip
+Dump Version: 1.16-0
+Dumped from database version: 17.6
+Dumped by pg_dump version: 18.4
+dbname no archive: postgres
+
+Amostra (sem dados):
+  SCHEMA auth
+  EXTENSION pg_cron
+  SCHEMA drizzle
+  SCHEMA extensions
+
+Restore NÃO executado. Produção NÃO alterada pelo dump (somente leitura).
+
+--------------------------------------------------------------------------------
+STATUS FINAL
+--------------------------------------------------------------------------------
+BACKUP = PASS
+
+Critérios:
+  [x] arquivo .dump existe
+  [x] tamanho > 0 (495736)
+  [x] SHA-256 calculado
+  [x] pg_restore --list exit 0
+
+GATE 2: PASS
+M1 permaneceu BLOCKED.
+================================================================================

@@ -1,0 +1,154 @@
+================================================================================
+GATE 3 — WORKTREE AUDIT — 2026-08-13
+================================================================================
+Projeto:             Qualivida Residence
+Data/hora UTC:       2026-08-13T16:08:00Z
+Modo:                SOMENTE DIAGNÓSTICO
+Branch:              master
+HEAD:                7ee0131d0e58f39f4a36d0e0125b7000ae760904
+Tag baseline:        pre-multitenant-baseline → f6307264d5aef97d2c8aed51a4c8d2b90d5ef902
+Working tree:        DIRTY
+pre-m1-checkpoint:   AUSENTE
+
+NÃO executado: commit / tag / reset / clean / stash / M1 / SQL / RLS / Storage.
+
+--------------------------------------------------------------------------------
+CONTADORES
+--------------------------------------------------------------------------------
+Arquivos modificados (tracked):     2
+Arquivos não rastreados (ls-files): 43
+  (git status --short mostra docs/evidence/ como um diretório ??;
+   inventário expandido abaixo)
+Dump .dump (ignored, fora do índice): 1
+
+--------------------------------------------------------------------------------
+1) MODIFICADOS (tracked) — git diff --name-status
+--------------------------------------------------------------------------------
+M  docs/FASE-1-ARQUITETURA-MULTITENANT.md
+   Classificação: BASELINE / PROJETO
+   Tipo: documentação
+   Motivo: revisão Operaut (ponte addendum, condominium≡site);
+           não é DDL/código M1. Diff ~270 linhas tocadas no par.
+
+M  docs/FASE-1-MIGRATION-PLAN.md
+   Classificação: BASELINE / PROJETO
+   Tipo: documentação
+   Motivo: plano M1–M16 revisado Operaut; status "nenhuma migration
+           executada". Não implementa M1.
+
+--------------------------------------------------------------------------------
+2) NÃO RASTREADOS — inventário classificado
+--------------------------------------------------------------------------------
+
+--- BASELINE / PROJETO (docs arquitetura) ---
+?? docs/OPERAUT-ARCHITECTURE-ADDENDUM.md
+
+--- EVIDÊNCIA DO GATE (docs/evidence) ---
+?? docs/evidence/README.md
+?? docs/evidence/BACKUP-VERIFICAVEL.md
+?? docs/evidence/D1-RLS-LIVE.sql
+?? docs/evidence/D2-STORAGE-LIVE.sql
+?? docs/evidence/D5-STORAGE-EVIDENCE.sql
+?? docs/evidence/FINAL-PRE-M1-CHECKPOINT-2026-08-13.md
+?? docs/evidence/PRE-BACKUP-SECURITY-REVIEW-2026-08-13.md
+?? docs/evidence/PRE-M1-GATE-AUDIT-2026-08-12.md
+?? docs/evidence/PRE-M1-GATE-STATUS.md
+?? docs/evidence/PRE-M1-GIT-BASELINE-2026-08-13.md
+?? docs/evidence/PROJECT-REF-AUDIT-2026-08-12.md
+?? docs/evidence/R1-PACKAGES-ALLOW-ALL-REMEDIATION.md
+?? docs/evidence/R2-STORAGE-BOLETOS-REMEDIATION.md
+?? docs/evidence/R2.1-PDF-URL-LEGACY-AUDIT-2026-08-12.md
+?? docs/evidence/R2.2-BOLETOS-OWNERSHIP-AUDIT-2026-08-12.md
+?? docs/evidence/R2.3-STORAGE-POLICY-AUDIT-2026-08-12.md
+?? docs/evidence/R2A-MIN-PLAN-2026-08-13.md
+?? docs/evidence/R2A-MIN-POST-LIVE-2026-08-13.md
+?? docs/evidence/R2A-MIN-PRE-EXECUTION-REVIEW-2026-08-13.md
+?? docs/evidence/R2A-STORAGE-BOLETOS-SECURITY-REMEDIATION.md
+?? docs/evidence/R2A.1-STORAGE-BOLETOS-PREFLIGHT-2026-08-12.md
+?? docs/evidence/R2A.2-STORAGE-RBAC-AUTHORIZATION-AUDIT-2026-08-12.md
+?? docs/evidence/SECURITY-REMEDIATION-PLAN-2026-08-12.md
+?? docs/evidence/STAFF-INVITES-AUDIT-2026-08-12.md
+?? docs/evidence/backups/.gitignore
+?? docs/evidence/results/BACKUP-MANIFEST-2026-08-13.md
+?? docs/evidence/results/BACKUP-PRE-M1-2026-08-13.txt
+?? docs/evidence/results/D1-RLS-LIVE-2026-08-12.txt
+?? docs/evidence/results/D2-STORAGE-LIVE-2026-08-12-RAW.txt
+?? docs/evidence/results/D2-STORAGE-LIVE-2026-08-12.txt
+?? docs/evidence/results/D2-STORAGE-LIVE-2026-08-13.txt
+?? docs/evidence/results/D5-STORAGE-EVIDENCE-2026-08-12.txt
+?? docs/evidence/results/D5-STORAGE-EVIDENCE-2026-08-13.txt
+?? docs/evidence/results/GATE-3-GIT-BASELINE-2026-08-13.txt
+?? docs/evidence/results/R1-PACKAGES-POST-2026-08-12.txt
+?? docs/evidence/results/R2A-MIN-LIVE-2026-08-13.txt
+   (+ este arquivo GATE-3-WORKTREE-AUDIT após criação = também evidência)
+
+--- BASELINE / PROJETO (SQL remediação segurança pré-M1; NÃO é M1) ---
+?? supabase/migrations/20260812220000_r1_packages_drop_allow_all_policy.sql
+?? supabase/migrations/20260812220000_r1_packages_drop_allow_all_policy.rollback.sql
+?? supabase/migrations/20260812230000_r2a_storage_boletos_security.sql
+?? supabase/migrations/20260812230000_r2a_storage_boletos_security.rollback.sql
+?? supabase/migrations/20260813090000_r2a_min_remove_public_exposure.sql
+?? supabase/migrations/20260813090000_r2a_min_remove_public_exposure.rollback.sql
+   Nota: R2A completa = proposta NÃO executar; R1/R2A-MIN = remediação Storage/
+   packages. Nenhuma cria organizations/condominiums/tenant_memberships.
+
+--- IGNORADO (fora do índice; artefato binário) ---
+!! docs/evidence/backups/backup-pre-m1-2026-08-13-115734.dump
+   Classificação: ARTEFATO TEMPORÁRIO / backup binário
+   DEVE ficar FORA do Git (já em .gitignore de backups/)
+
+--------------------------------------------------------------------------------
+3) SECRETS / CREDENCIAIS
+--------------------------------------------------------------------------------
+No status --short / ls-files --others --exclude-standard:
+  NENHUM .env, password, token ou connection string listado.
+
+.gitignore cobre .env / .env.localnet / etc.
+Se existirem no disco: [SENSÍVEL — NÃO EXIBIDO] e DEVEM ficar FORA.
+
+Secrets nesta inspeção: NÃO DETECTADOS no inventário dirty.
+
+--------------------------------------------------------------------------------
+4) ALTERAÇÕES M1
+--------------------------------------------------------------------------------
+NÃO DETECTADAS.
+Sem migration M1, sem tenant_id em código, sem CREATE organizations/
+condominiums/tenant_memberships no working tree.
+
+Docs FASE-1 / Operaut descrevem M1 futuro — são especificação, não implementação.
+
+--------------------------------------------------------------------------------
+5) ALTERAÇÕES DESCONHECIDAS
+--------------------------------------------------------------------------------
+NENHUMA. Todas as entradas mapeiam a gates R1/R2/R2A-MIN, evidências,
+Operaut docs ou backup.
+
+--------------------------------------------------------------------------------
+6) RECOMENDAÇÃO (NÃO EXECUTAR NESTA TAREFA)
+--------------------------------------------------------------------------------
+Candidatos a um futuro checkpoint (autorização explícita necessária):
+  - docs/FASE-1-ARQUITETURA-MULTITENANT.md
+  - docs/FASE-1-MIGRATION-PLAN.md
+  - docs/OPERAUT-ARCHITECTURE-ADDENDUM.md
+  - docs/evidence/** (md, sql de evidência, results/*.txt)
+  - docs/evidence/backups/.gitignore
+  - supabase/migrations/20260812* e 20260813* (R1/R2A/R2A-MIN + rollbacks)
+
+DEVEM ficar FORA:
+  - docs/evidence/backups/*.dump
+  - qualquer .env / secret / connection string
+  - node_modules, dist, logs
+
+NÃO recomendar commit automático se no futuro aparecer M1 ou unknown.
+Neste inventário: só evidências + docs + SQL de remediação conhecidos —
+candidatos válidos a checkpoint, mas commit/tag NÃO feitos aqui.
+
+--------------------------------------------------------------------------------
+RESULTADO
+--------------------------------------------------------------------------------
+GATE 3 continua BLOCKED?  SIM (worktree DIRTY; pre-m1-checkpoint AUSENTE)
+M1 permaneceu BLOCKED?    SIM
+
+Motivo dirty: evidências de gates + docs Operaut/Fase 1 + SQL R1/R2A-MIN
+não estão no HEAD 7ee0131.
+================================================================================

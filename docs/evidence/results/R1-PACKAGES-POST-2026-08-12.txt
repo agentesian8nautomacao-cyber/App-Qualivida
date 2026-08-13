@@ -1,0 +1,52 @@
+================================================================================
+R1 — PACKAGES POST-EXECUTION EVIDENCE
+================================================================================
+Project ref:         zaemlxjwhzrfmowbckmk
+Migration:           20260812220000_r1_packages_drop_allow_all_policy.sql
+Timestamp UTC:       2026-08-12T23:32:00Z (arquivamento; execução manual pelo operador)
+Executor:            operador (SQL Editor produção) / arquivamento assistente
+Modo desta tarefa:   DOCUMENTAÇÃO ONLY — nenhum SQL reexecutado pelo agente
+Classificação R1:    PASS
+
+--------------------------------------------------------------------------------
+RESULTADO PÓS-EXECUÇÃO CONFIRMADO PELO OPERADOR
+--------------------------------------------------------------------------------
+Tabela: public.packages
+
+Policies presentes (exatamente 6):
+
+- packages_resident_select
+- packages_resident_update
+- packages_staff_delete
+- packages_staff_insert
+- packages_staff_select
+- packages_staff_update
+
+Policy ausente (removida com sucesso):
+
+- "Allow all operations on packages"  — NÃO EXISTE MAIS
+
+RLS:
+
+- relrowsecurity      = true
+- relforcerowsecurity = false
+
+--------------------------------------------------------------------------------
+CRITÉRIOS DE SUCESSO
+--------------------------------------------------------------------------------
+[x] Policy global removida
+[x] 6 policies da migration 006 preservadas
+[x] Nenhuma policy extra reportada
+[x] RLS permanece enabled
+
+Classificação: PASS
+
+--------------------------------------------------------------------------------
+FORA DE ESCOPO (não alterado nesta R1)
+--------------------------------------------------------------------------------
+- Storage / bucket boletos
+- staff_invites
+- demais tabelas com policies Allow all / USING true
+- código funcional / frontend
+
+================================================================================

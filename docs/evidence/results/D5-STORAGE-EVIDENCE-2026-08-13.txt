@@ -1,0 +1,30 @@
+================================================================================
+D5 — STORAGE BUCKETS — PÓS-R2A-MIN (operador)
+================================================================================
+Script:              docs/evidence/D5-STORAGE-EVIDENCE.sql
+Modo:                READ-ONLY (esta coleta)
+Project ref:         zaemlxjwhzrfmowbckmk
+Timestamp UTC:       2026-08-13T13:48:00Z (arquivamento da entrega do operador)
+Executor:            operador (SQL Editor produção)
+Status da execução:  EXECUTADO (operador)
+
+Arquivo histórico NÃO substituído:
+  docs/evidence/results/D5-STORAGE-EVIDENCE-2026-08-12.txt
+
+--------------------------------------------------------------------------------
+RESULTADO LIVE 2026-08-13
+--------------------------------------------------------------------------------
+bucket boletos: public = false
+
+ANTES (D5 2026-08-12): public = true
+DEPOIS:                public = false
+
+--------------------------------------------------------------------------------
+CLASSIFICAÇÃO D5
+--------------------------------------------------------------------------------
+PASS — bucket financeiro não está mais marcado público.
+
+NÃO significa isolamento tenant-aware do path/objeto.
+
+READ-ONLY nesta documentação. Agente não reexecutou SQL.
+================================================================================

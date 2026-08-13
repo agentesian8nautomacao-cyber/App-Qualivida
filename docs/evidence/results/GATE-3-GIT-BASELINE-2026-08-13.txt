@@ -1,0 +1,100 @@
+================================================================================
+GATE 3 — GIT BASELINE — INSPEÇÃO 2026-08-13
+================================================================================
+Projeto:             Qualivida Residence
+Project ref Supabase: zaemlxjwhzrfmowbckmk
+Data/hora UTC:       2026-08-13T15:07:24Z
+Modo:                SOMENTE INSPEÇÃO
+M1:                  NÃO EXECUTADA
+
+Nenhuma tag criada. Nenhum commit. Nenhum reset/force-push.
+Nenhuma migration / SQL / RLS / Storage / código alterado.
+
+--------------------------------------------------------------------------------
+FASE A — GIT
+--------------------------------------------------------------------------------
+Toplevel:            D:/Gestao-Qualivida-Residence-main
+.git:                SIM
+Branch:              master
+HEAD:                7ee0131d0e58f39f4a36d0e0125b7000ae760904
+HEAD short:          7ee0131 (chore: protect local environment secrets)
+Commits em HEAD:     2
+Working tree:        DIRTY
+
+Tag list:
+  pre-multitenant-baseline
+
+show-ref:
+  f6307264d5aef97d2c8aed51a4c8d2b90d5ef902 refs/tags/pre-multitenant-baseline
+
+Tag commit message:  chore: establish pre-multitenant baseline
+Tag date:            2026-08-09 21:13:25 -0300
+Tag is ancestor of HEAD: SIM
+Tag == HEAD:         NÃO (HEAD = filho: secrets protect)
+
+--------------------------------------------------------------------------------
+FASE B — BASELINE
+--------------------------------------------------------------------------------
+A) .git existe?                                    SIM
+B) Existe pelo menos um commit?                    SIM
+C) Tag pre-multitenant-baseline existe?            SIM
+D) Tag aponta para commit existente?               SIM (f6307264...)
+E) Commit da tag = pré-implementação M1?           SIM
+   (baseline multi-tenant; sem DDL M1 no histórico)
+F) Working tree limpo?                             NÃO
+G) Alterações de M1 no working tree?               NÃO
+   (sem migration organizations/condominiums/
+    tenant_memberships/tenant_id; sem SQL M1)
+H) Evidência/backup não commitados?                SIM
+   (docs/evidence/ inteiro untracked; dumps *.dump
+    cobertos por .gitignore em backups/)
+I) Mudanças pós-baseline a preservar?              SIM
+   - docs Fase 1 / Operaut (M/??)
+   - docs/evidence (gates D1–D5, R1, R2A-MIN, backup)
+   - SQL R1 / R2A / R2A-MIN (+ rollbacks) untracked
+   Tag recomendada futura (NÃO criada): pre-m1-checkpoint
+
+Working tree (resumo porcelain):
+  M  docs/FASE-1-ARQUITETURA-MULTITENANT.md
+  M  docs/FASE-1-MIGRATION-PLAN.md
+  ?? docs/OPERAUT-ARCHITECTURE-ADDENDUM.md
+  ?? docs/evidence/
+  ?? supabase/migrations/20260812220000_r1_*
+  ?? supabase/migrations/20260812230000_r2a_*
+  ?? supabase/migrations/20260813090000_r2a_min_*
+
+--------------------------------------------------------------------------------
+FASE C — BACKUP ARTEFATOS (somente conferência)
+--------------------------------------------------------------------------------
+BACKUP-PRE-M1-2026-08-13.txt:                      SIM
+backup-pre-m1-2026-08-13-115734.dump:              SIM
+tamanho dump:                                      495736 bytes
+SHA-256 esperado: 435b322410fa417856d00a1b7ad751eb0c3155b073a49244e07ff8027e80eb1a
+SHA-256 arquivo:  435b322410fa417856d00a1b7ad751eb0c3155b073a49244e07ff8027e80eb1a
+SHA-256 confirmado:                                SIM
+
+Arquivos NÃO modificados nesta inspeção.
+
+--------------------------------------------------------------------------------
+CRITÉRIO / RESULTADO
+--------------------------------------------------------------------------------
+Documentação Fase 1 exige baseline `pre-multitenant-baseline` intacta: ATENDIDO.
+
+PRE-M1-GIT-BASELINE-2026-08-13.md exige worktree limpa + checkpoint
+do estado atual (evidências) antes de fechar o gate de baseline
+pré-M1: NÃO ATENDIDO (DIRTY; sem tag pre-m1-checkpoint).
+
+Não inferir PASS só pela existência da tag histórica.
+
+GATE 3 = BLOCKED
+
+Motivo: working tree DIRTY; evidências/backup/docs/SQL de remediação
+não commitados; checkpoint pre-m1-checkpoint ausente.
+Tag pre-multitenant-baseline permanece VÁLIDA e intacta.
+
+Próximo passo (NÃO nesta tarefa; exige autorização explícita):
+  commit de evidências/docs/SQL de remediação (sem M1) +
+  tag pre-m1-checkpoint — se o operador autorizar.
+
+M1 permaneceu BLOCKED.
+================================================================================

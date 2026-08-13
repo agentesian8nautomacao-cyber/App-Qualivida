@@ -1,0 +1,55 @@
+================================================================================
+R2A-MIN — LIVE EXECUTION RECORD
+================================================================================
+Project ref:         zaemlxjwhzrfmowbckmk
+URL:                 https://zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260813090000_r2a_min_remove_public_exposure.sql
+Nome lógico:         R2A-MIN-REMOVE-PUBLIC-EXPOSURE
+
+--------------------------------------------------------------------------------
+A) TENTATIVA AGENTE (não aplicada) — 2026-08-13T12:43:00Z
+--------------------------------------------------------------------------------
+STATUS: NÃO EXECUTADA (sem postgres/service_role; CLI em outra org).
+Preservado para auditoria. NÃO é o estado LIVE final.
+
+--------------------------------------------------------------------------------
+B) EXECUÇÃO OPERADOR — SQL Editor produção — 2026-08-13
+--------------------------------------------------------------------------------
+Timestamp UTC (arquivamento): 2026-08-13T13:48:00Z
+Executor:                     operador (SQL Editor, ref zaemlxjwhzrfmowbckmk)
+Resultado R2A-MIN:            Success. No rows returned.
+STATUS:                       EXECUTADA
+
+BUCKET ANTES (D5 2026-08-12):  boletos.public = true
+BUCKET DEPOIS (D5 2026-08-13): boletos.public = false
+
+SELECT ANTES (D2 2026-08-12):
+  boletos_read_all | SELECT | {public} | USING bucket_id='boletos'
+
+SELECT DEPOIS (D2 2026-08-13):
+  boletos_read_all               AUSENTE
+  boletos_select_authenticated   SELECT | {authenticated} | bucket_id='boletos'
+
+INSERT (inalterado vs D2-12 / R2A-MIN):
+  boletos_insert_authenticated   INSERT | {authenticated} | bucket_id='boletos'
+
+UPDATE (inalterado vs D2-12 / R2A-MIN):
+  boletos_update_authenticated   UPDATE | {authenticated} | bucket_id='boletos'
+
+Outros objetos (packages, staff_invites, public.boletos table RLS, M1):
+  NÃO alterados pela R2A-MIN (escopo só storage.objects + bucket boletos).
+
+R1 packages: permanece PASS (Allow all ausente; R2A-MIN não toca packages).
+
+--------------------------------------------------------------------------------
+CLASSIFICAÇÃO
+--------------------------------------------------------------------------------
+R2A-MIN = PASS
+D5      = PASS  (boletos.public = false)
+D2      = PASS  (Storage objects boletos: sem SELECT {public};
+                 insert/update autenticados presentes)
+
+NÃO significa: RBAC tenant-aware, staff_invites resolvido, backup, M1.
+
+Arquivos históricos 2026-08-12 NÃO apagados.
+================================================================================

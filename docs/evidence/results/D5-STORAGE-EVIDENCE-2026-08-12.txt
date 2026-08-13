@@ -1,0 +1,32 @@
+================================================================================
+D5 — STORAGE BUCKETS — RESULTADO INTEGRAL
+================================================================================
+Script:              docs/evidence/D5-STORAGE-EVIDENCE.sql
+Modo:                READ-ONLY
+Project ref:         zaemlxjwhzrfmowbckmk
+Timestamp UTC:       2026-08-12T20:49:00Z (coleta operador; arquivado no repo)
+Executor:            operador (SQL Editor produção) / arquivamento assistente
+Status da execução:  EXECUTADO
+
+--------------------------------------------------------------------------------
+RESULTADO (storage.buckets)
+--------------------------------------------------------------------------------
+| id      | name    | public | file_size_limit | allowed_mime_types | created_at                    |
+| ------- | ------- | ------ | --------------- | ------------------ | ----------------------------- |
+| boletos | boletos | true   | null            | null               | 2026-02-03 01:23:00.853485+00 |
+
+Buckets retornados: 1
+public=true no bucket boletos (alinhado à policy storage boletos_read_all).
+
+--------------------------------------------------------------------------------
+CLASSIFICAÇÃO D5
+--------------------------------------------------------------------------------
+FAIL — bucket `boletos` marcado public=true (leitura pública inesperada para
+documento financeiro em cenário SaaS/multi-tenant; confirma isolamento Storage
+inadequado junto com D2).
+
+NOTA: Fase 0 listava outros nomes de bucket via API list; D5 SQL retornou apenas
+`boletos` em storage.buckets. Inconsistência documentada — não corrigida aqui.
+
+READ-ONLY. Nenhum bucket alterado.
+================================================================================

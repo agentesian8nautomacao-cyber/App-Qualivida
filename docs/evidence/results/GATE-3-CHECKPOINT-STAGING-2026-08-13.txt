@@ -1,0 +1,96 @@
+================================================================================
+GATE 3 — CHECKPOINT STAGING — 2026-08-13
+================================================================================
+Projeto:             Qualivida Residence
+Data/hora UTC:       2026-08-13T16:30:00Z
+Branch:              master
+HEAD anterior:       7ee0131d0e58f39f4a36d0e0125b7000ae760904
+Baseline tag:        pre-multitenant-baseline
+Baseline commit:     f6307264d5aef97d2c8aed51a4c8d2b90d5ef902
+pre-m1-checkpoint:   AUSENTE (tag NÃO criada nesta execução)
+Commit:              NÃO CRIADO
+M1:                  NÃO EXECUTADA
+
+--------------------------------------------------------------------------------
+FASE 1 — .gitignore
+--------------------------------------------------------------------------------
+Antes:
+  .env / .env.local / .env.localnet / *.env / .env*.local  → SIM
+  docs/evidence/backups/.gitignore: *.dump, *.dump.tmp, *.sql.gz → SIM
+  Raiz: *.dump AUSENTE
+
+Alteração registrada (staged):
+  .gitignore (raiz) — adicionadas regras:
+    *.dump
+    *.dump.tmp
+    *.sql.gz
+  Motivo: defesa em profundidade além de backups/.gitignore
+
+check-ignore dump:
+  docs/evidence/backups/.gitignore:2:*.dump
+  → backup-pre-m1-2026-08-13-115734.dump IGNORADO
+
+--------------------------------------------------------------------------------
+FASE 2 — PRÉ-CHECK CANDIDATOS
+--------------------------------------------------------------------------------
+.env no inventário:                    NÃO
+.dump no inventário a commitar:        NÃO (ignorado)
+Credenciais/senhas em arquivos:        NÃO (hits = nomes de variáveis em docs)
+Connection string com senha:           NÃO
+Build/cache (node_modules/dist):       NÃO
+Implementação M1 (DDL/org/tenant):     NÃO
+
+Scanner: menções textuais a SUPABASE_SERVICE_ROLE_KEY / PGPPASSWORD em
+auditorias — nomes de env, sem valores. Aceito.
+
+--------------------------------------------------------------------------------
+FASE 3 — STAGING CONTROLADO
+--------------------------------------------------------------------------------
+Método: git add explícito (NÃO "git add .")
+Arquivos staged: 47 (+ este relatório será adicionado se staged após criação)
+
+Incluídos (resumo):
+  M  .gitignore
+  M  docs/FASE-1-ARQUITETURA-MULTITENANT.md
+  M  docs/FASE-1-MIGRATION-PLAN.md
+  A  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md
+  A  docs/evidence/** (md, sql evidência, results/*.txt, backups/.gitignore)
+  A  supabase/migrations/20260812220000_r1_* (+ rollback)
+  A  supabase/migrations/20260812230000_r2a_* (+ rollback)
+  A  supabase/migrations/20260813090000_r2a_min_* (+ rollback)
+
+Intencionalmente NÃO staged:
+  docs/evidence/backups/backup-pre-m1-2026-08-13-115734.dump  (FORA / ignored)
+  qualquer .env / secret
+  node_modules / dist / logs
+  implementação M1 (inexistente)
+
+git diff --cached --stat: 47 files, ~5777 insertions(+), 228 deletions(-)
+  (contagem antes de incluir este relatório)
+
+--------------------------------------------------------------------------------
+FASE 4 — AUDITORIA DO STAGING
+--------------------------------------------------------------------------------
+.env no index:                         NÃO
+secret/password no path staged:        NÃO
+.dump no index:                        NÃO
+alteração M1 no index:                 NÃO
+alteração desconhecida no index:       NÃO
+
+secrets = NÃO
+alterações M1 = NÃO
+staging seguro = SIM
+
+--------------------------------------------------------------------------------
+RESULTADO
+--------------------------------------------------------------------------------
+CHECKPOINT STAGING = READY
+
+Próximo passo (exige autorização explícita — NÃO feito aqui):
+  1) git commit do staging
+  2) tag pre-m1-checkpoint
+  3) somente depois: autorização separada para M1
+
+GATE 3: ainda BLOCKED até commit+tag (staging apenas preparado)
+M1 permaneceu BLOCKED.
+================================================================================

@@ -1,0 +1,4 @@
+# Dumps de produção — NÃO commitar
+*.dump
+*.dump.tmp
+*.sql.gz
