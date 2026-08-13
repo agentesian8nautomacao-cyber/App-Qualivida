@@ -82,15 +82,23 @@ alterações M1 = NÃO
 staging seguro = SIM
 
 --------------------------------------------------------------------------------
-RESULTADO
+RESULTADO FINAL — COMMIT + TAG (autorização explícita)
 --------------------------------------------------------------------------------
-CHECKPOINT STAGING = READY
+CHECKPOINT STAGING = READY (pré-commit)
+Commit criado:                 SIM
+Mensagem:                      chore: create pre-m1 checkpoint
+SHA do commit (HEAD):          aec1f5f2150633519b8a6136b9ddbff61bfed513
+Tag pre-m1-checkpoint:         SIM
+SHA da tag:                    aec1f5f2150633519b8a6136b9ddbff61bfed513
+HEAD == tag:                   SIM
+Working tree pós commit+tag:   CLEAN
+Backup .dump fora do Git:      SIM (ignored)
+Secrets no commit:             NÃO
+Alterações M1 no commit:       NÃO
+Push / PR:                     NÃO
+M1:                            NÃO EXECUTADA
 
-Próximo passo (exige autorização explícita — NÃO feito aqui):
-  1) git commit do staging
-  2) tag pre-m1-checkpoint
-  3) somente depois: autorização separada para M1
+GATE 3 = PASS
 
-GATE 3: ainda BLOCKED até commit+tag (staging apenas preparado)
-M1 permaneceu BLOCKED.
+M1 permanece BLOCKED.
 ================================================================================
