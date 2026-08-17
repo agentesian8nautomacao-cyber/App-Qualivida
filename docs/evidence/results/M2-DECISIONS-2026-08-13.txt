@@ -1,0 +1,146 @@
+# M2 DECISIONS — Fechamento DR1–DR6 (+ metadata)
+
+Data/hora UTC: 2026-08-13T19:25:00Z
+Projeto: zaemlxjwhzrfmowbckmk
+Modo: SOMENTE DOCUMENTAÇÃO DE DECISÃO
+SQL M2: NÃO CRIADO
+Banco: NÃO ALTERADO
+M2 APPLY: BLOCKED
+
+Fonte de readiness: docs/evidence/results/M2-READINESS-REVIEW-2026-08-13.txt
+Decisões aprovadas pelo operador (esta tarefa).
+
+================================================================================
+DR1 — TIMESTAMPS = CLOSED
+================================================================================
+Decisão:
+  created_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now()
+Motivo: consistência com M1 / padrão Fase 1.
+Trigger auto-update updated_at: NÃO (igual M1).
+
+================================================================================
+DR2 — block = CLOSED
+================================================================================
+Decisão: block text NULL
+Motivo: bloco pode não existir em todos os condomínios.
+
+================================================================================
+DR3 — number = CLOSED
+================================================================================
+Decisão: number text NULL
+Motivo: alfanumérico (101, 101A, T-01, Casa 02); NÃO integer.
+
+================================================================================
+DR4 — label = CLOSED
+================================================================================
+Decisão: label text NULL
+Motivo: auxiliar de apresentação; não obrigatório.
+
+================================================================================
+DR5 — status = CLOSED
+================================================================================
+Decisão: status text NOT NULL DEFAULT 'active'
+ENUM: NÃO
+CHECK: NÃO
+Motivo: mesmo padrão M1 (organizations/condominiums).
+Nota arquitetural: §4 cita exemplos occupied/vacant/maintenance na prosa;
+  a decisão aprovada adota 'active' + text livre, sem trava de enum no M2.
+  Valores de domínio de ocupação podem evoluir no app / M posteriores.
+
+================================================================================
+DR6 — FK = CLOSED
+================================================================================
+Decisão:
+  FOREIGN KEY (condominium_id)
+  REFERENCES public.condominiums(id)
+  ON DELETE RESTRICT
+Motivo: integridade; sem exclusão silenciosa em cascata.
+
+================================================================================
+CODE / UNIQUE = CLOSED (já no readiness; reconfirmado)
+================================================================================
+code text NOT NULL
+UNIQUE (condominium_id, code)
+NÃO UNIQUE(code) global.
+
+================================================================================
+ÍNDICES = CLOSED
+================================================================================
+Criar: índice da UNIQUE (condominium_id, code) apenas (via CONSTRAINT UNIQUE).
+NÃO criar: CREATE INDEX separado em (condominium_id)
+  Motivo: prefixo esquerdo da UNIQUE cobre lookups por condominium_id.
+NÃO criar: CREATE INDEX em (status)
+  Motivo: plano M2 não justifica consultas independentes por status;
+  evitar índice prematuro.
+
+================================================================================
+METADATA — consulta documental
+================================================================================
+FASE-1-ARQUITETURA §4 UNIT:
+  Linha da tabela: "`status`, `metadata` | jsonb opcional"
+  Prosa: metadados (vaga, observação); status (occupied/vacant/maintenance)
+  → A célula agrupa status+metadata de forma ambígua; "jsonb opcional"
+    aplica-se semanticamente a **metadata** (não a status — já fechado DR5).
+
+FASE-1-MIGRATION-PLAN § M2:
+  Silente sobre metadata (sem tipo/default).
+
+OPERAUT-ARCHITECTURE-ADDENDUM:
+  Silente sobre schema de metadata em units.
+
+Interpretação sem inventar default:
+  - tipo: jsonb (explicitamente citado como jsonb na §4)
+  - opcional: NULL permitido
+  - DEFAULT: NÃO definido em nenhum documento → NÃO inventar '{}'::jsonb
+
+DR7 — metadata = CLOSED
+  metadata jsonb NULL
+  SEM DEFAULT
+  Motivo: "jsonb opcional" na arquitetura; default ausente → NULL implícito.
+
+================================================================================
+SCHEMA CONSOLIDADO (proposta; SQL ainda NÃO criado)
+================================================================================
+public.units:
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  condominium_id  uuid NOT NULL
+                  REFERENCES public.condominiums(id) ON DELETE RESTRICT
+  code            text NOT NULL
+  block           text NULL
+  number          text NULL
+  label           text NULL
+  status          text NOT NULL DEFAULT 'active'
+  metadata        jsonb NULL
+  created_at      timestamptz NOT NULL DEFAULT now()
+  updated_at      timestamptz NOT NULL DEFAULT now()
+  CONSTRAINT units_condominium_id_code_key UNIQUE (condominium_id, code)
+
+Índices extras: NENHUM
+DML/seed/backfill/RLS: FORA do M2
+
+================================================================================
+STATUS DAS DECISÕES
+================================================================================
+DR1 = CLOSED
+DR2 = CLOSED
+DR3 = CLOSED
+DR4 = CLOSED
+DR5 = CLOSED
+DR6 = CLOSED
+DR7 = CLOSED  (metadata jsonb NULL, sem DEFAULT)
+
+Decisões abertas: NENHUMA
+
+================================================================================
+RESULTADO
+================================================================================
+READY FOR SQL CREATION
+
+NÃO significa APPROVED FOR APPLY.
+Próxima etapa autorizável: criar migration 002_units (+ rollback + pré-check).
+
+Nenhuma alteração de banco foi executada.
+Nenhum SQL M2 foi criado.
+M2 APPLY permanece BLOCKED.
+================================================================================

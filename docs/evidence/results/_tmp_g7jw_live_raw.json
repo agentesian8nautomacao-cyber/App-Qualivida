@@ -1,0 +1,142 @@
+{
+  "gate": "G7-J-W-LIVE",
+  "host": "db.zaemlxjwhzrfmowbckmk.supabase.co",
+  "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+  "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be",
+  "client_id": "n8n-pilot-test",
+  "domain_write_target": "fake_in_memory",
+  "event_store_target": "LIVE api_domain_events",
+  "scenarios": [
+    {
+      "scenario": "READ_identify_resident",
+      "http": 200,
+      "request_id": "g7jwl-read-1786846721767",
+      "success": true,
+      "core_executed": true,
+      "operation": "identify_resident"
+    },
+    {
+      "scenario": "WRITE_create_package",
+      "http": 200,
+      "request_id": "req_86ede9cc-b14f-491b-b288-8974b3f37bd2",
+      "success": true,
+      "core_executed": true,
+      "idempotency_key": "g7jwl-pkg-1786846723784",
+      "recipient": "G7-J-W-LIVE-TEST"
+    },
+    {
+      "scenario": "IDEMPOTENCY_replay",
+      "http": 200,
+      "request_id": "req_b33bbdb0-3a18-4e75-aead-a0925a7169bb",
+      "success": true,
+      "core_executed": false,
+      "idempotency_key": "g7jwl-pkg-1786846723784"
+    },
+    {
+      "scenario": "AUTHZ_denied",
+      "http": 403,
+      "request_id": "req_9e76aaef-f7b9-4705-80b3-cb6490c2b583",
+      "error_code": "FORBIDDEN",
+      "core_executed": null
+    },
+    {
+      "scenario": "TENANT_invalid",
+      "http": 403,
+      "request_id": "req_2b1ec570-132c-4536-a893-b91a5e86486e",
+      "error_code": "TENANT_MISMATCH"
+    },
+    {
+      "scenario": "SENSITIVE_confirmation_required",
+      "http": 409,
+      "request_id": "req_4d4069eb-740d-4f3e-bc14-0459fec6f58d",
+      "error_code": "CONFIRMATION_REQUIRED"
+    }
+  ],
+  "rows_before": 0,
+  "rows_after": 8,
+  "rows_delta": 8,
+  "live_events": [
+    {
+      "request_id": "g7jwl-read-1786846721767",
+      "event_type": "operation.completed",
+      "operation": "identify_resident",
+      "status": "completed",
+      "core_executed": "true",
+      "error_code": null,
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_86ede9cc-b14f-491b-b288-8974b3f37bd2",
+      "event_type": "operation.completed",
+      "operation": "create_package",
+      "status": "completed",
+      "core_executed": "true",
+      "error_code": null,
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_b33bbdb0-3a18-4e75-aead-a0925a7169bb",
+      "event_type": "idempotency.replay",
+      "operation": "create_package",
+      "status": "duplicate",
+      "core_executed": "false",
+      "error_code": null,
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_b33bbdb0-3a18-4e75-aead-a0925a7169bb",
+      "event_type": "operation.completed",
+      "operation": "create_package",
+      "status": "completed",
+      "core_executed": "false",
+      "error_code": null,
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_9e76aaef-f7b9-4705-80b3-cb6490c2b583",
+      "event_type": "request.denied",
+      "operation": "create_package",
+      "status": "rejected",
+      "core_executed": "false",
+      "error_code": "FORBIDDEN",
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_9e76aaef-f7b9-4705-80b3-cb6490c2b583",
+      "event_type": "operation.failed",
+      "operation": "create_package",
+      "status": "rejected",
+      "core_executed": "false",
+      "error_code": "FORBIDDEN",
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_4d4069eb-740d-4f3e-bc14-0459fec6f58d",
+      "event_type": "confirmation.required",
+      "operation": "pickup_package",
+      "status": "confirmation_required",
+      "core_executed": "false",
+      "error_code": "CONFIRMATION_REQUIRED",
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    },
+    {
+      "request_id": "req_4d4069eb-740d-4f3e-bc14-0459fec6f58d",
+      "event_type": "operation.failed",
+      "operation": "pickup_package",
+      "status": "confirmation_required",
+      "core_executed": "false",
+      "error_code": "CONFIRMATION_REQUIRED",
+      "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+      "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be"
+    }
+  ],
+  "redaction_leak_rows": 0,
+  "fail_safe": "Validated in g7jw.event-sink.test.ts (E/F): Core SUCCESS when Event Store INSERT fails; not provoked on LIVE."
+}

@@ -1,0 +1,159 @@
+# M1 SQL Revision (correção controlada pós Deep Review)
+
+Data/hora UTC: 2026-08-13T18:15:00Z
+Autorização: corrigir artefatos SQL M1 + validação ESTÁTICA somente
+Deep Review: docs/evidence/results/M1-SQL-DEEP-REVIEW-2026-08-13.txt = NEEDS REVISION
+M1 APPLY: BLOCKED
+Banco: NÃO ALTERADO
+
+---
+
+## Problema encontrado
+
+1. condominiums tinha UNIQUE (slug) global.
+   Impedia duas organizations distintas usarem o mesmo slug de site
+   (ex.: residencial-xyz em Org A e Org B) — incompatível com multi-tenant.
+
+2. COMMENT de condominiums.slug dizia “único global”.
+
+3. Plano M1 descrevia teste “UNIQUE slug” de forma ambígua.
+
+4. idx_condominiums_vertical sem seletividade (CHECK vertical = 'condominium').
+
+---
+
+## Correção aplicada
+
+Arquivo: supabase/migrations/20260813150000_001_platform_org_condo.sql
+
+- CONSTRAINT condominiums_slug_key UNIQUE (slug)
+  → condominiums_organization_id_slug_key UNIQUE (organization_id, slug)
+
+- COMMENT condominiums.slug:
+  → 'Identificador URL-safe único dentro da organization.'
+
+- Removido CREATE INDEX idx_condominiums_vertical
+  (registrado em comentário no SQL)
+
+Documento: docs/FASE-1-MIGRATION-PLAN.md § M1
+- Testes: organizations UNIQUE (slug); condominiums UNIQUE (organization_id, slug)
+- Critério de sucesso: unicidade de site scoped por org
+
+Atualizado: docs/evidence/results/M1-SQL-CREATION-REVIEW-2026-08-13.txt
+
+NÃO alterados (revisados estaticamente):
+- rollback (ordem e ausência de CASCADE OK)
+- M1-PRECHECK-LIVE.sql (existência organizations/condominiums OK)
+
+---
+
+## Motivo arquitetural
+
+Organization = nível PLATFORM; slug global.
+Operational Site (condominiums) = filho da org; slug scoped por organization_id.
+Padrão análogo a M2: UNIQUE (condominium_id, code).
+Storage paths usam UUIDs, não exigem slug de site global.
+
+---
+
+## Impacto
+
+- Permite CASO A e CASO B (mesmo slug em orgs diferentes).
+- Rejeita CASO C (duplicata na mesma org).
+- Sem impacto em tabelas legadas / RLS / seed (ainda ausentes).
+- Sem alteração de banco (somente arquivos no worktree).
+
+---
+
+## Teste conceitual de unicidade (não executado)
+
+| Caso | organization_id | slug | Esperado |
+|------|-----------------|------|----------|
+| A | A | residencial-xyz | PERMITIDO |
+| B | B | residencial-xyz | PERMITIDO |
+| C | A (2ª linha) | residencial-xyz | REJEITADO pela UNIQUE (organization_id, slug) |
+
+---
+
+## Decisão índice vertical
+
+idx_condominiums_vertical: REMOVIDO
+Motivo: CHECK fixa vertical='condominium'; índice sem seletividade no piloto;
+plano M1 não exige índice em vertical.
+
+Índices mantidos (aprovados):
+- idx_organizations_status
+- idx_condominiums_organization_id
+- idx_condominiums_status
+
+Índice duplicado CREATE INDEX (organization_id, slug): NÃO existe
+(a UNIQUE composta já cria o índice necessário).
+
+Nota: idx_condominiums_organization_id é parcialmente coberto pelo prefixo
+esquerdo da UNIQUE (organization_id, slug); mantido por decisão explícita
+aprovada nesta correção.
+
+---
+
+## Validação estática
+
+PASS:
+  [x] organizations UNIQUE (slug) presente
+  [x] condominiums UNIQUE (organization_id, slug) presente (exatamente uma regra)
+  [x] condominiums NÃO tem UNIQUE (slug) sozinho
+  [x] COMMENT site = único dentro da organization (sem “único global” no site)
+  [x] organizations COMMENT “único global” permanece (correto para org)
+  [x] name mantido; status text sem CHECK; FK ON DELETE RESTRICT; vertical CHECK
+  [x] sem CREATE INDEX duplicado (organization_id, slug)
+  [x] idx_condominiums_vertical ausente (CREATE)
+  [x] sem DML / backfill / seed / RLS / policies / Storage / Functions / Triggers
+  [x] sem ALTER em tabelas legadas
+  [x] rollback: DROP condo → DROP org; sem CASCADE
+  [x] pre-check: to_regclass organizations + condominiums
+  [x] plano M1 atualizado para UNIQUE (organization_id, slug)
+  [x] pre-m1-checkpoint intacta (não movida nesta tarefa)
+  [x] sem commit / push / tag
+
+Busca residual “único global” no migration: apenas organizations.slug (OK).
+
+---
+
+## Decisões que permaneceram
+
+- name em condominiums
+- status text sem enum/CHECK
+- ON DELETE RESTRICT
+- sem seed/RLS
+
+---
+
+## Arquivos modificados / criados nesta correção
+
+Modificados:
+  - supabase/migrations/20260813150000_001_platform_org_condo.sql
+  - docs/FASE-1-MIGRATION-PLAN.md
+  - docs/evidence/results/M1-SQL-CREATION-REVIEW-2026-08-13.txt
+
+Criados:
+  - docs/evidence/results/M1-SQL-REVISION-2026-08-13.txt  (este arquivo)
+
+Relacionados no worktree (não alterados nesta correção, já existiam untracked/prior):
+  - supabase/migrations/20260813150000_001_platform_org_condo.rollback.sql
+  - docs/evidence/M1-PRECHECK-LIVE.sql
+  - docs/evidence/results/M1-READINESS-CHECK-2026-08-13.txt
+  - docs/evidence/results/M1-SQL-DEEP-REVIEW-2026-08-13.txt
+
+Git: sem commit; sem push; tag pre-m1-checkpoint não alterada.
+
+---
+
+## Resultado
+
+M1 SQL = READY FOR FINAL REVIEW
+
+NÃO é “APPROVED FOR APPLY”.
+APPLY exige autorização explícita separada + pré-check live.
+
+NENHUMA alteração de banco foi executada.
+M1 APPLY permaneceu BLOCKED.
+================================================================================

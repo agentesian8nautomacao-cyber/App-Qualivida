@@ -1,0 +1,140 @@
+SENTINELA AUT — G6-2 — LIVE PRE-CHECK (READ-ONLY)
+Data/hora UTC:       2026-08-14T20:17:04Z → 2026-08-14T20:17:12Z
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Pré-check canônico:  docs/evidence/M-G6-2-PRECHECK-LIVE.sql
+Pré-check expandido: docs/evidence/M-G6-2-PRECHECK-LIVE-EXEC.sql
+Deep Review:         APPROVED FOR LIVE PRE-CHECK
+  (SENTINELA-G6-2-DEEP-REVIEW-2026-08-14.txt)
+
+Método:              psql READ-ONLY (-f SELECT / to_regclass / information_schema / pg_class)
+Modo:                READ-ONLY
+WRITE OPERATIONS:    0
+Migration APPLY:     NÃO EXECUTADO
+Rollback:            NÃO EXECUTADO
+Wiring API:          NÃO
+n8n / WhatsApp:      NÃO
+Secrets no relatório: NENHUM
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+psql_exit (auth) = 0
+utc_now          = 2026-08-14 20:17:05.509538
+
+============================================================
+2. DEPENDÊNCIAS
+============================================================
+organizations_regclass = organizations
+organizations_verdict  = EXISTS — OK (M1)
+
+condominiums_regclass  = condominiums
+condominiums_verdict   = EXISTS — OK (M1)
+
+api_idempotency_keys_regclass = api_idempotency_keys
+api_idempotency_keys_verdict  = EXISTS — OK (G6-1 intact)
+
+============================================================
+3. api_confirmations / OBJETOS CONFLITANTES
+============================================================
+api_confirmations_regclass = NULL
+api_confirmations_verdict  = ABSENT — OK for M-G6-2 CREATE
+
+pg_class relname=api_confirmations (qualquer schema) = 0 rows
+pg_type  typname=api_confirmations                 = 0 rows
+
+Objetos inesperados conflitantes: NENHUM
+
+============================================================
+4. PK / TIPOS (alvo das FKs)
+============================================================
+organizations.id:
+  data_type = uuid
+  udt_name  = uuid
+  nullable  = NO
+  PK        = organizations_pkey (PRESENT; pk_count=1)
+
+condominiums.id:
+  data_type = uuid
+  udt_name  = uuid
+  nullable  = NO
+  PK        = condominiums_pkey (PRESENT; pk_count=1)
+
+============================================================
+5. COMPATIBILIDADE FKs PLANEJADAS
+============================================================
+organization_id → organizations.id : uuid / uuid · compatible = t
+condominium_id  → condominiums.id  : uuid / uuid · compatible = t
+
+============================================================
+6. AMBIENTE PILOTO / M1–M4 / G6-1
+============================================================
+organizations_exists      = t
+condominiums_exists       = t
+units_exists              = t   (M2)
+tenant_memberships_exists = t   (M3)
+
+Pilot seed (M4):
+  organizations_rows = 1
+  condominiums_rows  = 1
+  org_pilot_rows (slug=qualivida-admin) = 1
+  condo_pilot_rows (slug=qualivida-club-residence) = 1
+  units_rows = 0
+  tenant_memberships_rows = 0
+  (baseline alinhado ao closeout G6-1)
+
+G6-1 intact snapshot:
+  api_idempotency_keys EXISTS
+  rows = 0
+  column_count = 13
+  relrowsecurity = t (0 policies expected; observação herdada G6-1)
+  NÃO ALTERADA nesta tarefa
+
+M1–M4 = INTACTOS
+G6-1 = CLOSED / PASS (intacto)
+
+============================================================
+7. AUSÊNCIA DE ALTERAÇÕES NESTE STEP
+============================================================
+WRITE OPERATIONS      = 0
+MIGRATIONS EXECUTED   = 0
+DATABASE CHANGES      = 0
+LIVE WRITE            = 0
+DDL / DML / rollback  = NÃO
+
+Canonical psql_exit  = 0
+Expanded psql_exit   = 0
+
+============================================================
+8. GUARD m_g6_2_create_safe
+============================================================
+m_g6_2_create_safe = t (TRUE)
+
+Critérios do guard:
+  organizations EXISTS           → OK
+  condominiums EXISTS            → OK
+  api_confirmations ABSENT       → OK
+  (informativo) api_idempotency_keys EXISTS → OK
+
+Estado atual PERMITE criação da tabela no APPLY futuro.
+Migration AINDA NÃO aplicada: CONFIRMADO
+
+============================================================
+RESULTADO
+============================================================
+G6-2 PRE-CHECK = PASS
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WRITE OPERATIONS = 0
+G6-1 = CLOSED / PASS
+G6-2 = APPROVED FOR LIVE PRE-CHECK
+G6-2 PRE-CHECK = PASS
+
+STOP OBRIGATÓRIO.
+NÃO executar APPLY automaticamente.
+Próximo gate somente com autorização explícita: APPLY M-G6-2.

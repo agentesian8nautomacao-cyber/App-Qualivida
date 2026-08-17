@@ -1,0 +1,216 @@
+# M4 SQL DEEP REVIEW — NÃO APLICAR
+# (revisão inicial + addendum pós-correção do rollback)
+
+Data/hora UTC (review inicial):   2026-08-14T12:34:51Z
+Data/hora UTC (re-review pós-fix): 2026-08-14T12:38:47Z
+Modo: SOMENTE REVIEW / CORREÇÃO DOCUMENTAL DO ROLLBACK
+Banco: NÃO ALTERADO
+Pré-check LIVE: NÃO EXECUTADO
+Migration / INSERT / rollback: NÃO EXECUTADOS
+Commit/tag/push: NÃO
+M4 APPLY: permanece BLOCKED
+
+Artefatos:
+  supabase/migrations/20260814180000_004_seed_pilot.sql          (NÃO alterada nesta correção)
+  supabase/migrations/20260814180000_004_seed_pilot.rollback.sql  (CORRIGIDA)
+  docs/evidence/M4-PRECHECK-LIVE.sql
+  docs/evidence/results/M4-SQL-CREATION-REVIEW-2026-08-14.txt
+
+================================================================================
+HISTÓRICO — PROBLEMA ORIGINAL (PRESERVADO)
+================================================================================
+Deep review 12:34Z classificou:
+
+HIGH / BLOCKING no rollback:
+
+  Condominium resolvido apenas por:
+    WHERE slug = 'qualivida-club-residence'
+
+  Incorreto porque UNIQUE é (organization_id, slug).
+  Outro tenant pode reutilizar o mesmo slug.
+  Risco: DELETE do condominium de OUTRA organization.
+
+Resultado histórico: M4 = NEEDS REVISION
+
+Seed principal (APPLY path) já estava PASS na review inicial
+(guards, atomicidade, RETURNING, escopo). Migration NÃO foi alterada.
+
+================================================================================
+1. PROBLEMA ORIGINAL
+================================================================================
+Rollback localizava condominium por slug global → cross-tenant DELETE possível.
+
+================================================================================
+2. CORREÇÃO APLICADA
+================================================================================
+Arquivo: …004_seed_pilot.rollback.sql (reescrito)
+
+Fluxo:
+  1) COUNT org WHERE slug='qualivida-admin' → deve ser exatamente 1
+  2) SELECT id, name → organization_id real
+  3) Validar name = 'Empresa/Administradora piloto' (fail-closed se divergir)
+  4) COUNT condo WHERE organization_id = org_piloto
+                     AND slug = 'qualivida-club-residence' → exatamente 1
+  5) SELECT id → condominium_id
+  6) Bloquear se org tiver outros condominiums além do piloto
+  7) Checar deps units / tenant_memberships → BLOCK se >0
+  8) DELETE condominiums WHERE id AND organization_id AND slug
+  9) DELETE organizations WHERE id AND slug
+  10) Sem CASCADE; BEGIN/COMMIT único; EXCEPTION aborta tudo
+
+DELETE perigoso AUSENTE:
+  DELETE FROM public.condominiums WHERE slug = '…'  (sem organization_id)
+  → NÃO existe mais.
+
+================================================================================
+3. COMO organization_id É RESOLVIDO
+================================================================================
+  COUNT(*) WHERE slug = 'qualivida-admin'
+  0 → BLOCK (não apaga nenhum condo)
+  <>1 → BLOCK
+  =1 → SELECT id, name INTO v_organization_id, v_org_name
+  name mismatch vs DR1 → BLOCK (conservador; evita org errada com slug colidido
+    por mutação manual)
+
+================================================================================
+4. COMO condominium É RESOLVIDO
+================================================================================
+  COUNT(*) / SELECT id WHERE
+    organization_id = v_organization_id
+    AND slug = 'qualivida-club-residence'
+  0 → BLOCK fail-closed (sem DELETE)
+  <>1 → BLOCK
+  =1 → v_condominium_id
+
+Condo com mesmo slug em OUTRA org: NÃO entra no WHERE → NÃO tocado.
+
+================================================================================
+5. ANTI CROSS-TENANT DELETION
+================================================================================
+Cenário A/B:
+  Org A = qualivida-admin + Condo A (org=A, slug=qualivida-club-residence)
+  Org B = outra-org + Condo B (org=B, slug=qualivida-club-residence)
+  Rollback → remove somente A + Condo A; B intacto — PASS
+
+Cenário org A ausente + Condo B com slug piloto:
+  org COUNT=0 → BLOCK; nenhum DELETE — PASS
+
+DELETE condo exige id + organization_id + slug — PASS
+
+================================================================================
+6. DEPENDÊNCIAS
+================================================================================
+units WHERE condominium_id = piloto → COUNT; se >0 BLOCK
+tenant_memberships WHERE condo_id OR org_id → COUNT; se >0 BLOCK
+Sem DELETE em tabelas dependentes
+Sem CASCADE
+Extra condominiums na mesma org → BLOCK (protege DELETE da org)
+Após M5+/deps: PROIBIDO (header + EXCEPTION) — usar snapshot
+
+PASS
+
+================================================================================
+7. ATOMICIDADE
+================================================================================
+BEGIN … COMMIT único
+Sem COMMIT intermediário
+RAISE EXCEPTION → aborta TX → sem remoção parcial
+RAISE NOTICE só log
+
+PASS
+
+================================================================================
+8. GUARDS (seed — inalterados; rollback — reforçados)
+================================================================================
+Seed migration: intacta (PASS review anterior)
+Rollback guards novos:
+  org ausente / múltipla / name mismatch
+  condo ausente / múltiplo sob a org
+  outros condos na org
+  deps units/memberships
+  DELETE 0 rows → BLOCK
+
+PASS
+
+================================================================================
+9. PRÉ-CHECK (re-revisão; NÃO executado)
+================================================================================
+READ-ONLY: SIM
+EXISTS org/condo/units/memberships: SIM
+org slug piloto ausente: SIM
+condo slug ausente (global; OK com empty tables do seed): SIM
+m4_seed_safe: SIM
+m4_seed_safe vs m4_create_safe: NON-BLOCKING naming
+
+PASS
+
+================================================================================
+10. VALIDAÇÃO ESTÁTICA PÓS-CORREÇÃO
+================================================================================
+dangerous_slug_only_condo_delete = False
+CASCADE executável = False
+UPDATE/INSERT/DDL = False
+UUID hardcoded = False
+legado users/staff/residents = False
+organization_id bind no DELETE condo = True
+exact counts org/condo = True
+BEGIN/COMMIT = True
+migration principal inalterada (2 INSERTs; sem DELETE) = True
+pré-check sem DML/DDL = True
+
+PASS
+
+================================================================================
+11. CENÁRIOS A/B (+ regressão)
+================================================================================
+1. Estado esperado pós-M4 sem deps → rollback ALLOW (conceitual) — PASS
+2. Org+Condo A e Org+Condo B mesmo slug → remove só A — PASS
+3. Org A ausente, Condo B slug piloto → BLOCK, 0 DELETE — PASS
+4. Deps units/memberships → BLOCK — PASS
+5. Org com condo extra → BLOCK — PASS
+6. Seed path (migration) inalterado → PASS review anterior
+7. Naming 004_seed_pilot vs 004_pilot_seed → NON-BLOCKING
+
+================================================================================
+12. NAMING
+================================================================================
+004_seed_pilot ≡ 004_pilot_seed (plano) — LOW / NON-BLOCKING
+m4_seed_safe — LOW / NON-BLOCKING vs m4_create_safe
+
+================================================================================
+13. RISCOS RESIDUAIS
+================================================================================
+CRITICAL: nenhum
+
+HIGH: nenhum residual no rollback após bind org+slug
+
+MEDIUM:
+  - Name check fail-closed: se alguém renomear a org mantendo o slug,
+    rollback bloqueia (conservador; preferível a apagar errado).
+    Mitigação: alinhar name ou restore snapshot.
+
+LOW:
+  - Naming arquivo/plano
+  - Pré-check condo slug global (suficiente no estado vazio pré-seed)
+
+Snapshot pré-APPLY continua obrigatório (DR6) — operacional, não SQL defect.
+
+================================================================================
+14. RESULTADO FINAL
+================================================================================
+Problema BLOCKING do rollback: CORRIGIDO e revalidado.
+Migration principal: NÃO alterada (sem necessidade).
+Pré-check: OK (não executado).
+Banco: intacto.
+
+M4 = APPROVED FOR LIVE PRE-CHECK
+
+NÃO é APPROVED FOR APPLY.
+M4 APPLY permanece BLOCKED.
+
+Confirmações:
+- Nenhuma alteração de banco foi executada.
+- Pré-check LIVE não foi executado.
+- Migration não foi executada.
+- Rollback não foi executado.
+- Sem commit/tag/push.

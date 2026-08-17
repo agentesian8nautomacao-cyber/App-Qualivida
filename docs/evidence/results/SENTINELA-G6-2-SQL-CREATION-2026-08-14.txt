@@ -1,0 +1,123 @@
+SENTINELA AUT — G6-2 — SQL CREATION
+Data: 2026-08-14
+Status: G6-2 SQL = CREATED — AWAITING DEEP REVIEW
+
+Autorização: CRIAÇÃO SQL somente (NÃO APPLY / NÃO Deep Review / NÃO Pre-check LIVE)
+
+Pré-requisitos:
+  G6-2 = READY FOR SQL CREATION (DECISIONS CLOSED)
+  G6-1 = CLOSED / PASS
+  M1–M4 = CLOSED / PASS
+
+============================================================
+ESCOPO CONFIRMADO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+G6-1 = CLOSED / PASS (não alterada)
+M1–M4 = INTACTOS
+Wiring / n8n / WhatsApp / Event Store = NÃO
+
+============================================================
+ARTEFATOS CRIADOS
+============================================================
+Migration:
+  supabase/migrations/20260814200000_006_api_confirmations.sql
+
+Rollback:
+  supabase/migrations/20260814200000_006_api_confirmations.rollback.sql
+
+Pré-check READ-ONLY (não executado):
+  docs/evidence/M-G6-2-PRECHECK-LIVE.sql
+
+Documentação:
+  docs/SENTINELA-AUT-G6-CONFIRMATIONS.md (atualizada — SQL CREATED)
+
+Evidência:
+  docs/evidence/results/SENTINELA-G6-2-SQL-CREATION-2026-08-14.txt
+
+Nome lógico: 006_api_confirmations
+Gate: M-G6-2
+
+============================================================
+TABELA public.api_confirmations
+============================================================
+Colunas:
+  confirmation_id text PK (CHECK LIKE 'cnf_%')
+  token_hash text NOT NULL          — SHA-256; SEM plaintext
+  organization_id uuid NOT NULL     — FK organizations RESTRICT
+  condominium_id uuid NOT NULL     — FK condominiums RESTRICT
+  client_id text NOT NULL
+  operation text NOT NULL          — CHECK pickup_package|cancel_reservation
+  resource_id text NOT NULL
+  operation_fingerprint text NOT NULL
+  status text NOT NULL             — CHECK pending|consumed
+  prompt text NOT NULL
+  requester_identity text NULL
+  created_request_id text NULL
+  created_at timestamptz NOT NULL DEFAULT now()
+  expires_at timestamptz NOT NULL
+  consumed_at timestamptz NULL
+
+CHECKs coerência:
+  pending  → consumed_at IS NULL
+  consumed → consumed_at IS NOT NULL
+  expires_at > created_at
+  non-empty trims em ids/hash/resource/fingerprint/prompt/client
+
+Índices:
+  PK confirmation_id
+  idx_api_confirmations_expires_at
+  idx_api_confirmations_tenant (organization_id, condominium_id)
+
+TTL clamp 30–3600 / default 300s: API only (não no DDL)
+Consume atômico: documentado para wiring (UPDATE … RETURNING); sem trigger
+
+============================================================
+ROLLBACK
+============================================================
+DROP TABLE public.api_confirmations;
+  — sem CASCADE
+  — sem IF EXISTS
+  — não toca api_idempotency_keys / M1–M4
+
+============================================================
+STATIC VALIDATION (local, sem banco)
+============================================================
+CREATE TABLE api_confirmations: presente
+UNIQUE/PK confirmation_id: presente
+FK org + condo ON DELETE RESTRICT ×2: presente
+operation CHECK SENSITIVE only: presente
+status pending|consumed: presente
+pending_not_consumed + consumed_coherence: presente
+confirmation_id LIKE cnf_%: presente
+token_hash only (sem coluna token plaintext): OK
+Sem CREATE POLICY / ENABLE ROW LEVEL: OK
+Sem CREATE TRIGGER: OK
+Sem cron: OK
+Sem INSERT/UPDATE/DELETE DML: OK
+Sem ALTER M1–M4 / G6-1: OK
+Sem FK composta org↔condo: OK
+Rollback DROP TABLE public.api_confirmations; (comando sem CASCADE; menção "SEM CASCADE" só em comentário): OK
+Pré-check READ-ONLY SELECTs: OK
+Nota: regex ampla sobre CASCADE no rollback bate o comentário documental — o DROP efetivo não usa CASCADE.
+
+============================================================
+NÃO EXECUTADO
+============================================================
+Deep Review
+LIVE PRE-CHECK
+APPLY
+Wiring
+n8n / WhatsApp
+
+============================================================
+RESULTADO
+============================================================
+G6-2 SQL = CREATED — AWAITING DEEP REVIEW
+
+STOP OBRIGATÓRIO.
+Não executar Deep Review automaticamente.
+Não executar Pre-check.
+Não executar APPLY.

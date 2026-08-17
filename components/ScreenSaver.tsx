@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { BRANDING } from '../config/branding';
 
 interface ScreenSaverProps {
   onExit: () => void;
@@ -36,7 +37,7 @@ const ScreenSaver: React.FC<ScreenSaverProps> = ({ onExit, theme }) => {
   return (
     <div 
       onClick={onExit}
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all duration-1000`}
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all duration-1000 ${theme === 'light' ? 'light-mode' : ''}`}
       style={{ backgroundColor: 'var(--bg-color)', color: 'var(--text-primary)' }}
     >
       {/* Background aurora adaptável ao tema */}
@@ -46,9 +47,17 @@ const ScreenSaver: React.FC<ScreenSaverProps> = ({ onExit, theme }) => {
       </div>
       
       <div className="text-center space-y-16 animate-in fade-in zoom-in duration-1000">
-        <h1 className="shimmer-text reveal-teaser text-5xl md:text-7xl font-black mb-8">
-          {config.condominiumName.toUpperCase()}
-        </h1>
+        <div>
+          <h1 className="shimmer-text reveal-teaser text-5xl md:text-7xl font-black mb-3">
+            {BRANDING.name}
+          </h1>
+          <p className="text-xs md:text-sm font-black uppercase tracking-[0.3em] text-[var(--sentinela-text-muted)]">
+            {BRANDING.tagline}
+          </p>
+          <p className="mt-5 text-sm font-bold uppercase tracking-[0.24em] opacity-60">
+            {config.condominiumName}
+          </p>
+        </div>
         
         <div className="space-y-6 opacity-0 animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500 fill-mode-forwards">
           <div className="text-[10rem] md:text-[16rem] font-black tracking-tighter leading-none drop-shadow-2xl">

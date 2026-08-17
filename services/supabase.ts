@@ -1,33 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolvePublicSupabaseConfig } from './supabaseEnv';
 
-// Obter variáveis de ambiente
 const rawSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const rawSupabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const resolved = resolvePublicSupabaseConfig(rawSupabaseUrl, rawSupabaseAnonKey);
 
-// Garantir URL absoluta https:// (evita "requested path is invalid" em localhost)
-let supabaseUrl = '';
-if (rawSupabaseUrl) {
-  let host = rawSupabaseUrl.replace(/^https?:\/\//, '').replace(/^\/+/, '').split('/')[0].trim();
-  if (host && host.includes('.supabase.co')) {
-    supabaseUrl = `https://${host}`;
-  }
-}
-// Garantia final: nunca passar URL sem protocolo (evita requisição relativa → localhost)
-if (supabaseUrl && !supabaseUrl.startsWith('https://')) {
-  supabaseUrl = supabaseUrl.startsWith('http://') ? supabaseUrl : `https://${supabaseUrl}`;
-}
+const supabaseUrl = resolved.url;
+const supabaseAnonKey = resolved.anonKey;
+const isPlaceholder = resolved.isPlaceholder;
 
-const isPlaceholder = !supabaseUrl || !supabaseAnonKey?.trim();
-const isAbsolute = supabaseUrl.startsWith('https://');
 if (import.meta.env.DEV) {
   if (isPlaceholder) {
-    console.warn(`[Supabase] URL: ${rawSupabaseUrl ? 'definida' : 'NÃO DEFINIDA'}. Key: ${supabaseAnonKey ? 'ok' : 'NÃO DEFINIDA'}. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local`);
+    console.warn(
+      `[Supabase] URL: ${rawSupabaseUrl ? 'definida' : 'NÃO DEFINIDA'}. Key: ${rawSupabaseAnonKey ? 'presente' : 'NÃO DEFINIDA'}. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local (npm run dev) ou use npm run dev:local (.env.localnet).`
+    );
   } else {
     console.log(`[Supabase] Usando: ${supabaseUrl}`);
   }
 }
 
-// Criar cliente Supabase (mesmo que as variáveis estejam vazias, para evitar erros)
+// Cliente sempre instanciado para a UI não crashar quando o env está ausente.
 export const isSupabasePlaceholder = isPlaceholder;
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',

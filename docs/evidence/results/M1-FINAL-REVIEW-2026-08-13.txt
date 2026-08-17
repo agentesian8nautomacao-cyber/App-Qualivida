@@ -1,0 +1,228 @@
+# M1 — Final Review (antes do pré-check LIVE)
+
+Data/hora UTC: 2026-08-13T18:30:00Z
+Modo: SOMENTE LEITURA
+Migration / rollback / pré-check LIVE / APPLY: NÃO EXECUTADOS
+
+---
+
+## Gates
+
+| Gate | Status |
+|------|--------|
+| D2 Storage (boletos) | PASS |
+| D5 Storage | PASS |
+| R2A-MIN | PASS |
+| Backup (GATE 2) | PASS |
+| GATE 3 Git baseline | PASS (tag pre-m1-checkpoint intacta) |
+
+M1 APPLY: BLOCKED
+Banco produção: NENHUMA alteração nesta revisão
+
+---
+
+## SQL
+
+Arquivo: supabase/migrations/20260813150000_001_platform_org_condo.sql
+Status artefato: PREPARED / NOT EXECUTED
+Revisão pós-correção: M1-SQL-REVISION → READY FOR FINAL REVIEW
+
+### organizations — check final
+
+| Campo | Esperado | SQL real | OK |
+|-------|----------|----------|----|
+| id | uuid | uuid PK DEFAULT gen_random_uuid() | SIM |
+| PK | id | PRIMARY KEY (id) | SIM |
+| name | text NOT NULL | text NOT NULL | SIM |
+| slug | text NOT NULL | text NOT NULL | SIM |
+| UNIQUE | (slug) | organizations_slug_key UNIQUE (slug) | SIM |
+| status | text NOT NULL DEFAULT 'active' | igual; sem CHECK | SIM |
+| created_at | timestamptz NOT NULL DEFAULT now() | igual | SIM |
+| updated_at | timestamptz NOT NULL DEFAULT now() | igual | SIM |
+
+Coerência especificação: SIM (arquitetura §2 + plano M1).
+
+### condominiums — check final
+
+| Campo | Esperado | SQL real | OK |
+|-------|----------|----------|----|
+| id | uuid | uuid PK DEFAULT gen_random_uuid() | SIM |
+| PK | id | PRIMARY KEY (id) | SIM |
+| organization_id | uuid NOT NULL | uuid NOT NULL | SIM |
+| name | text NOT NULL | text NOT NULL (decisão aprovada) | SIM |
+| vertical | text NOT NULL DEFAULT 'condominium' | igual | SIM |
+| slug | text NOT NULL | text NOT NULL | SIM |
+| status | text NOT NULL DEFAULT 'active' | igual; sem CHECK | SIM |
+| created_at / updated_at | timestamptz NOT NULL DEFAULT now() | igual | SIM |
+| FK | → organizations.id | condominiums_organization_id_fkey | SIM |
+| ON DELETE | RESTRICT | RESTRICT | SIM |
+| UNIQUE | (organization_id, slug) | condominiums_organization_id_slug_key | SIM |
+| CHECK | vertical = 'condominium' | condominiums_vertical_check | SIM |
+| COMMENT | Operational Site — vertical condominium | presente | SIM |
+| COMMENT slug | único dentro da organization | presente | SIM |
+
+Índices: status (org+condo), organization_id; vertical index ausente (correção aprovada).
+Sem CREATE INDEX duplicado (organization_id, slug).
+
+---
+
+## Isolamento multi-tenant (conceitual)
+
+Org A slug=acme, Org B slug=beta (UNIQUE global em organizations.slug).
+
+Permitido:
+  A + site slug=residencial
+  B + site slug=residencial
+
+Proibido:
+  A + duas linhas com slug=residencial
+
+Por que UNIQUE(organization_id, slug) é correto:
+  Site é filho da Organization (1→N). O namespace de slug do site
+  pertence à org, não à plataforma. Globais seriam organizations.slug
+  e ids UUID. Paths Storage usam UUIDs. Padrão análogo M2:
+  UNIQUE(condominium_id, code).
+
+---
+
+## Escopo M1
+
+| Item | Contagem / estado |
+|------|-------------------|
+| Tabelas criadas | 2 (organizations, condominiums) |
+| Tabelas existentes alteradas | 0 |
+| DML | 0 |
+| Backfill | 0 |
+| Seed | 0 |
+| RLS | 0 |
+| Policies | 0 |
+| Storage | 0 |
+| Functions | 0 |
+| Triggers | 0 |
+| RBAC | 0 |
+| Users/staff | 0 |
+| Operacional legado | inalterado |
+
+Escopo: ISOLADO — sem divergência bloqueante.
+
+---
+
+## Rollback
+
+Arquivo: …001_platform_org_condo.rollback.sql
+Ordem: DROP condominiums → DROP organizations
+CASCADE: NÃO
+Objetos externos: nenhum
+
+Dependências futuras que impediriam rollback após M4+:
+  units, tenant_memberships, FKs condominium_id em domínio, seed M4.
+  Sem CASCADE o DROP falha se FKs existirem → comportamento seguro.
+
+Classificação: SAFE FOR M1
+(condição operacional: apenas antes de M4 / FKs dependentes)
+
+---
+
+## Pré-check
+
+Arquivo: docs/evidence/M1-PRECHECK-LIVE.sql
+READ-ONLY: SIM (apenas SELECT / to_regclass)
+Verifica: public.organizations, public.condominiums
+ABSENT → potencialmente PASS; EXISTS → STOP / BLOCKED
+Flag m1_create_safe presente
+
+NÃO EXECUTADO nesta tarefa.
+
+Classificação: ADEQUADO para próxima etapa (autorização separada).
+
+---
+
+## Compatibilidade M4+
+
+| Fase | Espaço deixado por M1 | Prematuridade evitada |
+|------|----------------------|------------------------|
+| M2 units | condominiums.id disponível como FK pai | units não criadas |
+| M3 memberships | org_id + condo_id disponíveis | memberships não criadas |
+| M4 seed | tabelas vazias prontas para INSERT piloto | sem seed em M1 |
+| M11 backfill | — | sem DML |
+| M12–M14 RLS | sem policies prematuras; COMMENT “sem RLS” | sem helpers/policies |
+| M15 Storage | paths documentados com UUIDs | sem alteração Storage |
+| Events/n8n | — | fora de M1–M16 |
+
+Compatível com M4+: SIM
+
+---
+
+## Git
+
+Branch: master
+HEAD: 31731e72ddb0d98426be852aebb21f7685beca6b
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta)
+log -1: 31731e7 docs: finalize gate 3 checkpoint evidence
+Worktree: DIRTY (esperado — artefatos M1 ainda não commitados)
+
+Arquivos relacionados a M1 no worktree:
+  M  docs/FASE-1-MIGRATION-PLAN.md
+  ?? supabase/migrations/20260813150000_001_platform_org_condo.sql
+  ?? supabase/migrations/20260813150000_001_platform_org_condo.rollback.sql
+  ?? docs/evidence/M1-PRECHECK-LIVE.sql
+  ?? docs/evidence/results/M1-READINESS-CHECK-2026-08-13.txt
+  ?? docs/evidence/results/M1-SQL-CREATION-REVIEW-2026-08-13.txt
+  ?? docs/evidence/results/M1-SQL-DEEP-REVIEW-2026-08-13.txt
+  ?? docs/evidence/results/M1-SQL-REVISION-2026-08-13.txt
+  ?? docs/evidence/results/M1-FINAL-REVIEW-2026-08-13.txt  (este arquivo)
+
+Sem commit / push / tag / reset nesta tarefa.
+
+---
+
+## Divergências
+
+Nenhuma divergência bloqueante após correção controlada.
+
+Residuais documentais (não bloqueiam pré-check):
+  - status text sem enum (intencional)
+  - updated_at sem trigger (intencional)
+  - idx_condominiums_organization_id parcialmente coberto pelo prefixo da UNIQUE
+    (mantido por decisão aprovada)
+  - worktree dirty (esperado; commit fora de escopo)
+  - header FASE-1-ARQUITETURA pode ainda mencionar gates PENDENTE em trechos
+    históricos (cosmético; gates evidência = PASS)
+
+---
+
+## Riscos
+
+| Nível | Risco | Mitigação |
+|-------|-------|-----------|
+| MÉDIO | Tabelas já existem em produção | Pré-check LIVE obrigatório antes APPLY |
+| BAIXO | APPLY sem autorização | M1 APPLY permanece BLOCKED |
+| BAIXO | Rollback após M4 | Plano: não DROP se FKs; sem CASCADE |
+| BAIXO | status livre | Validação app / M posteriores |
+
+CRÍTICO: nenhum no artefato SQL revisado.
+
+---
+
+## Decisão
+
+APPROVED FOR LIVE PRE-CHECK
+
+Significado:
+  Artefatos M1 prontos para a próxima etapa autorizada:
+  executar SOMENTE docs/evidence/M1-PRECHECK-LIVE.sql (READ-ONLY)
+  contra o project zaemlxjwhzrfmowbckmk.
+
+NÃO autoriza:
+  APPLY da migration M1
+  rollback
+  seed / RLS / alterações de banco além do SELECT do pré-check
+
+Próximo gate (separado):
+  1) Autorização explícita PRE-CHECK LIVE
+  2) Resultado ABSENT → candidatura a autorização APPLY
+  3) Resultado EXISTS → BLOCKED / investigação
+
+NENHUMA alteração de banco foi executada.
+M1 APPLY permaneceu BLOCKED.
+================================================================================

@@ -1,0 +1,178 @@
+# M3 SQL Creation Review
+
+Data/hora UTC: 2026-08-14T10:26:53Z
+Autorização: CRIAR SQL M3 somente (NÃO APPLY)
+Project alvo: zaemlxjwhzrfmowbckmk
+Decisões: DR1–DR7 CLOSED (M3-DECISIONS-2026-08-14.txt)
+
+---
+
+## Resultado
+
+M3 SQL = CREATED — AWAITING REVIEW
+
+M3 APPLY: BLOCKED
+Banco: NENHUMA alteração executada nesta tarefa
+(Inspeção LIVE read-only de PKs residents/staff usada só para confirmar FKs)
+
+---
+
+## Arquivos criados
+
+| Tipo | Caminho |
+|------|---------|
+| Migration | supabase/migrations/20260814170000_003_tenant_memberships.sql |
+| Rollback | supabase/migrations/20260814170000_003_tenant_memberships.rollback.sql |
+| Pré-check READ-ONLY | docs/evidence/M3-PRECHECK-LIVE.sql |
+
+Nome lógico: 003_tenant_memberships
+
+---
+
+## Pré-inspeção FKs resident/staff (LIVE READ-ONLY)
+
+| Objeto | PK | Tipo | Resultado |
+|--------|----|------|-----------|
+| public.residents | id | uuid | CONFIRMADO |
+| public.staff | id | uuid | CONFIRMADO |
+| auth.users | (regclass) | — | EXISTS |
+| public.tenant_memberships | — | — | AUSENTE |
+
+staff_profile_id → public.staff(id) (conforme decisões / arquitetura)
+
+---
+
+## Estrutura
+
+Tabela: public.tenant_memberships (única)
+
+| coluna | definição |
+|--------|-----------|
+| id | uuid PK DEFAULT gen_random_uuid() |
+| auth_user_id | uuid NOT NULL |
+| organization_id | uuid NOT NULL |
+| condominium_id | uuid NOT NULL |
+| role_id | uuid NOT NULL |
+| resident_id | uuid NULL |
+| staff_profile_id | uuid NULL |
+| status | text NOT NULL DEFAULT 'active' |
+| is_default | boolean NOT NULL DEFAULT false |
+| created_at | timestamptz NOT NULL DEFAULT now() |
+| updated_at | timestamptz NOT NULL DEFAULT now() |
+
+Campos extras: NENHUM
+tenant_id / unit_id: AUSENTES
+
+---
+
+## FKs / ON DELETE
+
+Todas ON DELETE RESTRICT (6):
+  auth_user_id → auth.users(id)
+  organization_id → public.organizations(id)
+  condominium_id → public.condominiums(id)
+  role_id → public.roles(id)
+  resident_id → public.residents(id)
+  staff_profile_id → public.staff(id)
+
+CASCADE: NÃO
+SET NULL: NÃO
+FK composta org↔condo: NÃO (DR7)
+
+---
+
+## UNIQUE / Índices
+
+UNIQUE (auth_user_id, condominium_id) — 1
+UNIQUE(auth_user_id) global — AUSENTE
+INDEX idx_tenant_memberships_condominium_id — 1
+CREATE INDEX duplicado (auth_user_id, condominium_id) — AUSENTE
+
+---
+
+## Nullability / Defaults
+
+NOT NULL: id, auth_user_id, organization_id, condominium_id, role_id, status, is_default, created_at, updated_at
+NULL: resident_id, staff_profile_id
+Defaults: gen_random_uuid(), 'active', false, now(), now()
+ENUM/CHECK status: NÃO
+
+---
+
+## Escopo negativo
+
+ALTER tabelas existentes: NÃO
+DML/seed/backfill: NÃO
+RLS/policies: NÃO
+CREATE TABLE IF NOT EXISTS: NÃO
+Guard DO $$ se exists: SIM
+
+---
+
+## DR7 residual risk
+
+Documentado em COMMENT organization_id + header migration:
+  membership.organization_id pode divergir de condominiums.organization_id
+  Aceito em M3; app/M4/M11; FK composta futura (ALTER condo) fora de M3
+
+---
+
+## Rollback
+
+DROP TABLE IF EXISTS public.tenant_memberships;
+Sem CASCADE
+Status: PREPARED — NÃO EXECUTADO
+
+---
+
+## Pré-check
+
+docs/evidence/M3-PRECHECK-LIVE.sql
+Verifica: orgs, condos, roles, residents, staff, auth.users EXISTS;
+  tenant_memberships ABSENT → m3_create_safe
+NÃO EXECUTADO nesta tarefa (exceto inspeção pontual de PKs)
+
+---
+
+## Validação estática
+
+PASS:
+  [x] sintaxe / BEGIN-COMMIT / parênteses
+  [x] UNIQUE scoped; sem UNIQUE auth global
+  [x] 6× ON DELETE RESTRICT; sem CASCADE
+  [x] idx condominium_id; sem índice duplicado da UNIQUE
+  [x] status/is_default/timestamps conforme DRs
+  [x] FKs residents/staff confirmadas
+  [x] sem DML / RLS / ALTER legado
+  [x] DR7 documentado
+  [x] rollback sem CASCADE
+
+---
+
+## Divergências
+
+Nenhuma vs M3-DECISIONS-2026-08-14.txt
+
+---
+
+## Teste conceitual UNIQUE (não executado)
+
+User A + Condo A → permitido
+User A + Condo B → permitido
+User B + Condo A → permitido
+User A + Condo A duplicado → rejeitado
+
+---
+
+## Git
+
+Somente status (sem commit/push/tag).
+Worktree DIRTY (esperado).
+pre-m1-checkpoint não movida.
+
+---
+
+Nenhuma alteração de banco foi executada.
+Nenhuma migration M3 foi aplicada.
+M3 APPLY permanece BLOCKED.
+================================================================================

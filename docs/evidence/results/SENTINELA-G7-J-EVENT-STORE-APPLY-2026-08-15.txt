@@ -1,0 +1,96 @@
+SENTINELA AUT — G7-J — EVENT STORE — APPLY LIVE
+Data/hora UTC (pre-reconfirm): 2026-08-16T01:57:xxZ (mesma sessão APPLY)
+Backup UTC:                    2026-08-16T01:57:29Z → 2026-08-16T01:58:53Z
+APPLY UTC:                     2026-08-16T01:58:53Z → 2026-08-16T01:58:58Z
+Validação UTC:                 2026-08-16T01:59:30Z → 2026-08-16T01:59:31Z
+Projeto:                       zaemlxjwhzrfmowbckmk
+Host DB:                       db.zaemlxjwhzrfmowbckmk.supabase.co
+Autorização:                   EXPLÍCITA (APPLY G7-J 008 somente)
+
+Migration aplicada:
+  supabase/migrations/20260815220000_008_api_domain_events.sql
+Nome lógico:                   008_api_domain_events
+Gate:                          G7-J
+
+Pré-condições:
+  G7-I = PASS
+  Deep Review = APPROVED FOR LIVE PRE-CHECK
+  Pre-check LIVE (operador) = PASS (m_g7j_create_safe=true)
+  Pre-check LIVE (reconfirm pré-APPLY) = PASS (m_g7j_create_safe=t)
+
+Método:                        psql -f (arquivo íntegro, ON_ERROR_STOP=1)
+psql apply_exit:               0
+psql validation_exit:          0
+
+Saída APPLY (resumo):
+  BEGIN
+  DO
+  CREATE TABLE
+  CREATE INDEX (x3)
+  ALTER TABLE (RLS ENABLE)
+  COMMENT (x11)
+  COMMIT
+
+RESULTADO: G7-J APPLY = PASS
+
+============================================================
+PRE-APPLY RECONFIRM
+============================================================
+organizations EXISTS             = t
+condominiums EXISTS              = t
+api_domain_events ABSENT         = t
+api_idempotency_keys EXISTS      = t (G6-1)
+api_confirmations EXISTS         = t (G6-2)
+reservations exclusion (G7-C)    = t
+org/condo id type                = uuid / uuid
+m_g7j_create_safe                = t
+Alvo confirmado: 008_api_domain_events (somente este arquivo)
+Outras migrations nesta tarefa: 0
+
+============================================================
+BACKUP PRÉ-APPLY
+============================================================
+Tipo:     pg_dump -Fc --no-owner --no-acl
+Arquivo:  docs/evidence/backups/backup-pre-g7j-008-2026-08-15-225729.dump
+pg_dump_exit: 0
+SIZE_BYTES:   534798
+SHA-256:      48dd397a01b874581e6027bf27aa37a6af462670dcdfeb72da393c9aca576e76
+
+============================================================
+POST-APPLY VALIDATION (READ-ONLY)
+============================================================
+1. api_domain_events EXISTS = t
+2. row_count inicial = 0
+3. Colunas (21) alinhadas à migration 008
+4. PK = api_domain_events_pkey (event_id)
+5. FKs = organization_id → organizations; condominium_id → condominiums
+6. CHECKs = event_type subset G7-I; evt_/cnf_ prefixes; classification; duration>=0; etc.
+7. Índices:
+     api_domain_events_pkey
+     idx_api_domain_events_request_id
+     idx_api_domain_events_tenant_occurred
+     idx_api_domain_events_tenant_type_occurred
+8. RLS enabled = t; policies = 0; triggers = 0
+9. Colunas sensíveis (secret/hmac/token/…) = ABSENT
+10. M1 organizations/condominiums EXISTS; rows org=1 condo=1
+11. G6-1 intact; G6-2 intact; rows=0 cada
+12. G7-C exclusion EXISTS = t
+13. exit code APPLY = 0
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = CREATE public.api_domain_events (+3 indexes + RLS ON)
+MIGRATIONS EXECUTED = 1 (somente 008)
+LIVE WRITE          = 0 (sem DML de negócio; rows=0)
+DOMAIN DATA CHANGES = 0
+N8N                 = sem alteração
+WHATSAPP            = 0
+WIRING handlers     = 0
+
+============================================================
+STOP (APPLY)
+============================================================
+G7-J APPLY = PASS
+Aguarda CLOSEOUT READ-ONLY independente → CLOSED / PASS
+Sem WhatsApp / G7-J-W / endpoint / purge.

@@ -1,0 +1,119 @@
+# M1 SQL Creation Review (atualizado pós-correção controlada)
+
+Data/hora UTC original: 2026-08-13T17:50:00Z
+Atualização: 2026-08-13T18:15:00Z (após Deep Review → correção slug scoped)
+Autorização desta tarefa original: CRIAR SQL M1 somente (NÃO APPLY)
+Correção autorizada: ver M1-SQL-REVISION-2026-08-13.txt
+Project alvo (documentado): zaemlxjwhzrfmowbckmk
+
+---
+
+## Resultado (pós-correção)
+
+M1 SQL = READY FOR FINAL REVIEW
+(ver relatório de revisão para validação completa)
+
+M1 APPLY: BLOCKED (inalterado)
+Banco: NENHUMA alteração executada
+
+---
+
+## Arquivos
+
+| Tipo | Caminho |
+|------|---------|
+| Migration | supabase/migrations/20260813150000_001_platform_org_condo.sql |
+| Rollback | supabase/migrations/20260813150000_001_platform_org_condo.rollback.sql |
+| Pré-check READ-ONLY | docs/evidence/M1-PRECHECK-LIVE.sql |
+
+Nome lógico: 001_platform_org_condo
+
+---
+
+## Tabelas
+
+Criadas (DDL previsto): public.organizations, public.condominiums
+Tabelas existentes alteradas: NENHUMA
+DML / Backfill / Seed / RLS / Policies / Storage / Functions / Triggers: NENHUM
+
+---
+
+## Colunas (inalteradas vs decisões aprovadas)
+
+### organizations
+id uuid PK DEFAULT gen_random_uuid()
+name text NOT NULL
+slug text NOT NULL UNIQUE (global)
+status text NOT NULL DEFAULT 'active'  (sem CHECK)
+created_at / updated_at timestamptz NOT NULL DEFAULT now()
+
+### condominiums
+id uuid PK DEFAULT gen_random_uuid()
+organization_id uuid NOT NULL FK → organizations(id) ON DELETE RESTRICT
+name text NOT NULL  (MANTIDO)
+vertical text NOT NULL DEFAULT 'condominium' + CHECK (= 'condominium')
+slug text NOT NULL  UNIQUE (organization_id, slug)  ← CORRIGIDO
+status text NOT NULL DEFAULT 'active'  (sem CHECK)
+created_at / updated_at timestamptz NOT NULL DEFAULT now()
+
+COMMENT condominiums.slug:
+  'Identificador URL-safe único dentro da organization.'
+
+---
+
+## Constraints / FK / Índices (pós-correção)
+
+Constraints:
+  - organizations_pkey
+  - organizations_slug_key UNIQUE (slug)
+  - condominiums_pkey
+  - condominiums_organization_id_slug_key UNIQUE (organization_id, slug)
+  - condominiums_vertical_check CHECK (vertical = 'condominium')
+  - condominiums_organization_id_fkey FK ON DELETE RESTRICT
+
+Índices explícitos:
+  - idx_organizations_status (status)
+  - idx_condominiums_organization_id (organization_id)
+  - idx_condominiums_status (status)
+
+REMOVIDO:
+  - idx_condominiums_vertical (sem seletividade com CHECK fixo)
+
+NÃO criado (evita duplicata da UNIQUE composta):
+  - CREATE INDEX ... (organization_id, slug)
+
+Nota: a UNIQUE (organization_id, slug) já materializa índice btree composto.
+idx_condominiums_organization_id permanece por decisão aprovada (lookups só por org);
+parcialmente sobreposto pelo prefixo esquerdo da UNIQUE — aceito deliberadamente.
+
+---
+
+## Pré-check / Rollback
+
+Pré-check: docs/evidence/M1-PRECHECK-LIVE.sql (não executado)
+Rollback: DROP condominiums → DROP organizations; sem CASCADE (não alterado)
+
+---
+
+## Divergências históricas (resolvidas nesta correção)
+
+1. UNIQUE(slug) global em condominiums → CORRIGIDO para UNIQUE (organization_id, slug)
+2. COMMENT “único global” no site → CORRIGIDO
+3. idx_condominiums_vertical → REMOVIDO
+4. Plano M1 testes/critério → ATUALIZADO (FASE-1-MIGRATION-PLAN.md)
+
+name / status text / FK RESTRICT: MANTIDOS.
+
+---
+
+## Teste conceitual de unicidade (sem execução)
+
+CASO A: org A + slug residencial-xyz → permitido
+CASO B: org B + slug residencial-xyz → permitido
+CASO C: org A + slug residencial-xyz (2ª linha) → rejeitado UNIQUE(organization_id, slug)
+
+---
+
+NENHUMA alteração de banco foi executada.
+M1 APPLY permaneceu BLOCKED.
+================================================================================

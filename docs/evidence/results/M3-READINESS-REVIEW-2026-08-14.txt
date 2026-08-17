@@ -1,0 +1,324 @@
+# M3 READINESS REVIEW — Definição de escopo
+
+Data/hora UTC: 2026-08-14T10:14:20Z
+Projeto: zaemlxjwhzrfmowbckmk
+Modo: SOMENTE LEITURA / ANÁLISE / DOCUMENTAÇÃO
+SQL M3: NÃO CRIADO
+DDL/DML/pré-check/APPLY: NÃO EXECUTADOS
+M1: CLOSED / PASS
+M2: CLOSED / PASS
+
+Fontes:
+  docs/FASE-1-MIGRATION-PLAN.md § M3 — 003_tenant_memberships (+ M4/M11 contexto)
+  docs/FASE-1-ARQUITETURA-MULTITENANT.md §5 TENANT_MEMBERSHIP + §6 RBAC
+  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md (memberships no site)
+  docs/evidence/results/M1-CLOSEOUT-2026-08-13.txt
+  docs/evidence/results/M2-CLOSEOUT-2026-08-14.txt
+
+================================================================================
+0. ESTADO LIVE (READ-ONLY)
+================================================================================
+organizations:       EXISTS | rows=0
+condominiums:        EXISTS | rows=0
+units:               EXISTS | rows=0
+tenant_memberships:  AUSENTE
+roles:               EXISTS | rows=5 | colunas: id, name, created_at
+pre-m1-checkpoint:   aec1f5f2150633519b8a6136b9ddbff61bfed513 INTACTO
+HEAD:                31731e7 docs: finalize gate 3 checkpoint evidence
+Worktree:            DIRTY (artefatos M1/M2; esperado)
+
+Dependência estrutural M1: SATISFEITA
+Dependência catálogo roles: SATISFEITA
+M2 (units): presente; NÃO é dependência do plano M3 para CREATE memberships
+
+================================================================================
+1. OBJETIVO
+================================================================================
+Criar tabela **tenant_memberships** — vínculo entre auth.users e contexto
+Organization + Condominium (Operational Site) + Role.
+
+Permite: 1 auth_user → N memberships (sites/papéis diferentes).
+Não duplicar contas Auth.
+Não implementar RLS/helpers nesta fase (M12+).
+Não popular dados (seed/backfill = M4 / M11).
+
+Nome lógico migration (plano): 003_tenant_memberships
+
+================================================================================
+2. ESCOPO
+================================================================================
+IN:
+  - CREATE TABLE public.tenant_memberships
+  - FKs para organizations, condominiums, roles, auth.users
+  - UNIQUE (auth_user_id, condominium_id)
+  - índices conforme plano (auth_user_id, condominium_id)
+  - COMMENT Operaut (membership no site)
+
+OUT:
+  - ALTER legado (users/staff/residents)
+  - seed piloto (M4)
+  - backfill memberships (M11)
+  - unit_id em memberships
+  - tenant_id genérico
+  - RLS / policies / helpers
+  - JWT claims / active_membership_id
+  - segundo catálogo RBAC
+  - M4+
+
+================================================================================
+3. TABELAS
+================================================================================
+Novas:     public.tenant_memberships (1)
+Alteradas: NENHUMA (LEGACY ALTERATIONS = 0)
+Relação:   organizations 1→N memberships
+           condominiums 1→N memberships
+           roles 1→N memberships
+           auth.users 1→N memberships
+           units: SEM FK direta em M3
+
+================================================================================
+4. COLUNAS (documental — decisões abertas marcadas)
+================================================================================
+
+| campo | tipo proposto | null | origem | status |
+|-------|---------------|------|--------|--------|
+| id | uuid PK DEFAULT gen_random_uuid() | NOT NULL | arquitetura §5 | REQUISITO |
+| auth_user_id | uuid | NOT NULL | plano + arquitetura; FK auth.users | REQUISITO |
+| organization_id | uuid | NOT NULL | plano + arquitetura | REQUISITO |
+| condominium_id | uuid | NOT NULL | plano + arquitetura (site) | REQUISITO |
+| role_id | uuid | NOT NULL | plano + arquitetura → roles.id | REQUISITO |
+| resident_id | uuid? | NULL | arquitetura §5 | DR (incluir em M3?) |
+| staff_profile_id | uuid? | NULL | arquitetura §5 | DR (incluir em M3?) |
+| status | text | ? | arquitetura: active/invited/suspended | DR |
+| is_default | boolean? | ? | arquitetura §5 | DR |
+| created_at | timestamptz | ? | arquitetura timestamps | DR (padrão M1/M2) |
+| updated_at | timestamptz | ? | arquitetura timestamps | DR (padrão M1/M2) |
+
+NÃO incluir sem spec:
+  - unit_id
+  - tenant_id genérico
+  - vertical (pertence ao site)
+
+================================================================================
+5. CONSTRAINTS / FKs / UNIQUEs
+================================================================================
+Proposta documental:
+  PK (id)
+  UNIQUE (auth_user_id, condominium_id)  ← REQUISITO plano (piloto)
+  FK auth_user_id → auth.users(id)       ← REQUISITO arquitetura
+  FK organization_id → organizations(id)
+  FK condominium_id → condominiums(id)
+  FK role_id → roles(id)
+  FK resident_id → residents(id)         ← só se coluna incluída (DR)
+  FK staff_profile_id → staff(id)        ← só se coluna incluída (DR)
+
+ON DELETE / ON UPDATE: NÃO especificados no plano → DR
+CHECK status enum: NÃO especificado como CONSTRAINT → DR
+Consistência organization_id ≡ condominiums.organization_id: NÃO no plano → DR
+
+================================================================================
+6. ÍNDICES
+================================================================================
+Plano critério: índices por auth_user_id e condominium_id.
+UNIQUE (auth_user_id, condominium_id) cobre lookups por auth_user_id (prefixo).
+Índice separado condominium_id: recomendado (não coberto como leftmost da UNIQUE
+  se a ordem for auth_user_id, condominium_id).
+Índice organization_id / role_id / status: DECISION (não exigir sem consulta justificada).
+
+================================================================================
+7. TENANT BOUNDARY
+================================================================================
+Boundary operacional da membership: **condominium_id** (= site_id no piloto).
+organization_id: presente (escopo org / denormalizado na membership) — REQUISITO.
+unit_id: NÃO — membership não é por unidade.
+tenant_id genérico: NÃO criar.
+
+Isolamento efetivo de dados: M12–M14 (RLS) usando membership ativa.
+M3 só estabelece o vínculo estrutural.
+
+================================================================================
+8. MULTI-TENANCY (conceitual)
+================================================================================
+Org A / Condo A1 / User U:
+  membership (U, OrgA, A1, role X) → OK
+Org B / Condo B1 / User U:
+  membership (U, OrgB, B1, role Y) → OK (mesmo auth_user, sites diferentes)
+Condo A1 / User U / segunda linha mesmo condo:
+  → DENY UNIQUE(auth_user_id, condominium_id)
+
+UNIQUE scoped por site — NÃO bloqueia orgs/condos diferentes.
+Não há slug/code global em M3.
+
+Risco: organization_id inconsistente com condominiums.organization_id
+  (app poderia gravar OrgA + CondoB). Mitigação futura: CHECK/trigger ou app.
+  Classificado DR; não inventar agora.
+
+================================================================================
+9. LEGADO
+================================================================================
+LEGACY ALTERATIONS = 0
+
+M3 NÃO altera: users, staff, residents, packages, boletos, roles, permissions.
+Backfill users/staff/residents → memberships = M11 (fora de M3).
+resident_id / staff_profile_id se incluídos: FKs nullable para legado,
+  sem ALTER nas tabelas pai.
+
+================================================================================
+10. DML / BACKFILL / SEED
+================================================================================
+DML no M3:      NÃO
+BACKFILL no M3: NÃO  (M11 — fonte users/staff/residents → tenant_memberships)
+SEED no M3:     NÃO  (M4 = org + site piloto; não memberships)
+
+================================================================================
+11. RLS
+================================================================================
+RLS = OUT OF SCOPE
+Policies / helpers (has_permission, is_member, current_condominium_id) = M12–M14
+Flag relrowsecurity auto pós-CREATE possível (como M1/M2) — observação apenas.
+
+================================================================================
+12. TRIGGERS / FUNCTIONS / STORAGE
+================================================================================
+Triggers: FORA
+Functions: FORA
+Storage: FORA
+
+================================================================================
+13. ROLLBACK (documental)
+================================================================================
+DROP TABLE IF EXISTS public.tenant_memberships;
+Sem CASCADE.
+
+Ordem: memberships é folha sob org/condo/roles/auth — DROP único.
+Condição: seguro antes de M11 (dados) e antes de helpers/policies M12+
+  que dependam da tabela.
+Após M11/M12: DROP sem CASCADE falha se dependências existirem — desejável.
+Não executar.
+
+================================================================================
+14. PRÉ-CHECK LIVE (especificação; NÃO executar)
+================================================================================
+READ-ONLY:
+  1) organizations EXISTS
+  2) condominiums EXISTS
+  3) roles EXISTS (e tipicamente COUNT>0)
+  4) tenant_memberships ABSENT → se EXISTS → STOP/BLOCKED
+  5) units: opcional info (não bloqueia M3 por plano)
+  6) m3_create_safe =
+       orgs EXISTS AND condos EXISTS AND roles EXISTS
+       AND tenant_memberships ABSENT
+
+PASS: m3_create_safe = TRUE
+FAIL: qualquer pré-condição acima
+
+================================================================================
+15. VALIDAÇÕES PÓS-APPLY (futuras; NÃO agora)
+================================================================================
+  - tabela existe; rows=0
+  - PK/FKs/UNIQUE
+  - índices
+  - legado inalterado
+  - sem policies criadas pelo SQL M3
+  - teste conceitual: 2 memberships mesmo user / sites diferentes (após M4 seed
+    ou em staging com inserts controlados — fora de M3 APPLY se schema vazio)
+
+================================================================================
+16. RISCOS
+================================================================================
+| Nível | Causa | Impacto | Mitigação | Bloqueia M3? |
+|-------|-------|---------|-----------|--------------|
+| HIGH | DRs de schema não fechados (status/ON DELETE/colunas opcionais) | SQL inconsistente | Fechar DRs antes de criar SQL | Bloqueia SQL creation, não APPLY ainda |
+| HIGH | organization_id ≠ condo.organization_id | membership cross-org lógica | DR consistência; app/CHECK futuro | Não bloqueia CREATE vazio |
+| MEDIUM | FK auth.users com ON DELETE errado | órfãos ou cascade auth | DR ON DELETE RESTRICT/NO ACTION | Não |
+| MEDIUM | Incluir resident_id/staff_profile_id cedo | acoplamento legado | DR incluir ou adiar | Não |
+| MEDIUM | Confundir M3 com M11 backfill | DML prematuro | Escopo M3=DDL vazio | Não |
+| LOW | Flag RLS auto ON sem policies | confusão | observação M12+ | Não |
+| LOW | M2 units não usado por M3 | falso bloqueio | plano: deps = M1+roles | Não |
+
+CRITICAL bloqueante estrutural: NENHUM (M1/roles presentes; memberships ausente).
+
+================================================================================
+17. DEPENDÊNCIAS
+================================================================================
+Upstream obrigatório:
+  M1 CLOSED/PASS — organizations, condominiums — OK LIVE
+  roles catalog — OK LIVE (5 rows)
+Upstream NÃO obrigatório pelo plano:
+  M2 units — presente; memberships não referencia units
+Downstream:
+  M4 seed org/site (pode rodar após M3; memberships ainda vazias)
+  M11 backfill memberships
+  M12 helpers / M13–M14 RLS
+M3 pode ser executado sem M4: SIM (schema vazio)
+
+================================================================================
+18. DECISÕES (DR) — FECHADAS
+================================================================================
+Ver: docs/evidence/results/M3-DECISIONS-2026-08-14.txt
+
+DR1 timestamps     = CLOSED
+DR2 status         = CLOSED
+DR3 is_default     = CLOSED
+DR4 resident/staff = CLOSED (OPTIONAL — incluir nullable)
+DR5 ON DELETE      = CLOSED (RESTRICT)
+DR6 índices        = CLOSED (UNIQUE + idx condominium_id)
+DR7 org↔condo      = CLOSED (ambos; sem FK composta em M3)
+
+Decisões abertas: NENHUMA
+
+================================================================================
+19. CRITÉRIOS DE APROVAÇÃO (gates — não misturar)
+================================================================================
+M3 READY FOR SQL CREATION:
+  deps M1+roles OK; escopo DDL claro; DRs bloqueantes FECHADOS
+
+M3 SQL CREATED — AWAITING REVIEW:
+  arquivos migration+rollback+pré-check criados; validação estática PASS
+
+M3 APPROVED FOR LIVE PRE-CHECK:
+  deep review SQL PASS; sem divergência bloqueante
+
+M3 PRE-CHECK PASS:
+  LIVE READ-ONLY: pais EXISTS; tenant_memberships ABSENT; m3_create_safe TRUE
+
+M3 APPLY PASS:
+  migration aplicada; schema vazio; constraints OK; legado intacto; sem DML
+
+M3 CLOSED / PASS:
+  pós-apply LIVE reconfirmado; evidência closeout; M4+ não iniciados por engano
+
+Estado atual: DR1–DR7 CLOSED (M3-DECISIONS-2026-08-14.txt) → READY FOR SQL CREATION.
+
+================================================================================
+20. DIVERGÊNCIAS DOC (resolvidas nas decisões)
+================================================================================
+D1: plano mínimo vs §5 completo → §5 adotado com DR2–DR4
+D2: M2 não é dep de M3 → confirmado
+D3: ON DELETE → RESTRICT (DR5)
+D4: org↔condo → invariante documental em M3 (DR7)
+D5: org-only membership → fora de M3 (addendum)
+
+================================================================================
+21. GIT
+================================================================================
+Sem commit/push/tag/reset/clean.
+pre-m1-checkpoint intacta.
+Worktree dirty (artefatos M1/M2/M3 docs).
+
+================================================================================
+22. CONCLUSÃO
+================================================================================
+
+M3 = READY FOR SQL CREATION
+
+Motivo:
+  Escopo, dependências LIVE e DR1–DR7 fechados documentalmente.
+  Próximo passo autorizável: criação do SQL 003_tenant_memberships
+  (sem APPLY automático).
+
+Nenhuma alteração de banco foi executada.
+Nenhum SQL M3 foi criado.
+M1 e M2 permanecem CLOSED / PASS.
+M3 APPLY permanece BLOCKED.
+================================================================================

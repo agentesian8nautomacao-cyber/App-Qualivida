@@ -1,0 +1,301 @@
+# M2 READINESS REVIEW — Definição de escopo
+
+Data/hora UTC: 2026-08-13T19:11:05Z
+Projeto: zaemlxjwhzrfmowbckmk
+Modo: SOMENTE LEITURA / ANÁLISE / DOCUMENTAÇÃO
+SQL M2: NÃO CRIADO
+DDL/DML/pré-check/APPLY: NÃO EXECUTADOS
+M1: CLOSED / PASS
+Decisões DR1–DR7: CLOSED — ver M2-DECISIONS-2026-08-13.txt (atualização 2026-08-13T19:25Z)
+
+Fontes:
+  docs/FASE-1-ARQUITETURA-MULTITENANT.md §4 UNIT + inventário units
+  docs/FASE-1-MIGRATION-PLAN.md § M2 — 002_units
+  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md (UNIT = espaço do site)
+  docs/evidence/results/M1-CLOSEOUT-2026-08-13.txt
+  docs/evidence/results/M1-FINAL-REVIEW-2026-08-13.txt
+  Docs específicos M2 no repo: NENHUM arquivo *M2* além do plano/arquitetura
+
+================================================================================
+0. ESTADO REAL DO BANCO (READ-ONLY)
+================================================================================
+organizations: EXISTS | rows=0 | UNIQUE(slug) | PK id
+condominiums:  EXISTS | rows=0 | FK org RESTRICT | UNIQUE(org_id,slug) | CHECK vertical
+units:         AUSENTE (to_regclass NULL)
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 INTACTO
+HEAD: 31731e7 docs: finalize gate 3 checkpoint evidence
+Worktree: DIRTY (artefatos M1; esperado)
+
+Dependência M1 para M2: SATISFEITA (tabelas pai existem).
+
+================================================================================
+1. OBJETIVO
+================================================================================
+Criar catálogo **UNIT** (espaços físicos/lógicos do Operational Site).
+No piloto: apartamentos/unidades do condomínio.
+Semanticamente: UNIT do site; `condominium_id` ≡ `site_id`.
+Código único **por site** (não global).
+Sem popular dados (seed/backfill = fases posteriores).
+
+Nome lógico migration (plano): 002_units
+
+================================================================================
+2. ESCOPO
+================================================================================
+IN:
+  - CREATE TABLE public.units
+  - FK units.condominium_id → condominiums.id
+  - UNIQUE (condominium_id, code)
+  - índices de suporte
+  - COMMENT Operaut (unit = espaço do site)
+
+OUT:
+  - ALTER tabelas legadas (residents.unit / packages.unit permanecem string)
+  - organization_id em units (transitivo via condominiums)
+  - DML / seed / backfill
+  - RLS / policies
+  - memberships / units population
+  - M3 / M4 / M5+
+  - renomear para operational unit genérica além do nome `units`
+
+================================================================================
+3. TABELAS
+================================================================================
+Novas:     public.units (1)
+Alteradas: NENHUMA
+Relação:   condominiums 1 → N units
+
+================================================================================
+4. COLUNAS (proposta a partir da spec — sem inventar silenciosamente)
+================================================================================
+
+TABELA: units
+
+| campo | tipo | null | default | origem | status |
+|-------|------|------|---------|--------|--------|
+| id | uuid PK | NOT NULL | gen_random_uuid() | padrão M1 | CLOSED |
+| condominium_id | uuid | NOT NULL | — | REQUISITO | CLOSED |
+| code | text | NOT NULL | — | REQUISITO | CLOSED |
+| block | text | NULL | — | DR2 | CLOSED |
+| number | text | NULL | — | DR3 | CLOSED |
+| label | text | NULL | — | DR4 | CLOSED |
+| status | text | NOT NULL | 'active' | DR5 | CLOSED |
+| metadata | jsonb | NULL | (nenhum) | DR7 / §4 jsonb opcional | CLOSED |
+| created_at | timestamptz | NOT NULL | now() | DR1 | CLOSED |
+| updated_at | timestamptz | NOT NULL | now() | DR1 | CLOSED |
+
+NÃO incluir (não especificado / fora de escopo):
+  - organization_id denormalizado
+  - name (não está em §4; code/label cobrem identificação)
+  - unitFormatter como coluna (é função app → mapeia para `code`)
+  - vertical (pertence ao site, não à unit)
+
+================================================================================
+5. CONSTRAINTS
+================================================================================
+Fechado (M2-DECISIONS):
+  PK (id)
+  UNIQUE (condominium_id, code)
+  FK condominium_id → condominiums(id) ON DELETE RESTRICT (DR6)
+  CHECK status: NÃO (DR5 — text DEFAULT 'active', sem ENUM/CHECK)
+  vertical CHECK: N/A (não em units)
+
+================================================================================
+6. FKs
+================================================================================
+units.condominium_id → public.condominiums.id
+  Cardinalidade: condo 1 → N units
+  Referência a organizations: NÃO direta (via condominiums.organization_id)
+
+Integridade cross-org:
+  Um unit só pode apontar para um condominium existente.
+  Não há caminho SQL para “organization A + condominium B” sem escolher
+  condominium_id de B (que já pertence a uma org). Isolamento fino = RLS M12+.
+
+================================================================================
+7. ÍNDICES
+================================================================================
+Fechado:
+  UNIQUE (condominium_id, code) → único índice composto necessário
+  NÃO criar INDEX separado (condominium_id) — prefixo da UNIQUE cobre
+  NÃO criar INDEX (status) — plano M2 não justifica
+  NÃO criar UNIQUE(code) global
+
+================================================================================
+8. UNICIDADE
+================================================================================
+Regra correta: UNIQUE (condominium_id, code)
+
+Justificativa:
+  - Plano M2 testes: UNIQUE (condominium_id, code)
+  - Arquitetura: “Unique por condomínio (ex.: 03/005)”
+  - Mesmo padrão M1 site slug scoped por org
+  - Condo A e Condo B podem ambos ter code '03/005'
+  - Mesmo condo NÃO pode ter dois codes '03/005'
+
+UNIQUE(code) sozinho = REJEITADO para M2.
+
+================================================================================
+9. TENANT BOUNDARY
+================================================================================
+Boundary operacional: condominium_id (= site_id)
+Categoria inventário: TENANT-OWNED
+Organization: não referenciada diretamente na tabela units
+1:N: condominiums → units
+FK direta: SIM (condominium_id)
+Risco futuro RLS: policies devem filtrar por condominium_id (M12–M14)
+Risco integridade: FK impede condo inexistente; não impede “app enviar condo
+  errado” — isso é auth/RLS posterior.
+
+================================================================================
+10. DML
+================================================================================
+DML no M2: NÃO
+
+================================================================================
+11. BACKFILL
+================================================================================
+Backfill no M2: NÃO
+
+Nota documental: arquitetura §14 menciona
+  “units DISTINCT de residents/packages” no plano de backfill piloto —
+  isso é pós-M4 / backfill (fora de M2). Manter residents.unit string até então.
+
+================================================================================
+12. SEED
+================================================================================
+Seed no M2: NÃO
+(M4 = seed org + site; população de units = fase posterior / backfill)
+
+================================================================================
+13. RLS
+================================================================================
+RLS permanece fora do M2.
+Não criar policies.
+Não ENABLE/DISABLE deliberado no escopo M2 (flag auto Supabase possível,
+como observado em M1 — apenas observação).
+
+================================================================================
+14. ROLLBACK
+================================================================================
+Documental:
+  DROP TABLE IF EXISTS public.units;
+  Sem CASCADE.
+
+Ordem: units primeiro (folha sob condominiums).
+
+Condição de segurança:
+  Somente se M5+ / unit_id FKs ainda não existirem apontando para units.
+  Plano: “DROP TABLE units; se sem FKs M5+”.
+  M3/M4 não criam FK para units (M3=memberships, M4=seed org/site).
+
+Se FKs posteriores existirem: DROP falha sem CASCADE → seguro; não forçar.
+
+================================================================================
+15. PRÉ-CHECK LIVE (definir; NÃO executar)
+================================================================================
+READ-ONLY:
+  1) to_regclass('public.organizations') IS NOT NULL
+  2) to_regclass('public.condominiums') IS NOT NULL
+  3) to_regclass('public.units') IS NULL
+     → se units EXISTS → STOP / BLOCKED
+  4) opcional: COUNT orgs/condos (info; M2 não exige seed)
+
+PASS pré-check M2: pais M1 presentes + units ausente.
+
+================================================================================
+16. TESTES CONCEITUAIS (sem escrita)
+================================================================================
+Setup conceitual:
+  Org A / Condo A1
+  Org B / Condo B1
+
+CASO U1: A1 + code '03/005' → permitido
+CASO U2: B1 + code '03/005' → permitido (scoped)
+CASO U3: A1 + segundo '03/005' → rejeitado UNIQUE(condominium_id,code)
+CASO U4: unit com condominium_id inexistente → rejeitado FK
+CASO U5: unit não referencia organization_id; “A apontar para B” =
+  escolher condominium_id de B (dado válido de B). Isolamento de autorização
+  = M12+, não M2.
+CASO U6: DROP units com FKs M5+ → deve falhar sem CASCADE
+
+Critério sucesso plano: catálogo por site; unitFormatter → code (app).
+
+================================================================================
+17. RISCOS
+================================================================================
+| Nível | Descrição | Impacto | Mitigação | Fase |
+|-------|-----------|---------|-----------|------|
+| HIGH | Escolher UNIQUE(code) global por engano | Colisão multi-condo | Spec + review: scoped | SQL creation |
+| MEDIUM | DECISION REQUIRED não resolvidos (nullability/status/timestamps) | SQL inconsistente | Resolver antes/durante criação SQL | SQL creation auth |
+| MEDIUM | Backfill units confundido com M2 | DML prematuro | Escopo M2 = DDL vazio | M4+ |
+| MEDIUM | Flag RLS auto ON sem policies (como M1) | Confusão | Observar; policies M12+ | M12–M14 |
+| LOW | Índice condominium_id redundante vs UNIQUE | Cosmético | Decisão no SQL | SQL creation |
+| LOW | Legado residents.unit string diverge de units.code | Dual-write futuro | Manter string até backfill | M5+ |
+| LOW | Rollback após FKs unit_id | DROP bloqueado | Sem CASCADE; restore backup | M5+ |
+
+CRITICAL: nenhum no escopo M2 DDL vazio se UNIQUE scoped for respeitada.
+
+================================================================================
+18. DEPENDÊNCIAS
+================================================================================
+Upstream: M1 CLOSED/PASS (organizations, condominiums) — OK
+Downstream: M3 (memberships) independente de units; M4 seed org/site;
+            população units / unit_id em domínio = pós-M4 / M5+
+Bloqueio M2 APPLY: ainda BLOCKED até SQL + pré-check + autorização
+
+================================================================================
+19. DIVERGÊNCIAS
+================================================================================
+D1: Plano M2 é curto; detalhe de colunas está na arquitetura §4 — alinhar SQL à §4.
+D2: timestamps não listados em §4 UNIT (org tem; unit não).
+D3: status valores citados na prosa; sem CHECK no plano.
+D4: nullability block/number/label não especificada.
+D5: ON DELETE FK não especificado (M1 usou RESTRICT).
+D6: Addendum não detalha schema units além de “units do site”.
+D7: §14 backfill menciona units DISTINCT — não é M2.
+
+================================================================================
+20. DECISION REQUIRED
+================================================================================
+DR1–DR7 = CLOSED (ver M2-DECISIONS-2026-08-13.txt)
+Decisões abertas: NENHUMA
+
+================================================================================
+21. RECOMENDAÇÃO FINAL / PROPOSTA DDL (NÃO CRIADA)
+================================================================================
+CREATE TABLE public.units (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  condominium_id uuid NOT NULL
+    REFERENCES public.condominiums(id) ON DELETE RESTRICT,
+  code text NOT NULL,
+  block text NULL,
+  number text NULL,
+  label text NULL,
+  status text NOT NULL DEFAULT 'active',
+  metadata jsonb NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (condominium_id, code)
+);
+-- sem INDEX extra condominium_id; sem INDEX status;
+-- sem organization_id; COMMENT: unit = espaço do site (condominium_id ≡ site_id)
+
+Próxima etapa autorizável: CRIAR SQL 002_units (+ rollback + pré-check file)
+NÃO APPLY sem autorização separada.
+
+================================================================================
+RESULTADO
+================================================================================
+
+M2 = READY FOR SQL CREATION
+
+Significado:
+  Escopo e DR1–DR7 fechados; pronto para autorização de criação do SQL M2.
+
+NÃO significa APPROVED FOR APPLY.
+M2 APPLY permanece BLOCKED.
+
+Nenhuma alteração de banco foi executada.
+Nenhum SQL M2 foi criado.
+================================================================================

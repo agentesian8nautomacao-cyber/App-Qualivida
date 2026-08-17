@@ -1,0 +1,131 @@
+SENTINELA AUT — G7-C — RESERVATION EXCLUSION CONSTRAINT SQL
+Data: 2026-08-14
+Status: G7-C CONSTRAINT SQL = CREATED / AWAITING REVIEW
+
+Project:             zaemlxjwhzrfmowbckmk
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Método schema:       psql READ-ONLY
+WRITE OPERATIONS:    0
+Migration APPLY:     NÃO EXECUTADO
+Rollback:            NÃO EXECUTADO
+LIVE WRITE:          0
+DATABASE CHANGES:    0
+MIGRATIONS EXECUTED: 0
+n8n / WhatsApp / Event Store / G7-D: NÃO
+
+============================================================
+1. SCHEMA LIVE CONFIRMADO (não inventado)
+============================================================
+Tabela: public.reservations EXISTS
+
+Colunas:
+  id            uuid PK DEFAULT uuid_generate_v4()
+  area_id       uuid NOT NULL  FK → areas(id) ON DELETE CASCADE
+  resident_id   uuid NOT NULL  FK → residents(id) ON DELETE CASCADE
+  resident_name varchar NOT NULL
+  unit          varchar NOT NULL
+  date          date NOT NULL
+  start_time    time without time zone NOT NULL
+  end_time      time without time zone NOT NULL
+  status        varchar NOT NULL DEFAULT 'scheduled'
+                CHECK IN (scheduled, active, completed, canceled)
+  created_at    timestamptz
+  updated_at    timestamptz
+
+condominium_id em reservations = ABSENT
+condominium_id em areas        = ABSENT
+organization_id em reservations = ABSENT
+
+areas (LIVE): id, name, capacity, rules, is_active, created_at, updated_at
+  — sem tenant columns
+
+Extensões:
+  btree_gist = EXISTS (schema public)  → necessária / presente
+  uuid-ossp / pgcrypto = EXISTS (extensions)
+
+Constraint exclusion alvo:
+  reservations_area_date_slot_excl = ABSENT (ainda não aplicada)
+
+Reservas totais LIVE: 0
+Overlapping active pairs: 0
+
+PostgreSQL: 17.6
+Half-open smoke LIVE:
+  10:00–12:00 ∩ 11:00–13:00 = true (CONFLITO)
+  10:00–12:00 ∩ 12:00–14:00 = false (PERMITIDO)
+
+============================================================
+2. DECISÃO DE DESIGN (condominium_id)
+============================================================
+Requisito de produto: isolar por condominium_id + área.
+Schema LIVE: condominium_id ABSENT em reservations e areas.
+
+Decisão desta SQL (sem inventar coluna):
+  Isolar por area_id (+ date + tsrange half-open).
+  area_id é UUID globalmente único → condomínios distintos não
+  compartilham a mesma área → não bloqueia cross-condo.
+
+Quando M5 (ou gate tenant) adicionar condominium_id de fato,
+revisão futura pode estender o EXCLUDE — NÃO feito agora.
+
+Status relevantes = valores REAIS do CHECK LIVE:
+  scheduled, active   → na constraint
+  completed, canceled → fora
+  (nota: Core legado usa cancelled/cancelada em filtros; DB usa "canceled")
+
+============================================================
+3. ARTEFATOS CRIADOS
+============================================================
+Migration:
+  supabase/migrations/20260814210000_007_reservations_no_overlap.sql
+Rollback:
+  supabase/migrations/20260814210000_007_reservations_no_overlap.rollback.sql
+Pré-check canônico:
+  docs/evidence/M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE.sql
+Pré-check EXEC:
+  docs/evidence/M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE-EXEC.sql
+Testes:
+  api/v1/_lib/execution/g7c.reservation-exclusion.test.ts
+Docs:
+  docs/SENTINELA-AUT-G7-INTEGRITY.md (atualizado)
+  este arquivo
+
+============================================================
+4. PRÉ-CHECK LIVE (READ-ONLY) — EXECUTADO
+============================================================
+Arquivo: M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE-EXEC.sql
+Resultado summary:
+  reservations_exists              = t
+  btree_gist_exists                = t
+  exclusion_absent                 = t
+  condominium_id_absent_expected   = t
+  no_overlapping_active_pairs      = t
+  → create_safe (preparação SQL)   = YES
+
+APPLY permanece NÃO autorizado.
+
+============================================================
+5. ROLLBACK (regras)
+============================================================
+DROP CONSTRAINT reservations_area_date_slot_excl apenas
+SEM CASCADE
+SEM DELETE de reservas
+SEM DROP EXTENSION btree_gist
+SEM alteração de dados
+
+============================================================
+6. INTACTOS
+============================================================
+M1–M4 = intactos (não alterados)
+G6-1 / G6-2 = intactos
+M5+ = não iniciado
+G7-D = não iniciado
+
+============================================================
+STOP
+============================================================
+G7-C CONSTRAINT SQL = CREATED / AWAITING REVIEW
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+APPLY = NÃO

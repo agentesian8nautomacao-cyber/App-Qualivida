@@ -74,7 +74,7 @@ export default function AdminPermissionsView({ onBack }: AdminPermissionsViewPro
         },
         {
           id: 'sentinela',
-          label: 'Sentinela AI',
+          label: 'Sentinela',
           actions: ['view']
         },
         {

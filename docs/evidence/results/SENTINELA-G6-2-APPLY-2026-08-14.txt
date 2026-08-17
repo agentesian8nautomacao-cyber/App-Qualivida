@@ -1,0 +1,160 @@
+SENTINELA AUT — G6-2 — APPLY LIVE
+Data/hora UTC início (pre): 2026-08-14T20:29:31Z
+Data/hora UTC APPLY:        2026-08-14T20:29:33Z → 2026-08-14T20:29:37Z
+Validação UTC:              2026-08-14T20:29:37Z (query ~20:29:39Z)
+Projeto:                    zaemlxjwhzrfmowbckmk
+Host DB:                    db.zaemlxjwhzrfmowbckmk.supabase.co
+Autorização:                EXPLÍCITA (APPLY G6-2 somente)
+
+Migration aplicada:
+  supabase/migrations/20260814200000_006_api_confirmations.sql
+Nome lógico:                006_api_confirmations
+Gate:                       M-G6-2
+
+Pré-condições:
+  G6-2 DEEP REVIEW = APPROVED
+  G6-2 PRE-CHECK LIVE = PASS
+  G6-1 = CLOSED / PASS
+  M1–M4 = INTACTOS
+
+Método:                     psql -f (arquivo íntegro, ON_ERROR_STOP=1)
+psql apply_exit:            0
+psql validation_exit:       0
+
+Saída APPLY (resumo):
+  BEGIN
+  DO
+  CREATE TABLE
+  CREATE INDEX
+  CREATE INDEX
+  COMMENT ×14
+  COMMIT
+
+============================================================
+PRE-APPLY RECONFIRM
+============================================================
+PRE_UTC: 2026-08-14T20:29:31Z
+organizations_exists = t
+condominiums_exists  = t
+api_idempotency_keys_exists = t
+api_confirmations_absent = t
+m_g6_2_create_safe = t
+Alvo confirmado: 006_api_confirmations (somente este arquivo)
+Outras migrations nesta tarefa: 0
+
+============================================================
+POST-APPLY VALIDATION (READ-ONLY)
+============================================================
+api_confirmations EXISTS = t (regclass presente)
+ROW COUNT = 0
+
+COLUMN COUNT = 15 (information_schema):
+  1  confirmation_id       text        NOT NULL
+  2  token_hash            text        NOT NULL
+  3  organization_id       uuid        NOT NULL
+  4  condominium_id        uuid        NOT NULL
+  5  client_id             text        NOT NULL
+  6  operation             text        NOT NULL
+  7  resource_id           text        NOT NULL
+  8  operation_fingerprint text        NOT NULL
+  9  status                text        NOT NULL
+ 10  prompt                text        NOT NULL
+ 11  requester_identity    text        NULL
+ 12  created_request_id    text        NULL
+ 13  created_at            timestamptz NOT NULL  DEFAULT now()
+ 14  expires_at            timestamptz NOT NULL
+ 15  consumed_at           timestamptz NULL
+
+PK:
+  api_confirmations_pkey (confirmation_id)
+
+FKs:
+  api_confirmations_organization_id_fkey
+    organization_id → organizations(id)  delete_rule=RESTRICT
+  api_confirmations_condominium_id_fkey
+    condominium_id → condominiums(id)    delete_rule=RESTRICT
+
+token / plaintext:
+  token_hash PRESENT
+  plaintext token columns (confirmation_token/token_plaintext/plaintext_token/token) = 0
+
+fingerprint:
+  operation_fingerprint PRESENT NOT NULL
+
+status / CHECKs nomeados (12):
+  api_confirmations_operation_check
+    IN (pickup_package, cancel_reservation)
+  api_confirmations_status_check
+    IN (pending, consumed)
+  api_confirmations_pending_not_consumed_check
+  api_confirmations_consumed_coherence_check
+  api_confirmations_confirmation_id_prefix_check (cnf_%)
+  api_confirmations_confirmation_id_nonempty_check
+  api_confirmations_token_hash_nonempty_check
+  api_confirmations_client_id_nonempty_check
+  api_confirmations_resource_id_nonempty_check
+  api_confirmations_fingerprint_nonempty_check
+  api_confirmations_prompt_nonempty_check
+  api_confirmations_expires_after_created_check (expires_at > created_at)
+
+TTL:
+  expires_at NOT NULL; CHECK expires_at > created_at
+  Default TTL 300s / clamp 30–3600 = API only (não no DDL) — conforme contrato
+  created_at DEFAULT now()
+
+Índices:
+  api_confirmations_pkey
+  idx_api_confirmations_expires_at
+  idx_api_confirmations_tenant (organization_id, condominium_id)
+
+Triggers user (não internos) em api_confirmations: 0
+Functions nome *api_confirmation*: 0
+cron.job: extensão PRESENT; total jobs no projeto = 1 pré-existente
+  jobname=data-retention-daily (schedule 0 3 * * *) — NÃO criado por G6-2
+  jobs referenciando api_confirmation(s) = 0
+  (migration NÃO criou cron)
+
+RLS observação (plataforma; migration não ENABLE/CREATE POLICY):
+  relrowsecurity = t
+  relforcerowsecurity = f
+  policy_count = 0
+  (mesmo padrão observado em G6-1)
+
+============================================================
+INTEGRIDADE G6-1 / M1–M4
+============================================================
+api_idempotency_keys EXISTS
+  rows = 0
+  column_count = 13
+  INTACTA (não ALTER)
+
+organizations_rows = 1 · org_pilot (qualivida-admin) = 1
+condominiums_rows  = 1 · condo_pilot (qualivida-club-residence) = 1
+units_rows = 0
+tenant_memberships_rows = 0
+M1–M4 = INTACTOS
+
+============================================================
+CONFIRMAÇÕES EXPLÍCITAS
+============================================================
+INSERT/UPDATE/DELETE de dados = 0
+Outras migrations executadas = 0
+Seed / backfill = 0
+Tabelas legadas alteradas = 0
+Wiring / n8n / WhatsApp = NÃO
+Rollback = NÃO
+CLOSEOUT = NÃO EXECUTADO
+
+DATABASE CHANGES = 1 (CREATE TABLE public.api_confirmations + 2 indexes + comments)
+OTHER MIGRATIONS = 0
+LEGACY ALTERATIONS = 0
+G6-1 = INTACT
+M1–M4 = INTACTOS
+
+============================================================
+RESULTADO
+============================================================
+G6-2 APPLY = PASS
+
+STOP OBRIGATÓRIO.
+NÃO executar CLOSEOUT automaticamente.

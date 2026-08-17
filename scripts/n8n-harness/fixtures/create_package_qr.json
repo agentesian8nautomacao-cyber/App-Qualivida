@@ -1,0 +1,16 @@
+{
+  "source": "harness",
+  "input_type": "qrcode",
+  "external_message_id": "harness-msg-qr-001",
+  "sender": { "phone": "5511999990004" },
+  "content": { "code": "QV-PKG-QR-998877" },
+  "metadata": { "scenario": "create_package_qr" },
+  "api_body": {
+    "input_type": "qrcode",
+    "recipient": "Maria",
+    "unit": "101",
+    "qr_code_data": "QV-PKG-QR-998877",
+    "text": "QV-PKG-QR-998877",
+    "metadata": { "source": "n8n", "decoder": "qr" }
+  }
+}

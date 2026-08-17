@@ -1,0 +1,211 @@
+SENTINELA AUT — ETAPA 3 — API DESIGN / DISCOVERY
+Data: 2026-08-14
+Status: CLOSED / PASS (somente design — ZERO implementação)
+
+Pré-requisitos:
+  Etapa 1 Core = CLOSED / PASS
+  Etapa 2 Painel = CLOSED / PASS
+  M1/M2/M3/M4 = CLOSED / PASS
+
+============================================================
+CONFIRMAÇÃO OBRIGATÓRIA
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+PUBLIC API = 0
+EVENT STORE = 0
+NOVOS ENDPOINTS = 0
+
+Documento principal:
+  docs/SENTINELA-AUT-API-ARCHITECTURE.md
+
+============================================================
+1. ARQUITETURA ATUAL
+============================================================
+- Frontend: React 19 + Vite SPA
+- Host: Vercel (rewrite SPA exclui /api/*)
+- Backend existente: api/*.ts (Vercel Serverless Node)
+  convites staff/morador, Resend, create-auth-user
+- Supabase: DB + Auth + Realtime (channels no App.tsx)
+- Edge Functions: não usadas (só README password-reset)
+- Core: sentinela/core → adapters → dataService
+- Painel: DashboardView Central da Portaria
+- Offline: Dexie/outbox (browser)
+- RBAC: roles/permissions (com bypass SINDICO documentado)
+- Tenant: M1–M4 schema; Core ainda warning se tenant ausente
+
+============================================================
+2. ARQUITETURA PROPOSTA
+============================================================
+WhatsApp → n8n (orquestração)
+  → SENTINELA API (fronteira)
+  → Operational Core (regras)
+  → adapters server
+  → Database
+
+Painel → Core (in-process hoje; API opcional depois)
+
+n8n NÃO acessa banco / NÃO contém regra de condomínio.
+
+============================================================
+3. LOCAL DA FUTURA API
+============================================================
+RECOMENDADO: Vercel Serverless sob /api/v1/...
+  - reutiliza padrão api/ existente
+  - service role já no Vercel
+  - mesmo deploy do painel
+
+NÃO preferir agora:
+  - Supabase Edge (stack pouco usada)
+  - n8n como “API de negócio”
+  - novo servidor (só se Vercel insuficiente)
+
+DECISION REQUIRED:
+  - confirmar Vercel vs novo host
+  - adapter persistência server sem Dexie
+
+============================================================
+4. OPERAÇÕES (1 endpoint → 1 Core)
+============================================================
+GET  /api/v1/residents/identify          → identify_resident
+GET  /api/v1/units/identify              → identify_unit
+POST /api/v1/operations/packages         → create_package
+POST /api/v1/operations/packages/{id}/pickup → pickup_package
+POST /api/v1/operations/occurrences      → create_occurrence
+PATCH /api/v1/operations/occurrences/{id}→ update_occurrence
+POST /api/v1/operations/reservations     → create_reservation
+POST /api/v1/operations/reservations/{id}/cancel → cancel_reservation
+GET  /api/v1/boletos                     → get_boleto
+POST /api/v1/notifications/resident      → notify_resident
+
+Estilo: REST versionado (não God-RPC obrigatório).
+Sem CRUD genérico desnecessário.
+
+============================================================
+5. CONTRATOS
+============================================================
+Sucesso/erro alinhados a OperationResult + request_id + correlation_id.
+Códigos estáveis: TENANT_REQUIRED, UNAUTHORIZED, FORBIDDEN,
+DUPLICATE_REQUEST, PACKAGE_ALREADY_PICKED_UP, RESERVATION_CONFLICT, etc.
+HTTP: 400/401/403/404/409/429/500 conforme tabela no MD.
+
+============================================================
+6. AUTENTICAÇÃO
+============================================================
+Proposta: client_id + HMAC (timestamp + body hash + tenant + Idempotency-Key)
+  + janela anti-replay + rotação de segredo.
+Rejeitado: segredo fixo sozinho sem contexto.
+JWT Supabase = opcional para caller humano futuro.
+Service role NUNCA no n8n.
+
+============================================================
+7. AUTORIZAÇÃO
+============================================================
+Authn ≠ Authz.
+Credential autenticada ainda precisa:
+  tenant match + permission key da operação (RBAC existente).
+Não criar segundo catálogo de permissões.
+LIMITATION: memberships=0; grants de integração = DECISION REQUIRED.
+
+============================================================
+8. TENANT ISOLATION
+============================================================
+API externa: organization_id + condominium_id OBRIGATÓRIOS (fail-closed).
+Core legado: warning TENANT_CONTEXT_ABSENT (painel).
+Endurecer Core globalmente = DECISION REQUIRED (wire App aos IDs M4 antes).
+
+============================================================
+9. IDEMPOTÊNCIA
+============================================================
+Idempotency-Key obrigatória em mutações (n8n usa wa_message_id estável).
+request_id = por tentativa; correlation_id = conversa/fluxo.
+Replay mesmo body → mesma resposta; body diferente → 409.
+
+Store (Postgres/Redis/KV) = DECISION REQUIRED — NÃO criar tabela agora.
+Memória de processo = inadequada no serverless.
+
+============================================================
+10. RETRY
+============================================================
+n8n: backoff + mesma Idempotency-Key.
+Sem retry que gere nova key para a mesma intenção WA.
+
+============================================================
+11. OBSERVABILIDADE
+============================================================
+Log: request_id, correlation_id, actor, source, operation, tenant, result.
+Sources: panel | whatsapp | n8n | system.
+Sem Event Store nesta etapa.
+
+============================================================
+12. RATE LIMITING
+============================================================
+Por client_id + condominium_id; classes identify/create/pickup/etc.
+Implementação = DECISION REQUIRED. Design only.
+
+============================================================
+13. VERSIONAMENTO
+============================================================
+/api/v1/... — breaking → /api/v2/
+Convites legados /api/* fora de v1 permanecem.
+
+============================================================
+14. CORS
+============================================================
+API pensada server-to-server (n8n).
+NÃO copiar Allow-Origin: * das rotas de convite.
+Browser allowlist só se painel chamar API.
+
+============================================================
+15. SECRETS
+============================================================
+HMAC + service role: só Vercel / vault n8n (HMAC).
+WhatsApp tokens: só n8n/Meta.
+Nada disso no frontend.
+
+============================================================
+16. N8N BOUNDARY
+============================================================
+Pode: orquestrar, chamar API, responder WA, retry transporte.
+Não pode: SQL, Supabase domínio, regras de condomínio, bypass Core.
+
+============================================================
+17. WHATSAPP BOUNDARY
+============================================================
+Canal apenas. Core recebe create_package(input) sem if whatsapp.
+Webhook Meta → n8n (futuro). Não criar agora.
+
+============================================================
+18. RISCOS
+============================================================
+HIGH: API sem idempotency store; tenant warning no canal WA;
+      n8n com service_role; secret global sem escopo.
+MEDIUM: dataService/Dexie no server; RBAC bypass; CORS legado *.
+LOW: cold start Vercel.
+
+============================================================
+19. DECISÕES NECESSÁRIAS (antes de implementar)
+============================================================
+[ ] Confirmar host Vercel api/v1
+[ ] Adapter server-side (sem offline)
+[ ] Store idempotência (migration vs Redis/KV)
+[ ] Modelo credential + grants RBAC (migration?)
+[ ] Tenant fail-closed: só fronteira vs Core
+[ ] App enviar organization_id/condominium_id
+[ ] Rate limit backend
+[ ] (Opcional) Painel via API
+[ ] Não expor API até itens críticos fechados
+
+REGRA DE PARADA: qualquer migration/RLS/RBAC/auth/tenant/servidor
+novo/exposição pública = NÃO IMPLEMENTAR nesta etapa (já cumprido).
+
+============================================================
+20. CADEIA ALVO (ainda não construída)
+============================================================
+n8n → SENTINELA API → OPERATIONAL CORE → dataService/adapters → DATABASE
+
+Painel acompanha; automação externa ainda não executa via API.
+
+FIM ETAPA 3 DESIGN

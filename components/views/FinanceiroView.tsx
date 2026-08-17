@@ -696,8 +696,8 @@ const FinanceiroView: React.FC<FinanceiroViewProps> = ({
             onDownloadBoleto={onDownloadBoleto}
             onDeleteBoleto={onDeleteBoleto}
             showImportButton={showImportButton}
-            isResidentView={role === 'MORADOR'}
-            currentResident={role === 'MORADOR' ? currentResident : null}
+            isResidentView={false}
+            currentResident={null}
             isLoading={isLoadingBoletos}
             role={role}
             onImportPdfsSelected={(files) => {

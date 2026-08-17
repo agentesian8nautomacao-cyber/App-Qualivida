@@ -1,0 +1,73 @@
+# M1 PRE-CHECK LIVE — EVIDÊNCIA
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Porta:               5432
+Database:            postgres
+User:                postgres
+sslmode:             require
+Data/hora UTC:       2026-08-13T18:33:27Z
+
+Arquivo executado:   docs/evidence/M1-PRECHECK-LIVE.sql
+Método:              psql -f (READ-ONLY SELECT / to_regclass)
+Executor:            agente
+
+Identidade (read-only prévia):
+  current_database = postgres
+  current_user     = postgres
+  psql_exit        = 0
+
+================================================================================
+RESULTADOS
+================================================================================
+
+Resultado organizations:
+  organizations_regclass = NULL
+  organizations_verdict  = ABSENT — OK for M1 CREATE
+  organizations_absent   = true (t)
+
+Resultado condominiums:
+  condominiums_regclass  = NULL
+  condominiums_verdict   = ABSENT — OK for M1 CREATE
+  condominiums_absent    = true (t)
+
+m1_create_safe:
+  true (t)
+
+Saída bruta (aligned/pipe):
+
+organizations_regclass|organizations_verdict
+|ABSENT — OK for M1 CREATE
+
+condominiums_regclass|condominiums_verdict
+|ABSENT — OK for M1 CREATE
+
+organizations_absent|condominiums_absent|m1_create_safe
+t|t|t
+
+================================================================================
+SEGURANÇA
+================================================================================
+
+Operações de escrita:     NENHUMA
+Migration M1 aplicada:    NÃO
+Rollback executado:       NÃO
+CREATE/ALTER/DROP/DML:    NÃO
+RLS/policies/Storage:     NÃO
+
+Significado deste PASS:
+  Pré-condição estrutural satisfeita (tabelas ausentes).
+  NÃO autoriza APPLY da migration M1.
+  NÃO significa migration executada.
+
+================================================================================
+STATUS FINAL
+================================================================================
+
+M1 PRE-CHECK = PASS
+
+M1 APPLY permanece BLOCKED até autorização explícita separada.
+
+NENHUMA alteração de banco foi executada.
+================================================================================

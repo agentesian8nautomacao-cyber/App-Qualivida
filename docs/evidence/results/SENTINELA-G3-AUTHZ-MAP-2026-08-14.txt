@@ -1,0 +1,130 @@
+SENTINELA AUT — G3 AUTHZ MAP
+Data: 2026-08-14
+Status: MAP CLOSED (implementação G3 em seguida, sem DDL)
+
+============================================================
+FONTES REUTILIZADAS
+============================================================
+Tabelas:
+  roles / permissions / role_permissions  (RBAC existente)
+  tenant_memberships (M3) — schema existe; 0 rows; vínculo auth_user_id
+    NÃO adequado ainda para client_id de integração sem FUTURE MIGRATION
+
+Frontend (NÃO reutilizar bypasses na API):
+  AuthContext.isAdminPrincipal = (role === 'SINDICO') → ALL_PERMISSION_KEYS
+  useHasPermission: if (isAdminPrincipal) return true
+  App/Layout: hasPermission = isAdminPrincipal || includes(key)
+
+API G3:
+  ZERO bypass SINDICO/PORTEIRO
+  Autorização somente por permission keys do catálogo RBAC
+
+============================================================
+OPERATION → PERMISSION → PROFILE → TENANT
+============================================================
+
+identify_resident
+  permission: residents.view
+  profile: role_name e/ou permission_keys contendo residents.view
+  tenant: organization_id + condominium_id (G2) obrigatórios
+  notes: leitura de identificação; sem write
+
+identify_unit
+  permission: residents.view
+  profile: idem
+  tenant: obrigatório
+  notes: unit identify reutiliza residents.view (consulta operacional)
+         NÃO inventar units.view (não existe no catálogo granular)
+
+create_package
+  permission: packages.create
+  profile: autorizado com packages.create
+  tenant: obrigatório
+
+pickup_package
+  permission: packages.update
+  profile: autorizado com packages.update
+  tenant: obrigatório
+  notes: confirmação sensível = G4 (não G3)
+
+create_occurrence
+  permission: occurrences.create
+  profile: autorizado
+  tenant: obrigatório
+
+update_occurrence
+  permission: occurrences.update
+  profile: autorizado
+  tenant: obrigatório
+
+create_reservation
+  permission: reservations.create
+  profile: autorizado
+  tenant: obrigatório
+
+cancel_reservation
+  permission: reservations.delete
+  profile: autorizado
+  tenant: obrigatório
+  notes: Core atual = delete; confirmação sensível = G4
+
+get_boleto
+  permission: boletos.view
+  profile: autorizado
+  tenant: obrigatório
+  notes: somente consulta nesta fase
+
+notify_resident
+  permission: *** DECISION REQUIRED ***
+  motivo: não existe notifications.create / inbox.notify no catálogo
+           notices.create é domínio de mural, não inbox operacional
+  operações afetadas: notify_resident
+  impacto RBAC: exigiria nova permission key + grants
+  migration necessária: SIM (INSERT permissions + role_permissions)
+                         = DDL/DML → NÃO executar nesta etapa
+  comportamento G3 até decisão: DENY (FORBIDDEN) fail-closed
+  NÃO inventar key silenciosamente
+
+============================================================
+PROFILE (integração API) — SEM MIGRATION
+============================================================
+Enquanto tenant_memberships não vincula client_id:
+
+Profile v1 (server env SENTINELA_API_CREDENTIALS):
+  client_id
+  secret
+  organization_id
+  condominium_id
+  role_name?          → resolve keys via roles/role_permissions (ou memory catalog)
+  permission_keys?    → grants explícitos (subset do catálogo RBAC)
+
+Regras:
+  - sem role_name E sem permission_keys → DENY (client sem profile)
+  - se ambos: interseção (least privilege)
+  - keys desconhecidas no catálogo → ignoradas / DENY se única grant inválida
+  - credential tenant ≠ request tenant → DENY (G2)
+  - NÃO autorizar só com client_id
+
+FUTURE MIGRATION (documentado, não executar):
+  - api_integration_credentials
+  - ou client_id → tenant_memberships bridge
+  - permission notify_resident (se aprovada)
+
+============================================================
+BYPASSES DOCUMENTADOS (NÃO COPIAR PARA API)
+============================================================
+1. SINDICO → ALL_PERMISSION_KEYS no AuthContext
+2. isAdminPrincipal em useHasPermission / App
+3. role === 'PORTEIRO' checks pontuais no App (fora RBAC)
+
+API G3: testes explícitos garantem que role_name sindico/porteiro
+sem permission na matriz do resolver = DENY.
+
+============================================================
+FLUXO
+============================================================
+HMAC (G2) → Tenant fail-closed (G2) → authorizeOperation (G3)
+  → se DENY: FORBIDDEN
+  → se ALLOW: contexto para Core (ops ainda GATE_PENDING até G4/G5)
+
+FIM MAP

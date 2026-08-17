@@ -1,0 +1,180 @@
+SENTINELA AUT — G7-C — INTEGRIDADE OPERACIONAL SERVER-SIDE
+Data: 2026-08-14
+Status: G7-C = NEEDS REVISION
+
+Pré-requisitos:
+  G7-A = PASS
+  G7-B = PASS
+  G6-1 / G6-2 = CLOSED / PASS
+  M1–M4 = INTACTOS
+
+============================================================
+VEREDICTO
+============================================================
+G7-C = NEEDS REVISION
+
+Motivo bloqueante:
+  DECISION REQUIRED — reservation_exclusion_constraint
+  Check-then-insert app-level NÃO garante unicidade sob concorrência
+  real (Request A || Request B mesmo slot). Proteção correta exige
+  exclusion constraint (ou equivalente) no PostgreSQL.
+  Migration NÃO criada / NÃO aplicada nesta etapa (autorização explícita).
+
+Demais critérios de integridade (client slots, retries, SENSITIVE,
+tenant fail-closed, Core único dono das regras, testes, build) foram
+auditados e corrigidos onde aplicável.
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+Event Store = 0
+M1–M4 = INTACTOS
+G6-1 / G6-2 = INTACTOS
+G7-D = NÃO INICIADO
+
+============================================================
+ACHADOS
+============================================================
+1. RESERVATION_CONFLICT_CLIENT_ONLY
+   - API passava existingSlots: [] → conflito efetivamente desligado
+   - CORRIGIDO: listReservationSlots no adapter; Core ignora slots do client
+     quando o método existe
+
+2. Regra de domínio (preservada)
+   - timesOverlap half-open [start,end)
+   - 10-12 vs 11-13 = CONFLICT
+   - 10-12 vs 12-14 = OK (adjacente)
+
+3. Concorrência A||B mesmo horário
+   - App-level pode permitir 2 inserts sob race
+   - DECISION REQUIRED (exclusion constraint) — ver docs
+
+4. cancel delete not-found
+   - Memory/Supabase agora falham com not found (sem sucesso falso)
+
+5. identify_resident telefone
+   - inexistente → NOT_FOUND (sem fallback name/unit)
+   - ambíguo → CLARIFICATION_REQUIRED / NEEDS_CONFIRMATION
+   - nunca escolhe arbitrariamente
+
+6. get_boleto canal system
+   - exige boletoId|residentId|unit
+   - omite pdf_original_path / checksum_pdf na resposta
+
+7. Transações multi-etapa (documentadas, sem compensação improvisada)
+   - create_package: packages + package_items
+   - reservation race: precisa constraint DB
+   - Event Store: ainda não
+
+8. API não duplica regras do Core
+
+============================================================
+CORREÇÕES REALIZADAS
+============================================================
+sentinela/core/adapters/persistence.ts
+  + listReservationSlots? no port
+  + getDefaultPersistence implementa via getReservations
+
+sentinela/core/operations/createReservation.ts
+  + fonte de verdade = listReservationSlots
+  + existingSlots só legacy (warning CLIENT_ONLY)
+  + cancel → NOT_FOUND se delete falhar
+
+sentinela/core/operations/identifyResident.ts
+  + phone miss → NOT_FOUND; multi → CLARIFICATION_REQUIRED
+
+sentinela/core/operations/getBoleto.ts
+  + system exige filtro; sanitize paths internos
+
+api/v1/_lib/execution/supabasePersistence.ts
+  + listReservationSlots
+  + getBoletos sem paths internos no SELECT
+
+api/v1/_lib/execution/memoryPersistence.ts
+  + slots completos + listReservationSlots + delete not-found
+
+api/v1/_lib/execution/executeCore.ts
+  - remove existingSlots: [] forçado
+
+api/v1/_lib/composition/residentsProvider.ts (NOVO)
+api/v1/_lib/composition/productionDeps.ts
+  + wire residentsProvider
+
+api/v1/health.ts
+  stage = ETAPA_G7_C_INTEGRITY
+
+api/v1/_lib/execution/g7c.integrity.test.ts (NOVO) A–P
+docs/SENTINELA-AUT-G7-INTEGRITY.md (NOVO)
+
+============================================================
+OPERAÇÕES AUDITADAS
+============================================================
+create_reservation   — server slots; race residual
+cancel_reservation   — confirmation + not-found retry
+create_package       — idempotency replay / fingerprint
+pickup_package       — confirmation single-use + already picked
+identify_resident    — phone NOT_FOUND / ambiguous
+identify_unit        — intacto (format/catalog)
+get_boleto           — scoped + no internal path dump
+
+============================================================
+TESTES
+============================================================
+npx vitest run
+  Test Files  11 passed (11)
+  Tests       156 passed (156)
+
+Cobertura G7-C (g7c.integrity.test.ts):
+  A  reservas sequenciais mesmo slot
+  A2 concorrência Promise.all (documenta race)
+  B  sobreposição parcial + adjacente
+  B2 client existingSlots mentiroso ignorado
+  C  retry create_package
+  D  retry pickup já retirada
+  E  retry cancel
+  F  confirmation consumida
+  G  tenant mismatch
+  H  telefone inexistente
+  I  telefone ambíguo
+  J  boleto scoped / cross-tenant headers
+  K  Core não executa se validação falha
+  L  Core uma vez + replay
+  M  idempotency replay
+  N  fingerprint mismatch
+  O  API sem import Dexie
+  P  server sem memória como persistência prod
+
+============================================================
+BUILD
+============================================================
+npm run build → PASS (vite)
+
+============================================================
+LIMITAÇÕES / DECISION REQUIRED
+============================================================
+1. reservation_exclusion_constraint (PostgreSQL)
+   — necessária para A||B sob carga/n8n
+   — NÃO criar sem autorização explícita
+
+2. M5 residual — colunas org/condo em tabelas operacionais
+   — isolation linha ainda incompleta; borda API fail-closed
+
+3. Event Store — não iniciado (intencional)
+
+4. create_package multi-INSERT — tx DB futura recomendada
+
+============================================================
+STOP
+============================================================
+G7-D = NÃO
+Event Store = NÃO
+n8n = NÃO
+WhatsApp = NÃO
+migrations = 0
+
+Aguardando decisão humana sobre exclusion constraint antes de PASS.

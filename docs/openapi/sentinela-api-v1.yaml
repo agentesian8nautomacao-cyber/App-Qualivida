@@ -1,0 +1,395 @@
+openapi: 3.0.3
+info:
+  title: Sentinela API
+  version: '1.0.0'
+  description: |
+    Contrato externo G7-E para orquestração n8n.
+    Fonte narrativa: docs/SENTINELA-AUT-API-CONTRACT.md
+    Não gera API paralela — documenta handlers existentes em /api/v1.
+servers:
+  - url: /api/v1
+tags:
+  - name: public
+  - name: read
+  - name: write
+  - name: sensitive
+  - name: admin
+    description: Consultas administrativas (auditoria). Requer permission dedicada.
+components:
+  securitySchemes:
+    SentinelaHmac:
+      type: apiKey
+      in: header
+      name: X-Sentinela-Signature
+      description: |
+        HMAC-SHA256 hex. Também requer X-Sentinela-Client-Id, X-Sentinela-Timestamp,
+        X-Organization-Id, X-Condominium-Id. Canonical v1 documentado no contrato MD.
+  parameters:
+    OrganizationId:
+      name: X-Organization-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    CondominiumId:
+      name: X-Condominium-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    ClientId:
+      name: X-Sentinela-Client-Id
+      in: header
+      required: true
+      schema: { type: string }
+    Timestamp:
+      name: X-Sentinela-Timestamp
+      in: header
+      required: true
+      schema: { type: string, description: Unix seconds }
+    Signature:
+      name: X-Sentinela-Signature
+      in: header
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema: { type: string, pattern: '^[A-Za-z0-9_.:-]{8,128}$' }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [ok, success, request_id, api_version, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        success: { type: boolean, enum: [false] }
+        request_id: { type: string }
+        correlation_id: { type: string, nullable: true }
+        operation: { type: string }
+        api_version: { type: string, enum: [v1] }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+    SuccessEnvelope:
+      type: object
+      required: [ok, success, request_id, api_version, data]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        success: { type: boolean, enum: [true] }
+        request_id: { type: string }
+        correlation_id: { type: string, nullable: true }
+        operation: { type: string }
+        api_version: { type: string, enum: [v1] }
+        data: { type: object }
+    CreatePackageBody:
+      type: object
+      properties:
+        recipient: { type: string, maxLength: 200 }
+        unit: { type: string, maxLength: 64 }
+        recipient_id: { type: string, maxLength: 64 }
+        resident_phone: { type: string, maxLength: 32 }
+        type: { type: string, maxLength: 120 }
+        image_url: { type: string, maxLength: 2000 }
+        qr_code_data: { type: string, maxLength: 2000 }
+        barcode_data: { type: string, maxLength: 2000 }
+        code: { type: string, maxLength: 2000 }
+        input_type:
+          type: string
+          enum: [text, voice, photo, qrcode, barcode]
+        text: { type: string, maxLength: 2000 }
+        metadata:
+          type: object
+          description: Max ~4096 JSON bytes; no binaries
+        received_by_name: { type: string, maxLength: 200 }
+    CreateReservationBody:
+      type: object
+      required: [area_id, resident_id, resident_name, unit, date, start_time, end_time]
+      properties:
+        area_id: { type: string }
+        resident_id: { type: string }
+        resident_name: { type: string }
+        unit: { type: string }
+        date: { type: string }
+        start_time: { type: string, example: '10:00' }
+        end_time: { type: string, example: '12:00' }
+        area_name: { type: string }
+    SensitiveConfirmBody:
+      type: object
+      properties:
+        resource_id: { type: string }
+        package_id: { type: string }
+        reservation_id: { type: string }
+        confirmation_id: { type: string }
+        confirmation_token: { type: string }
+paths:
+  /health:
+    get:
+      tags: [public]
+      summary: Health (no HMAC)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+  /events:
+    get:
+      tags: [admin]
+      summary: list_events — Event Store audit query (events.view)
+      description: |
+        Consulta tenant-scoped de `api_domain_events`.
+        Permission: events.view. READ only. Sem Core. Sem confirmation.
+        Tenant vem dos headers autenticados; query organization_id/condominium_id são ignorados.
+        Ordenação keyset: occurred_at DESC, event_id DESC. limit default 50, max 100.
+        Resposta sanitizada (sem attributes/secrets/HMAC/body/SQL/stack).
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/RequestId'
+        - name: event_type
+          in: query
+          schema: { type: string }
+        - name: operation
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: request_id
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          description: ISO-8601 with explicit timezone; inclusive on occurred_at
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: ISO-8601 with explicit timezone; inclusive on occurred_at; max range 93 days with from
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+        '400':
+          description: INVALID_REQUEST (filters/limit/cursor/dates)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '401':
+          description: HMAC / timestamp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: FORBIDDEN (sem events.view) / TENANT_MISMATCH
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /residents/identify:
+    get:
+      tags: [read]
+      summary: identify_resident
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/RequestId'
+        - { name: phone, in: query, schema: { type: string } }
+        - { name: name, in: query, schema: { type: string } }
+        - { name: unit, in: query, schema: { type: string } }
+        - { name: resident_id, in: query, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /units/identify:
+    get:
+      tags: [read]
+      summary: identify_unit
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - { name: unit, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /boletos:
+    get:
+      tags: [read]
+      summary: get_boleto
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - { name: boleto_id, in: query, schema: { type: string } }
+        - { name: resident_id, in: query, schema: { type: string } }
+        - { name: unit, in: query, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /operations/packages:
+    post:
+      tags: [write]
+      summary: create_package (also QR/barcode destination)
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePackageBody' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '501': { description: Store unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /operations/occurrences:
+    post:
+      tags: [write]
+      summary: create_occurrence
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description: { type: string, maxLength: 8000 }
+                resident_name: { type: string }
+                unit: { type: string }
+                resident_id: { type: string }
+                reported_by: { type: string }
+                image_url: { type: string }
+      responses:
+        '200': { description: OK }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /operations/occurrences/update:
+    patch:
+      tags: [write]
+      summary: update_occurrence
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [occurrence]
+              properties:
+                occurrence:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: { type: string }
+      responses:
+        '200': { description: OK }
+        '4XX': { description: Client error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /operations/reservations:
+    post:
+      tags: [write]
+      summary: create_reservation
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReservationBody' }
+      responses:
+        '200': { description: Created }
+        '400': { description: INVALID_TIME_RANGE / validation }
+        '409': { description: CONFLICT }
+  /operations/packages/pickup:
+    post:
+      tags: [sensitive]
+      summary: pickup_package (confirmation required)
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SensitiveConfirmBody' }
+      responses:
+        '200': { description: Picked up }
+        '409': { description: CONFIRMATION_* / NEEDS_CONFIRMATION }
+  /operations/reservations/cancel:
+    post:
+      tags: [sensitive]
+      summary: cancel_reservation (confirmation required)
+      security: [{ SentinelaHmac: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/Signature'
+        - $ref: '#/components/parameters/OrganizationId'
+        - $ref: '#/components/parameters/CondominiumId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SensitiveConfirmBody' }
+      responses:
+        '200': { description: Canceled }
+        '409': { description: CONFIRMATION_* }

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Search, UserPlus, Edit2, Trash2, MessageCircle, UserCircle, Upload, Link2 } from 'lucide-react';
+import { Search, UserPlus, Edit2, Trash2, MessageCircle, UserCircle, Upload } from 'lucide-react';
 import { Resident, Package, VisitorLog } from '../../types';
 import { formatUnit } from '../../utils/unitFormatter';
 import { openWhatsApp } from '../../utils/phoneNormalizer';
@@ -16,7 +16,6 @@ interface ResidentsViewProps {
   allPackages: Package[];
   visitorLogs: VisitorLog[];
   onImportClick?: () => void;
-  onInviteClick?: () => void;
   /** Síndico: pode adicionar, importar, editar e excluir. Portaria: apenas visualiza. */
   canManageResidents?: boolean;
 }
@@ -31,7 +30,6 @@ const ResidentsView: React.FC<ResidentsViewProps> = ({
   allPackages,
   visitorLogs,
   onImportClick,
-  onInviteClick,
   canManageResidents = true
 }) => {
   const toast = useToast();
@@ -65,15 +63,6 @@ const ResidentsView: React.FC<ResidentsViewProps> = ({
               className="px-6 py-3 bg-[var(--glass-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-transform whitespace-nowrap flex items-center justify-center gap-2 hover:bg-[var(--border-color)] w-full sm:w-auto"
             >
               <Upload className="w-4 h-4" /> Importar
-            </button>
-          )}
-          {canManageResidents && onInviteClick && (
-            <button
-              onClick={onInviteClick}
-              className="px-6 py-3 bg-white/5 border border-white/10 text-[10px] font-black uppercase rounded-2xl hover:bg-white/10 transition-transform hover:scale-105 whitespace-nowrap flex items-center gap-2 w-full sm:w-auto"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              <Link2 className="w-4 h-4" /> Convidar por link
             </button>
           )}
           {canManageResidents && (

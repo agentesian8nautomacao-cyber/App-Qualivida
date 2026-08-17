@@ -1,0 +1,98 @@
+SENTINELA AUT — G7-L — N8N WORKFLOW READINESS
+Data: 2026-08-16
+
+=============================================================================
+1. STATUS
+=============================================================================
+G7-L = PASS
+
+Pré-requisitos: G7-K / G7-K-RBAC / G7-J-W / G7-F / G7-H-B = PASS
+
+=============================================================================
+2. ARTEFATOS
+=============================================================================
+docs/SENTINELA-AUT-G7-L-N8N-WORKFLOW-CONTRACT.md
+api/v1/_lib/execution/g7l.n8n-workflow-contract.ts
+api/v1/_lib/execution/g7l.n8n-workflow.test.ts
+scripts/n8n-harness/workflows/SENTINELA-G7-L-FIRST-REAL-WORKFLOW.json
+docs/SENTINELA-AUT-N8N-CONTRACT.md (ponteiro G7-L)
+
+=============================================================================
+3. WORKFLOW
+=============================================================================
+Arquivo: SENTINELA-G7-L-FIRST-REAL-WORKFLOW.json
+active = false
+nodes = 6
+cenário default = identify_resident (READ)
+rota WRITE = create_package (Idempotency-Key estável)
+WhatsApp = 0
+SQL / Postgres node = 0
+Supabase direct = 0
+HMAC = env-only (SENTINELA_N8N_* / HARNESS_*)
+
+WORKFLOW JSON VALIDATED = PASS (auditWorkflowJson + vitest)
+WORKFLOW IMPORTED (UI n8n :5678) = 0 nesta sessão
+  Motivo: n8n local unreachable (healthz timeout); CLI --help hung
+  Ação operador: Import from File quando n8n local estiver no ar; manter active=false
+
+=============================================================================
+4. TESTES
+=============================================================================
+npm run test:run
+  Test Files  21 passed
+  Tests       304 passed  (baseline 290 + 14 G7-L)
+
+Cobertura G7-L:
+  intenção válida / desconhecida
+  HMAC válido / inválido / timestamp
+  tenant inválido / AuthZ denied
+  READ sucesso + request_id
+  WRITE + retry mesma key + fingerprint mismatch
+  timeout/5xx retry_same_key
+  SENSITIVE confirmation_required + consume path
+  secret ausente no workflow/harness
+  sem SQL / Event Store direto
+  active=false
+
+=============================================================================
+5. BUILD
+=============================================================================
+npm run build → PASS (vite ✓)
+
+=============================================================================
+6. FRONTEIRAS
+=============================================================================
+DATABASE CHANGES = 0
+MIGRATIONS       = 0
+LIVE WRITE       = 0
+N8N PRODUÇÃO     = 0
+WHATSAPP         = 0
+SQL ACCESS N8N   = 0
+EVENT STORE DIRECT FROM N8N = 0
+
+=============================================================================
+7. CONTRACT VALIDATIONS
+=============================================================================
+OPERATIONS VALIDATED   = PASS (inventário + intent catalog alinhado AuthZ)
+RETRY VALIDATED        = PASS (decideWorkflowRetry / classifyRetry)
+IDEMPOTENCY VALIDATED  = PASS (stable key + same-key retry + mismatch)
+CONFIRMATION VALIDATED = PASS (flow + no blind retry after consume)
+EVENT STORE VALIDATED  = PASS (n8n não grava; API sink permanece)
+HMAC COMPATÍVEL        = PASS (canonical v1 / harness / workflow)
+
+=============================================================================
+8. BLOCKERS
+=============================================================================
+Nenhum blocker de contrato.
+Import UI n8n pendente de serviço local (não bloqueia PASS do contrato/tests).
+
+=============================================================================
+9. STOP
+=============================================================================
+NÃO WhatsApp.
+NÃO migration.
+NÃO ativar workflow em produção.
+NÃO novas operações Core.
+
+Próximo gate: aguardar decisão explícita
+  (ex.: n8n local import+smoke controlado, ou canal WhatsApp — somente se autorizado)

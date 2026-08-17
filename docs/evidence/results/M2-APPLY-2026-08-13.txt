@@ -1,0 +1,118 @@
+# M2 APPLY — EVIDÊNCIA PRODUÇÃO
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260813160000_002_units.sql
+Nome lógico:         002_units
+Método:              psql -f (arquivo íntegro, sem SQL improvisado)
+Executor:            agente
+Início UTC:          2026-08-13T21:00:01Z
+Fim UTC:             2026-08-13T21:00:05Z
+psql apply_exit:     0
+
+================================================================================
+PRÉ-APPLY (read-only, imediato antes do APPLY)
+================================================================================
+organizations_regclass = organizations
+condominiums_regclass  = condominiums
+units_regclass         = NULL
+organizations_exists   = true
+condominiums_exists    = true
+units_absent           = true
+m2_create_safe         = true
+Pré-condições:         PASS
+
+================================================================================
+APPLY
+================================================================================
+Saída psql:
+  BEGIN
+  DO
+  CREATE TABLE
+  COMMENT x8
+  COMMIT
+
+Tabela criada: public.units
+Rows: 0
+
+================================================================================
+PÓS-APPLY — VALIDAÇÃO READ-ONLY
+================================================================================
+
+1) units existe: SIM (to_regclass = units)
+2) rows: 0
+
+3) PK: units_pkey PRIMARY KEY (id)
+
+4) FK: units_condominium_id_fkey
+   FOREIGN KEY (condominium_id) REFERENCES condominiums(id)
+
+5) ON DELETE: RESTRICT
+
+6) UNIQUE: units_condominium_id_code_key UNIQUE (condominium_id, code)
+
+7) UNIQUE(code) global: AUSENTE
+
+8) Campos (information_schema):
+   id, condominium_id, code, block, number, label,
+   status, metadata, created_at, updated_at
+
+9) Nullability:
+   NOT NULL: id, condominium_id, code, status, created_at, updated_at
+   NULL: block, number, label, metadata
+
+10) Defaults:
+    id → gen_random_uuid()
+    status → 'active'::text
+    created_at → now()
+    updated_at → now()
+    metadata → nenhum default
+
+11) Índices:
+    units_pkey
+    units_condominium_id_code_key
+    (somente PK + UNIQUE; sem índices extras)
+
+12) RLS observado:
+    relrowsecurity units = true (flag ON)
+    pg_policies units = 0 linhas
+    Arquivo SQL sem ENABLE RLS / CREATE POLICY
+    (comportamento típico Supabase pós-CREATE; policies = M12+)
+
+13–15) Legado / M1:
+    organizations presente (intacta no escopo M2)
+    condominiums presente (intacta no escopo M2)
+    Smoke presentes: users, staff, residents, packages, boletos,
+      roles, permissions, role_permissions, staff_invites
+      + organizations, condominiums, units
+
+================================================================================
+ESCOPO / SEGURANÇA
+================================================================================
+
+Migrations executadas nesta tarefa: 002_units SOMENTE
+001 (re-APPLY): NÃO
+003+: NÃO
+DML: NÃO
+Seed: NÃO
+Backfill: NÃO
+RLS policies: NÃO
+Rollback: NÃO
+ALTER legado / org / condo: NÃO
+
+================================================================================
+GIT (pós-APPLY, sem commit)
+================================================================================
+Worktree DIRTY (esperado). Sem commit / push / tag / PR.
+pre-m1-checkpoint não movida nesta tarefa.
+
+================================================================================
+RESULTADO
+================================================================================
+
+M2 APPLY = PASS
+
+Nenhuma migration além de M2 foi executada.
+Nenhuma tabela operacional legada foi alterada.
+================================================================================

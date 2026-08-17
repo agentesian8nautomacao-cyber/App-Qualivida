@@ -1,0 +1,85 @@
+SENTINELA AUT — G7-J-W — PERSISTENT EVENT STORE SINK
+Data: 2026-08-15
+Status: G7-J-W = PASS
+
+Pré-requisito: G7-J = CLOSED / PASS (api_domain_events LIVE)
+
+============================================================
+OBJETIVO
+============================================================
+Ligar envelope G7-G/H-A → INSERT best-effort em public.api_domain_events
+sem alterar Core / domínio / AuthZ / migrations.
+
+============================================================
+ARQUIVOS
+============================================================
+CRIADOS:
+  api/v1/_lib/observability/persistentEventStore.ts
+  api/v1/_lib/observability/g7jw.event-sink.test.ts
+  docs/SENTINELA-AUT-G7-J-W-EVENT-SINK.md
+  docs/evidence/results/SENTINELA-G7-J-W-EVENT-SINK-2026-08-15.txt
+
+MODIFICADOS:
+  api/v1/_lib/observability/runtime.ts
+  api/v1/_lib/observability/index.ts
+  api/v1/_lib/composition/productionDeps.ts
+  api/v1/_lib/execution/fakePersistenceDb.ts
+  docs/SENTINELA-AUT-EVENT-OBSERVABILITY.md
+
+============================================================
+EVENTOS PERSISTIDOS
+============================================================
+request.rejected* | request.denied | confirmation.required |
+confirmation.consumed | idempotency.replay | core.failed |
+operation.completed | operation.failed
+
+*somente com tenant UUID válido; senão skip fail-closed (logs only)
+
+NÃO persistidos: received | authorized | core.started | core.completed |
+idempotency.created
+
+============================================================
+FAIL-SAFE / REDACTION / TENANT
+============================================================
+[x] INSERT falha → operação Core permanece sucesso
+[x] redact + assertNoSensitiveLeak antes do map
+[x] sem inventar organization_id/condominium_id
+[x] service-role server-side via createServerSupabaseClient
+[x] sem endpoint /events
+[x] sem policies novas (RLS ON + 0 policies intacto)
+
+============================================================
+TESTES / BUILD
+============================================================
+npm run test:run → 251 passed (18 files)  [baseline 237 + 14 G7-J-W]
+npm run build    → PASS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0 (sem INSERT LIVE arbitrário neste gate)
+N8N                 = piloto intacto / sem prod
+WHATSAPP            = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+G7-C                = INTACTO
+
+============================================================
+LIMITAÇÕES
+============================================================
+- Persistência LIVE só quando composition production + service-role
+  disponível no runtime da API
+- Sem fila/retry durável; falhas só no log local
+- Sem consulta painel / AuthZ events.view
+- Validação LIVE ponta a ponta = gate opcional futuro (piloto API)
+
+============================================================
+STOP
+============================================================
+G7-J-W = PASS
+
+NÃO iniciar WhatsApp / G7-K / endpoint / purge sem autorização.
+Próximo gate recomendado: piloto LIVE controlado do sink
+  OU WhatsApp (somente se autorizado) OU API admin events.view

@@ -1,0 +1,90 @@
+# M4 PRE-CHECK LIVE — EVIDÊNCIA (READ-ONLY)
+
+Projeto:             zaemlxjwhzrfmowbckmk
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Data/hora UTC:       2026-08-14T12:46:16Z
+Método:              psql -f docs/evidence/M4-PRECHECK-LIVE.sql
+                     + SELECTs extras READ-ONLY (namespace org/condo)
+Arquivo pré-check:   docs/evidence/M4-PRECHECK-LIVE.sql (NÃO modificado)
+Modo:                READ-ONLY
+WRITE OPERATIONS:    0
+Migration/seed/APPLY: NÃO EXECUTADOS
+Rollback:            NÃO EXECUTADO
+Commit/tag/push:     NÃO
+
+Autenticação:        OK (current_database=postgres, current_user=postgres)
+Secrets no relatório: NENHUM
+
+================================================================================
+1. ESTRUTURA (arquivo pré-check)
+================================================================================
+organizations:       EXISTS — OK (M1)
+condominiums:        EXISTS — OK (M1)
+units:               EXISTS — OK (M2)
+tenant_memberships:  EXISTS — OK (M3)
+
+================================================================================
+2. CONTAGENS OBSERVADAS
+================================================================================
+organizations_rows       = 0
+condominiums_rows        = 0
+units_rows               = 0
+tenant_memberships_rows  = 0
+
+================================================================================
+3. ORGANIZATION PILOTO
+================================================================================
+slug = 'qualivida-admin'
+count observado = 0
+org_slug_verdict = ABSENT — OK
+duplicidade = N/A (0 rows)
+
+================================================================================
+4. CONDOMINIUM PILOTO (namespace)
+================================================================================
+slug = 'qualivida-club-residence'
+
+condo na organization piloto (org slug=qualivida-admin):
+  count = 0
+  presente = NÃO
+
+mesmo slug em outras organizations:
+  count = 0
+  presente = NÃO
+
+condo_slug global (pré-check arquivo): ABSENT — OK
+
+================================================================================
+5. DEPENDÊNCIAS RELEVANTES
+================================================================================
+tenant_memberships para org piloto = 0
+units para org piloto = 0
+estado parcial de M4 = NÃO detectado
+Dependências relevantes: PASS
+
+================================================================================
+6. m4_seed_safe
+================================================================================
+Arquivo pré-check: m4_seed_safe = t (TRUE)
+Reconfirmação scoped: m4_seed_safe_reconfirm = t (TRUE)
+
+Condições:
+  deps M1–M3 EXISTS
+  organizations empty
+  condominiums empty
+  slug org piloto ausente
+  slug condo piloto ausente
+
+================================================================================
+7. GARANTIA READ-ONLY
+================================================================================
+WRITE OPERATIONS = 0
+Sem INSERT/UPDATE/DELETE/TRUNCATE/ALTER/DROP/seed/migration/rollback
+
+================================================================================
+8. RESULTADO
+================================================================================
+M4 PRE-CHECK = PASS
+
+M4 APPLY permanece BLOCKED
+Aguardando autorização explícita para APPLY.

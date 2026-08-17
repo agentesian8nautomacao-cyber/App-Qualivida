@@ -1,0 +1,181 @@
+SENTINELA AUT — G7-H-B — PILOTO REAL N8N LOCAL → API V1
+Data: 2026-08-15
+Status: G7-H-B = PASS (STOP — não iniciar G7-I / WhatsApp / Event Store)
+
+Pré-requisito: G7-H-A = PASS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0   (API piloto com fake stores)
+N8N REAL            = 1   (workflow importado + execute CLI)
+WHATSAPP            = 0
+Event Store         = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+PostgreSQL via n8n  = 0
+service-role no n8n = 0
+node PostgreSQL     = 0
+
+============================================================
+1. WORKFLOW IMPORTADO
+============================================================
+Comando:
+  n8n import:workflow --input=scripts/n8n-harness/workflows/SENTINELA-G7-H-B-API-PILOT.json
+
+Resultado:
+  Successfully imported 1 workflow.
+  id = dVQ1BLazEiBKlDDO
+  name = SENTINELA AUT — G7-H-B — API PILOT
+  active = false
+
+Nota: import inicial falhou (SQLITE NOT NULL workflow_entity.active);
+      corrigido com "active": false no JSON e reimportado com sucesso.
+
+Fluxo: Manual Trigger → Build → HMAC → HTTP Request → Validate → Result
+Sem webhook público. Sem WhatsApp. Sem node PostgreSQL.
+
+============================================================
+2. URL / TENANT PILOTO (sem segredos)
+============================================================
+URL API piloto: http://127.0.0.1:3099
+client_id: n8n-pilot-test
+organization_id: 0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+condominium_id: 3f383313-5ec0-4d21-97c7-1b2500c933be
+Segredo HMAC: NÃO registrado (somente env local do n8n / shell)
+
+n8n local (CLI) para Code node com HMAC:
+  N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+  NODE_FUNCTION_ALLOW_BUILTIN=crypto
+
+============================================================
+3. CENÁRIOS — n8n execute (real)
+============================================================
+[x] health via n8n execute
+    success=true operation=health request_id=n8n-* postgres_node=0 whatsapp=0
+
+[x] protected-probe via n8n execute (HMAC + tenant)
+    request_id=n8n-1786843868310 chegou à API piloto
+    client_id=n8n-pilot-test
+
+[x] identify_resident (READ) via n8n execute
+    success=true core_executed=true operation=identify_resident
+    request_id=n8n-1786843930413
+    obs: request.received → request.authorized → core.started
+         → core.completed → operation.completed
+
+============================================================
+4. CENÁRIOS — pilot-http.mjs (mesmo contrato HMAC/headers)
+============================================================
+API: http://127.0.0.1:3099 (fake stores; LIVE WRITE=0)
+
+[x] health                     HTTP 200  stage=ETAPA_G7_H_B_N8N_PILOT
+[x] protected-probe            HTTP 200
+[x] identify_resident (READ)   HTTP 200  core_executed=true
+[x] create_package WRITE       HTTP 200  core_executed=true
+    recipient=G7-H-B-N8N-TEST + Idempotency-Key
+[x] create_package replay      HTTP 200  core_executed=false
+[x] HMAC inválido              HTTP 401  INVALID_SIGNATURE
+[x] timestamp expirado         HTTP 401  TIMESTAMP_EXPIRED
+[x] tenant inválido            HTTP 403  TENANT_MISMATCH
+[x] AuthZ denied (readonly)    HTTP 403  FORBIDDEN
+[x] fingerprint mismatch       HTTP 409  IDEMPOTENCY_FINGERPRINT_MISMATCH
+[x] payload inválido           HTTP 400  INVALID_REQUEST
+[x] create_reservation         HTTP 200  core_executed=true
+[x] reservation conflict       HTTP 409  CONFLICT (sem 23P01/SQL)
+[x] pickup SENSITIVE           HTTP 409  CONFIRMATION_REQUIRED
+
+Raw (sem secret): docs/evidence/results/_tmp_g7hb_pilot_raw.json
+
+============================================================
+5. OBSERVABILIDADE
+============================================================
+Handlers G7-H-A emitem [sentinela-obs] no servidor piloto.
+
+Sucesso (ex.: identify via n8n request_id=n8n-1786843930413):
+  request.received → request.authorized → core.started
+  → core.completed → operation.completed
+
+Falha (ex.: hmac_invalid via pilot-http):
+  request.received → request.rejected (INVALID_SIGNATURE)
+
+Campos: request_id, operation, tenant, core_executed, retry_class
+Sem secret / service-role / SQL / stack trace nos envelopes.
+
+============================================================
+6. SEGURANÇA
+============================================================
+[x] n8n não acessa PostgreSQL
+[x] n8n não executa SQL
+[x] n8n não possui service-role
+[x] nenhum segredo no JSON do workflow
+[x] nenhum segredo nesta evidência
+[x] assinatura/HMAC não gravada em docs permanentes
+[x] sem bypass AuthZ / sem fallback global de tenant
+[x] regras de negócio permanecem no Core (n8n só HTTP + HMAC)
+
+============================================================
+7. TESTES / BUILD
+============================================================
+npm run test:run → 237 passed (17 files)
+npm run build    → PASS
+pilot-http.mjs   → all scenarios PASS
+n8n import       → PASS
+n8n execute      → health / probe / identify PASS
+
+============================================================
+8. ARQUIVOS Tocados NESTA EXECUÇÃO
+============================================================
+MODIFICADOS:
+  scripts/n8n-harness/workflows/SENTINELA-G7-H-B-API-PILOT.json
+    (+ active:false, id, Web/crypto HMAC compatível n8n VM,
+     SENTINELA_PILOT_SCENARIO override)
+  scripts/n8n-harness/n8n-code-hmac.js
+    (early-return auth:false; require('crypto') após gate;
+     docs env N8N_BLOCK_ENV_ACCESS_IN_NODE / NODE_FUNCTION_ALLOW_BUILTIN)
+  scripts/n8n-harness/pilot-http.mjs
+    (data de reserva única por run — evita falso CONFLICT residual)
+  scripts/n8n-harness/G7-H-B-PILOT.md
+
+CRIADOS:
+  docs/evidence/results/SENTINELA-G7-H-B-N8N-API-PILOT-2026-08-15.txt
+  (este arquivo)
+
+============================================================
+9. CHECKLIST PASS
+============================================================
+[x] workflow importado no n8n local
+[x] Health PASS
+[x] Protected Probe PASS
+[x] operação READ PASS
+[x] operação WRITE PASS
+[x] Idempotência PASS
+[x] HMAC inválido rejeitado
+[x] timestamp expirado rejeitado
+[x] tenant inválido rejeitado
+[x] AuthZ inválido rejeitado
+[x] fingerprint mismatch rejeitado
+[x] payload inválido rejeitado
+[x] SENSITIVE → CONFIRMATION_REQUIRED
+[x] observabilidade funciona
+[x] n8n sem PG / SQL / service-role
+[x] sem secrets em logs/evidência
+[x] npm test PASS
+[x] build PASS
+[x] M1–M4 intactos
+[x] G6-1/G6-2 intactos
+
+============================================================
+10. STOP
+============================================================
+G7-H-B = PASS
+
+NÃO iniciar G7-I.
+NÃO iniciar WhatsApp.
+NÃO criar Event Store.
+NÃO criar migration.
+
+Próximo gate recomendado: G7-I (somente quando explicitamente autorizado) —
+integração WhatsApp controlada sobre o contrato n8n→API já validado.

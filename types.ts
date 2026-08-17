@@ -1,7 +1,6 @@
 
 // Perfis do app. Mantemos também aliases legados (ADMIN/ADMINISTRADOR) para não quebrar logins antigos.
 export type UserRole =
-  | 'MORADOR'
   | 'PORTEIRO'
   | 'SINDICO'
   | 'ADMINISTRADORA'

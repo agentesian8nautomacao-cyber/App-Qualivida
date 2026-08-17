@@ -1,0 +1,217 @@
+SENTINELA AUT — G6-1 — IDEMPOTENCY DEEP REVIEW FINAL
+Data: 2026-08-14
+Artefato: supabase/migrations/20260814190000_005_api_idempotency_keys.sql (REVISED R1)
+Rollback: supabase/migrations/20260814190000_005_api_idempotency_keys.rollback.sql
+Docs: docs/SENTINELA-AUT-G6-IDEMPOTENCY.md
+Revision: SENTINELA-G6-1-IDEMPOTENCY-REVISION-2026-08-14.txt
+Prior deep review: SENTINELA-G6-1-IDEMPOTENCY-DEEP-REVIEW-2026-08-14.txt (NEEDS REVISION — superado por R1)
+
+============================================================
+VEREDITO FINAL
+============================================================
+G6-1 = APPROVED FOR LIVE PRE-CHECK
+
+NÃO é APPLY.
+NÃO é wiring.
+LIVE PRE-CHECK ainda NÃO executado (próximo gate autorizado separadamente).
+
+============================================================
+CONFIRMAÇÃO DE ESCOPO DESTA REVIEW
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+M1–M4 = INTACTOS
+Pré-check LIVE = NÃO EXECUTADO
+Wiring API = NÃO EXECUTADO
+
+============================================================
+1–7. ESTRUTURA / TIPOS / NULL / DEFAULTS / FK / ON DELETE / UNIQUE
+============================================================
+PASS
+
+PK id uuid DEFAULT gen_random_uuid()
+organization_id uuid NOT NULL → FK organizations ON DELETE RESTRICT
+condominium_id uuid NOT NULL → FK condominiums ON DELETE RESTRICT
+idempotency_key / fingerprint / operation / request_id text NOT NULL + trim CHECKs
+status text NOT NULL CHECK IN (in_progress, completed, failed)
+response_status integer NULL (coerção por CHECK terminal)
+response_body jsonb NULL (obrigatório só em completed)
+created_at timestamptz NOT NULL DEFAULT now()
+expires_at timestamptz NOT NULL CHECK > created_at
+completed_at timestamptz NULL (obrigatório em completed/failed)
+
+UNIQUE (organization_id, condominium_id, idempotency_key) MANTIDA — correto para R1+E.
+
+Sem tenant_id. Sem ENUM. Sem IF NOT EXISTS no CREATE.
+
+Residual aceito: condo∈org sem FK composta (API; sem ALTER M1–M4).
+
+============================================================
+8–11. TTL / R1 / TENANT RECLAIM / CONCORRÊNCIA
+============================================================
+PASS — problema original F endereçado pelo desenho R1
+
+Distinções confirmadas no SQL/docs:
+
+  TTL lógico:
+    expires_at = created_at+48h (app)
+    NÃO remove row
+    NÃO libera UNIQUE sozinho
+
+  Reclaim (R1, API — não trigger):
+    EXISTS && expires_at <= now()
+    → DELETE WHERE organization_id AND condominium_id AND idempotency_key
+         AND expires_at <= now()
+    → depois INSERT
+    Nunca DELETE só por idempotency_key
+
+  Criação:
+    miss → INSERT in_progress
+
+  Replay:
+    ativa + mesmo fingerprint → reutilizar conforme status
+
+  Conflito:
+    ativa + fingerprint diferente → DUPLICATE_REQUEST (sem reclaim)
+
+  Concorrência:
+    UNIQUE serializa
+    unique_violation → re-SELECT
+    reclaim+INSERT em transação (contrato wiring)
+
+R1 NÃO substituído por exclusion / remoção UNIQUE / single-use / trigger / cron.
+Implementação R1 no DDL = suporte estrutural + contrato documentado.
+Código de reclaim = gate wiring futuro (esperado; não bloqueia PRE-CHECK do SQL).
+
+============================================================
+12. CHECKs DE COERÊNCIA
+============================================================
+PASS — não excessivamente restritivos
+
+completed → response_body + response_status + completed_at NOT NULL
+failed    → response_status + completed_at NOT NULL
+in_progress → responses/completed_at podem ser NULL
+
+Compatível com fluxo:
+  INSERT in_progress → UPDATE terminal com campos exigidos.
+INSERT direto completed/failed também possível se campos setados.
+
+response_body opcional em failed = intencional (não inventa campo).
+jsonb vazio '{}' satisfaz NOT NULL — aceitável; wiring deve evitar secrets.
+
+============================================================
+13. ROLLBACK
+============================================================
+PASS
+
+DROP TABLE public.api_idempotency_keys;
+- sem CASCADE no comando
+- sem IF EXISTS no comando
+- sem DELETE DML
+- sem risco cross-tenant (drop da tabela inteira só em rollback explícito
+  desta migration; não remove organizations/condominiums/sites)
+- falha se FKs externas existirem (desejado)
+
+Nota estática: comentário "SEM CASCADE" pode gerar falso positivo em grep;
+comando DROP real não usa CASCADE.
+
+============================================================
+14–17. TRIGGER / CRON / DML / RLS
+============================================================
+PASS
+
+CREATE TRIGGER = 0
+pg_cron / cron.schedule = 0
+INSERT/UPDATE/DELETE DML na migration = 0
+ENABLE ROW LEVEL / CREATE POLICY = 0
+RLS ausente = INTENCIONAL (API fail-closed + service-role)
+
+============================================================
+18–22. COMPATIBILIDADE G1–G5 / HMAC / AUTHZ / API / N8N / DOMÍNIO
+============================================================
+PASS
+
+G1–G5: tabela infra API; não altera envelope/HMAC/AuthZ/Core.
+HMAC/tenant: organization_id+condominium_id alinhados aos headers.
+AuthZ: independente (permission keys permanecem na API).
+Wiring /api/v1: port IdempotencyStore mapeável (get/put + reclaim).
+n8n futuro: Idempotency-Key + retries cobertos por UNIQUE+R1; sem SQL no n8n.
+Regra de negócio de condomínio: NÃO no banco além de idempotência/coerência de row.
+R2/R3/exclusion/tstzrange: AUSENTES (R1 preservado).
+
+============================================================
+23. CHECK vs ESTADOS PREVISTOS
+============================================================
+PASS
+
+Nenhum CHECK impede in_progress.
+Nenhum CHECK força response_body em failed.
+Nenhum CHECK conflita com expires_at > created_at.
+Transição in_progress→completed exige preenchimento atômico dos 3 campos — correto.
+
+============================================================
+MATRIZ A–H (DESENHO SQL + CONTRATO R1)
+============================================================
+A — primeira utilização
+    PASS  SELECT miss → INSERT
+
+B — replay ativo / mesmo fingerprint (in_progress)
+    PASS  chave ativa; UNIQUE impede 2ª row; wiring await/retry
+
+C — completed / replay (mesmo fingerprint)
+    PASS  chave ativa; replay response_body; Core não reexecuta
+
+D — fingerprint diferente (ativa)
+    PASS  DUPLICATE_REQUEST; sem reclaim
+
+E — concorrência
+    PASS  UNIQUE + unique_violation → re-SELECT
+
+F — expirado + reclaim (>48h)
+    PASS  TTL lógico + DELETE tenant-scoped + INSERT
+          UNIQUE NÃO bloqueia permanentemente após reclaim
+          (endereça divergência do deep review anterior)
+
+G — tenant A ≠ tenant B
+    PASS  UNIQUE inclui tenant; reclaim A não toca B
+
+H — reclaim com tenant incorreto
+    PASS  DELETE scoped → 0 rows; sem cross-tenant
+
+============================================================
+STATIC VALIDATION (sem banco LIVE)
+============================================================
+PASS — ver checklist acima (UNIQUE, FKs RESTRICT, CHECKs, R1 docs,
+       zero trigger/cron/DML/RLS/exclusion, rollback DROP limpo,
+       M1–M4 files present/untouched by this review)
+
+============================================================
+RESÍDUOS NÃO BLOQUEANTES
+============================================================
+R1) Wiring deve implementar reclaim em transação (gate futuro)
+R2) Lease curto para in_progress stuck (política API, não DDL)
+R3) condo∈org sem FK composta (API; residual M3)
+R4) response_body pode conter PII do envelope — minimizar no wiring; sem secrets
+
+Nenhum residual acima é bloqueio do SQL para LIVE PRE-CHECK.
+
+============================================================
+GATES SEGUINTES (NÃO AUTORIZADOS AQUI)
+============================================================
+1. Executar docs/evidence/M-G6-1-PRECHECK-LIVE.sql (READ-ONLY)
+2. Se PASS → autorização APPLY M-G6-1
+3. Wiring API persistent store + R1
+4. M-G6-2 Confirmation — fora de escopo
+
+============================================================
+RESULTADO
+============================================================
+G6-1 = APPROVED FOR LIVE PRE-CHECK
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+M1–M4 = INTACTOS

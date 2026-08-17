@@ -4,7 +4,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Qualivida Gestão</title>
+    <title>SentinelaAUT — Central de Operações Inteligentes</title>
+    <meta name="description" content="SentinelaAUT — proteção, automação e inteligência para operações condominiais." />
+    <meta property="og:title" content="SentinelaAUT — Central de Operações Inteligentes" />
+    <meta property="og:description" content="Proteção, automação e inteligência para operações condominiais." />
+    <meta property="og:image" content="/1024.png" />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -16,7 +20,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/1024.png" />
     <link rel="shortcut icon" href="/1024.png" />
     
-    <!-- Apple Touch Icons (iOS) – ícone Qualivida na tela inicial -->
+    <!-- Apple Touch Icons (iOS) – ícone SentinelaAUT na tela inicial -->
     <link rel="apple-touch-icon" sizes="180x180" href="/1024.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/1024.png" />
     <link rel="apple-touch-icon" sizes="144x144" href="/1024.png" />
@@ -30,56 +34,73 @@
     <!-- Apple Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Qualivida" />
+    <meta name="apple-mobile-web-app-title" content="SentinelaAUT" />
     
     <!-- Theme Color -->
-    <meta name="theme-color" content="#0b7a4b" />
-    <meta name="msapplication-TileColor" content="#0b7a4b" />
+    <meta name="theme-color" content="#06142b" />
+    <meta name="msapplication-TileColor" content="#06142b" />
     <meta name="msapplication-TileImage" content="/1024.png" />
     
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="application-name" content="Qualivida Gestão" />
+    <meta name="application-name" content="SentinelaAUT" />
     <style>
       :root {
-        /* Paleta inspirada na marca QualiVida (verdes) */
-        --bg-color: #0c1a13;
-        --sidebar-bg: rgba(12, 26, 19, 0.9);
-        --header-bg: rgba(12, 26, 19, 0.8);
-        --text-primary: #f9fff9;
-        --text-secondary: #b6d6c2;
-        --border-color: rgba(182, 214, 194, 0.25);
-        --glass-bg: rgba(12, 26, 19, 0.6);
+        /* SentinelaAUT — navy operacional, azul elétrico e ciano */
+        --sentinela-primary: #2563eb;
+        --sentinela-primary-hover: #1d4ed8;
+        --sentinela-accent: #22d3ee;
+        --sentinela-background: #06101f;
+        --sentinela-surface: #0b1930;
+        --sentinela-surface-elevated: #102443;
+        --sentinela-border: rgba(125, 211, 252, 0.18);
+        --sentinela-text: #f4f9ff;
+        --sentinela-text-muted: #9bb0ca;
+        --sentinela-focus: #38bdf8;
+
+        --bg-color: var(--sentinela-background);
+        --sidebar-bg: rgba(7, 20, 42, 0.94);
+        --header-bg: rgba(6, 16, 31, 0.84);
+        --text-primary: var(--sentinela-text);
+        --text-secondary: var(--sentinela-text-muted);
+        --border-color: var(--sentinela-border);
+        --glass-bg: rgba(11, 25, 48, 0.72);
 
         /* Destaques */
-        --highlight-card: #0b7a4b;
+        --highlight-card: #0f3b82;
         --highlight-text: #ffffff;
 
         /* Cards secundários */
-        --secondary-card-bg: #0f2219;
-        --secondary-card-text: #f9fff9;
-        --secondary-card-btn-bg: #7fcf6b;
-        --secondary-card-btn-text: #0c1a13;
+        --secondary-card-bg: var(--sentinela-surface);
+        --secondary-card-text: var(--sentinela-text);
+        --secondary-card-btn-bg: var(--sentinela-accent);
+        --secondary-card-btn-text: #06101f;
 
         --card-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
         --hover-scale: 1.02;
       }
 
-      /* Tema Alternative - Design em verde claro */
+      /* Tema alternativo — SentinelaAUT light */
       [data-theme="alternative"] {
-        --bg-color: #f8f9fa;
+        --sentinela-background: #f2f7fc;
+        --sentinela-surface: #ffffff;
+        --sentinela-surface-elevated: #e8f1fb;
+        --sentinela-border: rgba(30, 64, 175, 0.14);
+        --sentinela-text: #0b1930;
+        --sentinela-text-muted: #52657d;
+        --bg-color: var(--sentinela-background);
         --sidebar-bg: rgba(255, 255, 255, 0.98);
         --header-bg: rgba(255, 255, 255, 0.95);
-        --text-primary: #0b7a4b;
-        --text-secondary: #3c5f4a;
-        --border-color: rgba(11, 122, 75, 0.15);
+        --text-primary: var(--sentinela-text);
+        --text-secondary: var(--sentinela-text-muted);
+        --border-color: var(--sentinela-border);
         --glass-bg: rgba(255, 255, 255, 0.9);
 
-        --highlight-card: #0b7a4b;
+        --highlight-card: #1d4ed8;
         --highlight-text: #ffffff;
-        --secondary-card-bg: #f5fbf6;
-        --secondary-card-text: #0a0a0a;
-        --secondary-card-btn-bg: #1e9f63;
+        --secondary-card-bg: #ffffff;
+        --secondary-card-text: #0b1930;
+        --secondary-card-btn-bg: #2563eb;
         --secondary-card-btn-text: #ffffff;
 
         --card-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0,0,0,0.12);
@@ -97,12 +118,18 @@
       }
 
       .light-mode {
-        --bg-color: #f8f9fa; 
+        --sentinela-background: #f2f7fc;
+        --sentinela-surface: #ffffff;
+        --sentinela-surface-elevated: #e8f1fb;
+        --sentinela-border: rgba(30, 64, 175, 0.14);
+        --sentinela-text: #0b1930;
+        --sentinela-text-muted: #52657d;
+        --bg-color: var(--sentinela-background);
         --sidebar-bg: rgba(255, 255, 255, 0.98);
         --header-bg: rgba(255, 255, 255, 0.95);
-        --text-primary: #0a0a0a;
-        --text-secondary: #525252;
-        --border-color: rgba(0, 0, 0, 0.12);
+        --text-primary: var(--sentinela-text);
+        --text-secondary: var(--sentinela-text-muted);
+        --border-color: var(--sentinela-border);
         --glass-bg: rgba(255, 255, 255, 0.85);
         
         /* Card de Destaque (Gigante) - Light Mode */
@@ -365,7 +392,7 @@
   <body class="theme-transition">
     <div id="root">
       <!-- Fundo escuro até o React montar a tela de Login (Controle de Acesso) -->
-      <div style="position:fixed;inset:0;background:#0c1a13;" aria-hidden="true"></div>
+      <div style="position:fixed;inset:0;background:#06101f;" aria-hidden="true"></div>
     </div>
   <script type="module" src="/index.tsx"></script>
 </body>

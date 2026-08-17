@@ -1,0 +1,130 @@
+SENTINELA AUT — G7-H-B — PILOTO REAL N8N LOCAL → API V1
+Data: 2026-08-15
+Status: G7-H-B = PASS (STOP — não iniciar G7-I)
+
+Pré-requisito: G7-H-A = PASS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0   (piloto usa fake stores)
+N8N REAL            = 1   (artefatos + HTTP pilot; n8n CLI 1.114.1 instalado)
+WHATSAPP            = 0
+Event Store         = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+PostgreSQL via n8n  = 0
+service-role no n8n = 0
+
+============================================================
+1. ARQUIVOS CRIADOS / MODIFICADOS
+============================================================
+CRIADOS:
+  scripts/n8n-harness/local-api-pilot.ts
+  scripts/n8n-harness/pilot-http.mjs
+  scripts/n8n-harness/n8n-code-hmac.js
+  scripts/n8n-harness/G7-H-B-PILOT.md
+  scripts/n8n-harness/workflows/SENTINELA-G7-H-B-API-PILOT.json
+  docs/evidence/results/SENTINELA-G7-H-B-N8N-PILOT-2026-08-15.txt
+  docs/evidence/results/_tmp_g7hb_pilot_raw.json  (sem secrets)
+
+MODIFICADOS:
+  package.json (+ pilot:api / pilot:http)
+  docs/SENTINELA-AUT-N8N-CONTRACT.md
+  api/v1/health.ts (stage ETAPA_G7_H_B_N8N_PILOT)
+  api/v1/_lib/foundation.test.ts
+
+============================================================
+2. URL / TENANT PILOTO
+============================================================
+URL: http://127.0.0.1:3099
+client_id: n8n-pilot-test  (secret NÃO registrado)
+organization_id: 0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+condominium_id: 3f383313-5ec0-4d21-97c7-1b2500c933be
+
+Workflow n8n importável:
+  scripts/n8n-harness/workflows/SENTINELA-G7-H-B-API-PILOT.json
+Fluxo: Manual Trigger → Build → HMAC → HTTP → Validate → Result
+Sem webhook público. Sem WhatsApp. Sem node PostgreSQL.
+
+============================================================
+3. CENÁRIOS EXECUTADOS (pilot-http.mjs → API piloto)
+============================================================
+[x] health                     HTTP 200
+[x] protected-probe            HTTP 200
+[x] identify_resident (READ)   HTTP 200  core_executed=true
+[x] create_package WRITE       HTTP 200  core_executed=true
+    recipient=G7-H-B-N8N-TEST + Idempotency-Key
+[x] create_package replay      HTTP 200  core_executed=false
+[x] HMAC inválido              HTTP 401  INVALID_SIGNATURE
+[x] timestamp expirado         HTTP 401  TIMESTAMP_EXPIRED
+[x] tenant inválido            HTTP 403  TENANT_MISMATCH
+[x] AuthZ denied (readonly)    HTTP 403  FORBIDDEN
+[x] fingerprint mismatch       HTTP 409  IDEMPOTENCY_FINGERPRINT_MISMATCH
+[x] payload inválido           HTTP 400  INVALID_REQUEST
+[x] reservation → CONFLICT     HTTP 409  CONFLICT (sem 23P01/SQL)
+[x] pickup SENSITIVE           HTTP 409  CONFIRMATION_REQUIRED
+[x] n8n sem SQL / sem PG node  (artefato + runner)
+[x] secrets omitidos da evidência
+
+Observabilidade: handlers G7-H-A emitem [sentinela-obs] com request_id
+no servidor piloto (received → authorized → core.* → operation.*).
+
+============================================================
+4. TESTES / BUILD
+============================================================
+npm run test:run → 237 passed (17 files)
+npm run build    → PASS
+pilot-http.mjs   → all scenarios PASS (see §3)
+
+============================================================
+5. BLOCKERS
+============================================================
+Nenhum blocker estrutural.
+
+Nota operacional:
+- Execução HTTP automatizada do contrato n8n↔API foi feita via
+  pilot-http.mjs (mesmo HMAC/headers/paths do workflow).
+- Import/execução visual no UI n8n fica a cargo do desenvolvedor
+  (n8n 1.114.1 presente na máquina; workflow JSON fornecido).
+- Piloto NÃO grava em PostgreSQL LIVE (fake stores).
+
+============================================================
+6. CHECKLIST PASS
+============================================================
+[x] n8n local conversa com API V1 (HTTP piloto + workflow)
+[x] Health PASS
+[x] protected-probe PASS
+[x] READ PASS
+[x] WRITE PASS
+[x] retry/idempotência PASS
+[x] HMAC inválido rejeitado
+[x] tenant inválido rejeitado
+[x] AuthZ inválido rejeitado
+[x] fingerprint mismatch rejeitado
+[x] payload inválido rejeitado
+[x] n8n não acessa banco
+[x] n8n não possui SQL
+[x] n8n não possui service-role
+[x] SENSITIVE → CONFIRMATION_REQUIRED
+[x] observabilidade (wiring G7-H-A) ativa no servidor
+[x] nenhum secret na evidência
+[x] npm test PASS (237)
+[x] build PASS
+[x] M1–M4 / G6 intactos (sem migration)
+
+============================================================
+7. RECOMENDAÇÃO PRÓXIMO GATE
+============================================================
+NÃO iniciar WhatsApp automaticamente.
+
+Candidatos:
+  - G7-I: decisão Event Store vs logs-only após piloto
+  - OU piloto n8n apontando para API deployada (ainda sem WA)
+  - WhatsApp Cloud / webhook = gate separado explícito
+
+RESULTADO: G7-H-B = PASS (piloto controlado)
+
+STOP.

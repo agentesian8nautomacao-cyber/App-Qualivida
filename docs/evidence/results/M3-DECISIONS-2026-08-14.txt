@@ -1,0 +1,273 @@
+# M3 DECISIONS — Fechamento DR1–DR7
+
+Data/hora UTC: 2026-08-14T10:19:39Z
+Projeto: zaemlxjwhzrfmowbckmk
+Modo: SOMENTE ANÁLISE / FECHAMENTO DOCUMENTAL
+SQL M3: NÃO CRIADO
+Banco: NÃO ALTERADO
+M1: CLOSED / PASS
+M2: CLOSED / PASS
+Fonte readiness: docs/evidence/results/M3-READINESS-REVIEW-2026-08-14.txt
+
+================================================================================
+DECISION MATRIX
+================================================================================
+
+| DR | Tema | Decisão | Justificativa | Fonte | Impacto | Status |
+|----|------|---------|---------------|-------|---------|--------|
+| DR1 | timestamps | created_at/updated_at timestamptz NOT NULL DEFAULT now(); sem trigger | Auditoria explícita em §5; padrão M1/M2 | Arquitetura §5; M1/M2 | Schema M3 | CLOSED |
+| DR2 | status | status text NOT NULL DEFAULT 'active'; sem ENUM/CHECK | Lifecycle active/invited/suspended na doc; avaliação “membership ativa” em M12; padrão text M1/M2 | Arquitetura §5, §10; M1/M2 | Revogação/RBAC futuro | CLOSED |
+| DR3 | is_default | INCLUIR boolean NOT NULL DEFAULT false | Campo conceitual “membership padrão ao login”; multi-condo exige default inicial; contexto ativo continua JWT/session | Arquitetura §5 + § sessão | Login multi-site | CLOSED |
+| DR4 | resident/staff FKs | OPTIONAL — INCLUIR nullable + FK; sem ALTER legado | Arquitetura lista nullable; plano M3 omite mas §5 define; preenchimento M11 | Arquitetura §5; plano M11 | Acoplamento leve opcional | CLOSED |
+| DR5 | ON DELETE | RESTRICT em auth.users, organizations, condominiums, roles (e FKs opcionais) | Alinhado M1/M2; NOT NULL impede SET NULL; CASCADE perigoso | M1/M2 FK pattern | Integridade | CLOSED |
+| DR6 | índices | UNIQUE(auth_user_id, condominium_id) + INDEX(condominium_id); rejeitar idx role/status/org prematuros | Critério plano: índices por auth_user_id e condominium_id; UNIQUE cobre auth_user_id | Plano M3 critério sucesso | Lookups | CLOSED |
+| DR7 | org↔condo | MANTER ambos; FKs simples; SEM constraint composta em M3; invariante documental | Ambos exigidos; composite FK exige ALTER condominiums (fora escopo M3) | Plano M3; Arquitetura §5/§2; escopo M3=CREATE only | Integridade lógica | CLOSED |
+
+Decisões abertas: NENHUMA
+NEEDS HUMAN DECISION: NENHUMA
+
+================================================================================
+DR1 — TIMESTAMPS = CLOSED
+================================================================================
+Decisão:
+  created_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now()
+  Sem trigger de auto-update (igual M1/M2)
+
+Fontes:
+  Arquitetura §5: created_at, updated_at (auditoria)
+  M1 organizations/condominiums; M2 units — mesmo padrão
+
+Rejeitado: omitir timestamps (quebra consistência Fase 1)
+
+================================================================================
+DR2 — STATUS = CLOSED
+================================================================================
+Decisão:
+  status text NOT NULL DEFAULT 'active'
+  Sem ENUM
+  Sem CHECK
+
+Fontes:
+  Arquitetura §5: status active / invited / suspended
+  Arquitetura §10: membership status=active no fluxo de autorização
+  M1/M2: text + DEFAULT 'active' sem CHECK
+
+Valores documentados (app/M posteriores, sem trava DB em M3):
+  active | invited | suspended
+
+Rejeitado: omitir status (impede lifecycle/revogação e “membership ativa” em M12)
+Rejeitado: ENUM/CHECK sem especificação de migration constraint
+
+================================================================================
+DR3 — IS_DEFAULT = CLOSED
+================================================================================
+Decisão:
+  is_default boolean NOT NULL DEFAULT false
+
+Análise:
+  - User pode ter N memberships (arquitetura + testes M3) — SIM
+  - Multi-condomínio — SIM
+  - Conceito “membership padrão ao login” — SIM (§5 is_default)
+  - Contexto ativo operacional — JWT/session active_membership_id (§ sessão)
+  - is_default NÃO substitui sessão; apenas sugere membership inicial no login
+
+Fontes:
+  Arquitetura §5 campo is_default
+  Plano M3 omite (mínimo) — arquitetura prevalece para campo conceitual listado
+  Operaut: membership no site
+
+Rejeitado: omitir “porque sessão resolve” — doc lista o campo; default DB ajuda M4/M11
+Nota: UNIQUE parcial “um default por user” NÃO especificado — NÃO inventar agora
+  (app garante no máximo um is_default=true por auth_user_id)
+
+================================================================================
+DR4 — RESIDENT / STAFF FKs = CLOSED
+================================================================================
+Classificação: OPTIONAL — incluir em M3
+
+Decisão:
+  resident_id uuid NULL
+    REFERENCES public.residents(id) ON DELETE RESTRICT
+  staff_profile_id uuid NULL
+    REFERENCES public.staff(id) ON DELETE RESTRICT
+  Sem ALTER em residents/staff
+  Sem NOT NULL
+  Preenchimento: M11 / app (não M3 DML)
+
+Fontes:
+  Arquitetura §5: resident_id nullable; staff_profile_id nullable opcional
+  Plano M3 lista só auth/org/condo/role — complementar §5 sem contradizer núcleo
+  M11: backfill a partir users/staff/residents
+
+Rejeitado: REQUIRED (não obrigatório na criação)
+Rejeitado: OUT OF SCOPE total (arquitetura lista explicitamente)
+LEGACY ALTERATIONS permanece 0
+
+================================================================================
+DR5 — ON DELETE = CLOSED
+================================================================================
+Decisão por FK:
+
+| FK | Referência | ON DELETE | Motivo |
+|----|------------|-----------|--------|
+| auth_user_id | auth.users(id) | RESTRICT | Evita apagar auth com memberships; offboarding controlado |
+| organization_id | organizations(id) | RESTRICT | Igual M1; sem exclusão silenciosa |
+| condominium_id | condominiums(id) | RESTRICT | Igual M1/M2; condo→membership protegido |
+| role_id | roles(id) | RESTRICT | Não apagar role em uso |
+| resident_id | residents(id) | RESTRICT | Se presente |
+| staff_profile_id | staff(id) | RESTRICT | Se presente |
+
+ON UPDATE: default (NO ACTION) — não especificar CASCADE
+CASCADE: REJEITADO em todas
+SET NULL: REJEITADO para FKs NOT NULL; não usar em opcionais no M3 (preferir RESTRICT)
+
+Compatibilidade: M1 org→condo RESTRICT; M2 condo→units RESTRICT
+
+================================================================================
+DR6 — ÍNDICES = CLOSED
+================================================================================
+Obrigatórios:
+  1) CONSTRAINT UNIQUE (auth_user_id, condominium_id)
+     → índice composto; cobre lookups por auth_user_id (prefixo esquerdo)
+  2) CREATE INDEX idx_tenant_memberships_condominium_id (condominium_id)
+     → plano: índice por condominium_id; UNIQUE não começa por condo
+
+Opcionais rejeitados (prematuros sem justificativa de consulta no plano):
+  - INDEX (organization_id)
+  - INDEX (role_id)
+  - INDEX (status)
+  - INDEX (is_default)
+
+Não duplicar CREATE INDEX (auth_user_id, condominium_id) além da UNIQUE
+
+================================================================================
+DR7 — CONSISTÊNCIA ORG ↔ CONDO = CLOSED
+================================================================================
+Decisão: opção A (variante documentada)
+
+  - MANTER organization_id NOT NULL + condominium_id NOT NULL
+  - FK simples para organizations(id) e condominiums(id)
+  - NÃO implementar FK composta / CHECK / trigger em M3
+  - Invariante documental:
+      membership.organization_id
+        = (SELECT organization_id FROM condominiums WHERE id = membership.condominium_id)
+  - Enforcement: aplicação + M4/M11 inserts corretos
+  - Evolução futura (fora M3): FK composta
+      (condominium_id, organization_id) → condominiums(id, organization_id)
+      exigiria UNIQUE(id, organization_id) em condominiums (= ALTER M1)
+      → requer autorização separada
+
+Por que não B agora:
+  Composite FK é superior em integridade, mas altera condominiums — escopo M3
+  é CREATE tenant_memberships; LEGACY/M1 ALTER = 0
+
+Por que não C (remover organization_id):
+  Contradiz plano M3 e arquitetura §5 (organization_id FK NOT NULL)
+  Addendum/arquitetura usam org em memberships para escopo org
+
+Exemplo proibido (deve ser impedido por app/M4/M11 até constraint futura):
+  Org A + Condo de Org B
+
+================================================================================
+SCHEMA CONSOLIDADO (proposta; SQL ainda NÃO criado)
+================================================================================
+public.tenant_memberships:
+  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  auth_user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT
+  organization_id    uuid NOT NULL REFERENCES public.organizations(id) ON DELETE RESTRICT
+  condominium_id     uuid NOT NULL REFERENCES public.condominiums(id) ON DELETE RESTRICT
+  role_id            uuid NOT NULL REFERENCES public.roles(id) ON DELETE RESTRICT
+  resident_id        uuid NULL REFERENCES public.residents(id) ON DELETE RESTRICT
+  staff_profile_id   uuid NULL REFERENCES public.staff(id) ON DELETE RESTRICT
+  status             text NOT NULL DEFAULT 'active'
+  is_default         boolean NOT NULL DEFAULT false
+  created_at         timestamptz NOT NULL DEFAULT now()
+  updated_at         timestamptz NOT NULL DEFAULT now()
+  UNIQUE (auth_user_id, condominium_id)
+
+INDEX:
+  idx_tenant_memberships_condominium_id (condominium_id)
+
+Sem: tenant_id, unit_id, ENUM/CHECK status, trigger, RLS, DML
+
+================================================================================
+TENANT BOUNDARY
+================================================================================
+condominium_id = site boundary (isolamento operacional)
+organization_id = parent organization (denormalizado; invariante documental)
+unit_id = NÃO
+tenant_id = NÃO
+
+================================================================================
+UNIQUE — confirmado
+================================================================================
+UNIQUE (auth_user_id, condominium_id)
+
+Testes conceituais:
+  User A + Condo A → permitido
+  User A + Condo B → permitido
+  User B + Condo A → permitido
+  User A + Condo A duplicado → rejeitado
+UNIQUE(auth_user_id) global → NÃO
+
+================================================================================
+RBAC
+================================================================================
+role_id → roles.id somente
+NÃO alterar roles / permissions / role_permissions
+NÃO segundo catálogo RBAC
+
+================================================================================
+COMPATIBILIDADE
+================================================================================
+M1: FKs para organizations/condominiums; RESTRICT; sem ALTER M1 — OK
+M2: units não referenciada — OK
+M4: seed org+site; memberships ainda vazias; schema pronto para INSERT futuro — OK
+M11: backfill memberships; resident_id/staff_profile_id nullable disponíveis — OK
+M12+: status=active; is_member via auth_user_id+condo; has_permission via role_id — OK
+     (sem policies em M3)
+
+================================================================================
+RISCOS RESIDUAIS
+================================================================================
+| Nível | Risco | Mitigação |
+|-------|-------|-----------|
+| MEDIUM | organization_id inconsistente com condo | Invariante doc; app/M4/M11; FK composta futura |
+| LOW | múltiplos is_default=true por user | App; UNIQUE parcial futura se necessário |
+| LOW | Flag RLS auto ON sem policies | Observação M12+ |
+| LOW | resident_id/staff_profile_id órfãos lógicos | RESTRICT; backfill M11 cuidadoso |
+
+CRITICAL: nenhum após fechamento DRs
+
+================================================================================
+DECISÕES REJEITADAS
+================================================================================
+- Omitir timestamps / status
+- ENUM/CHECK status em M3
+- Omitir is_default apesar de §5
+- CASCADE em qualquer FK M3
+- Remover organization_id da membership
+- FK composta exigindo ALTER condominiums nesta fase
+- Índices role/status/org prematuros
+- tenant_id / unit_id
+
+================================================================================
+CONCLUSÃO
+================================================================================
+
+Todas DR1–DR7 = CLOSED
+
+M3 = READY FOR SQL CREATION
+
+Significado:
+  Pronto para autorização de criação do SQL 003_tenant_memberships
+  (+ rollback + pré-check), sujeito a revisão estática posterior.
+
+NÃO significa APPROVED FOR APPLY.
+NÃO criar SQL nesta tarefa.
+
+Nenhuma alteração de banco foi executada.
+Nenhum SQL M3 foi criado.
+M3 APPLY permanece BLOCKED.
+================================================================================

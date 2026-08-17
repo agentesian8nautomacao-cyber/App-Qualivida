@@ -1,0 +1,143 @@
+SENTINELA AUT — G6-1 — IDEMPOTENCY STORE SQL CREATION
+Data: 2026-08-14
+Status: G6-1 = SQL CREATED / AWAITING REVIEW
+
+Autorização: SOMENTE criar SQL M-G6-1 (api_idempotency_keys)
+APPLY: NÃO
+Wiring API: NÃO
+Banco alterado: NÃO
+
+============================================================
+VALIDAÇÃO DESTA TAREFA
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+N8N = 0
+WHATSAPP = 0
+M1–M4 = INTACTOS (não modificados)
+Confirmation Store = NÃO CRIADO
+Event Store = NÃO CRIADO
+M5+ = NÃO
+API code = NÃO ALTERADO
+
+============================================================
+ARTEFATOS CRIADOS
+============================================================
+Migration:
+  supabase/migrations/20260814190000_005_api_idempotency_keys.sql
+
+Rollback:
+  supabase/migrations/20260814190000_005_api_idempotency_keys.rollback.sql
+
+Pré-check READ-ONLY:
+  docs/evidence/M-G6-1-PRECHECK-LIVE.sql
+
+Documentação:
+  docs/SENTINELA-AUT-G6-IDEMPOTENCY.md
+
+Evidência:
+  docs/evidence/results/SENTINELA-G6-1-IDEMPOTENCY-SQL-CREATION-2026-08-14.txt
+
+============================================================
+TABELA
+============================================================
+public.api_idempotency_keys
+
+Colunas:
+  id uuid PK DEFAULT gen_random_uuid()
+  organization_id uuid NOT NULL → FK organizations ON DELETE RESTRICT
+  condominium_id uuid NOT NULL → FK condominiums ON DELETE RESTRICT
+  idempotency_key text NOT NULL
+  fingerprint text NOT NULL
+  operation text NOT NULL
+  request_id text NOT NULL
+  status text NOT NULL  CHECK IN (in_progress, completed, failed)
+  response_status integer NULL
+  response_body jsonb NULL
+  created_at timestamptz NOT NULL DEFAULT now()
+  expires_at timestamptz NOT NULL
+  completed_at timestamptz NULL
+
+UNIQUE: (organization_id, condominium_id, idempotency_key)
+CHECK: expires_at > created_at
+CHECK: campos text chave não vazios (trim)
+
+Índices:
+  idx_api_idempotency_keys_expires_at
+  idx_api_idempotency_keys_tenant (organization_id, condominium_id)
+
+TTL lógico: 48h via expires_at (app) — sem cron nesta migration
+
+============================================================
+CAMPOS NÃO INCLUÍDOS (JUSTIFICATIVA)
+============================================================
+client_id     — fora da autorização explícita desta migration; wiring/API pode
+                correlacionar via request_id; ALTER futuro se necessário
+tenant_id     — proibido
+ENUM          — projeto usa text + CHECK
+
+============================================================
+RLS
+============================================================
+NÃO criado.
+Decisão: segurança interim = service-role + fail-closed API
+  (IDEMPOTENCY_STORE_UNAVAILABLE). Revisitar com M5+/RLS.
+
+============================================================
+ROLLBACK
+============================================================
+DROP TABLE public.api_idempotency_keys;
+  — sem CASCADE
+  — sem IF EXISTS
+  — falha se dependências inesperadas ou tabela ausente
+
+============================================================
+STATIC VALIDATION (local, sem banco)
+============================================================
+Migration DDL:
+  CREATE TABLE + UNIQUE + FKs ON DELETE RESTRICT + CHECKs + indexes
+  Nenhum INSERT / UPDATE / DELETE DML
+  Nenhum CREATE POLICY / ENABLE ROW LEVEL SECURITY
+  Nenhum IF NOT EXISTS (fail-closed se já existir)
+  Nenhum CASCADE em DROP
+  "tenant_id" apenas em COMMENT de proibição (coluna NÃO criada)
+  "ON DELETE RESTRICT" nas FKs (não é DML DELETE)
+  Guards: organizations + condominiums must exist; table must be absent
+  BEGIN/COMMIT presentes
+
+Rollback:
+  DROP TABLE public.api_idempotency_keys only
+  Comentário documenta SEM CASCADE; comando sem CASCADE
+  Sem IF EXISTS
+
+Pre-check:
+  READ-ONLY SELECTs only
+  PASS criteria: orgs EXISTS + condos EXISTS + api_idempotency_keys ABSENT
+
+============================================================
+FORA DE ESCOPO (RESPEITADO)
+============================================================
+Confirmation Store
+Event Store
+M5+
+WhatsApp / n8n
+Conflito DB reservas
+Remoção login moradores
+Mudanças M1–M4
+Wiring API IdempotencyStore persistent
+
+============================================================
+PRÓXIMO GATE
+============================================================
+1. Revisão humana do SQL
+2. Executar pré-check LIVE (autorização separada)
+3. Autorização APPLY (se PASS)
+4. Wiring API = gate separado após APPLY
+
+============================================================
+RESULTADO
+============================================================
+G6-1 = SQL CREATED / AWAITING REVIEW
+
+STOP OBRIGATÓRIO NESTE GATE.
+Não aplicar. Não alterar banco. Não implementar wiring.

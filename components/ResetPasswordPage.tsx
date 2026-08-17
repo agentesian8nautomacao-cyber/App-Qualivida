@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Lock, CheckCircle, XCircle, Eye, EyeOff, Mail } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getOrRestoreRecoverySession, clearRecoveryHashFromUrl } from '../services/userAuth';
+import { BRANDING } from '../config/branding';
 
 interface ResetPasswordPageProps {
   theme?: 'dark' | 'light';
@@ -150,9 +151,7 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
   // Se ainda está verificando o link
   if (isValidRecoveryLink === null) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${
-        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-      }`}>
+      <div className={`sentinela-page min-h-screen flex items-center justify-center ${theme === 'light' ? 'light-mode' : ''}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p>Verificando link de recuperação...</p>
@@ -164,9 +163,7 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
   // Se o link não é válido
   if (isValidRecoveryLink === false) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-4 ${
-        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-      }`}>
+      <div className={`sentinela-page min-h-screen flex items-center justify-center p-4 ${theme === 'light' ? 'light-mode' : ''}`}>
         <div className="max-w-md w-full">
           <div className="text-center mb-6">
             <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
@@ -205,12 +202,13 @@ const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
 
   // Página de reset de senha válida
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 ${
-      theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'
-    }`}>
-      <div className="max-w-md w-full">
+    <div className={`sentinela-page min-h-screen flex items-center justify-center p-4 ${theme === 'light' ? 'light-mode' : ''}`}>
+      <div className="sentinela-card max-w-md w-full rounded-[36px] border p-8">
         <div className="text-center mb-6">
-          <Mail className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+          <img src={BRANDING.icon} alt="" aria-hidden="true" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-4" />
+          <p className="font-black">{BRANDING.name}</p>
+          <p className="text-[8px] uppercase tracking-[0.18em] text-[var(--sentinela-text-muted)] mb-4">{BRANDING.tagline}</p>
+          <Mail className="w-10 h-10 text-blue-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">Redefinir Senha</h1>
           <p className="text-gray-600 dark:text-gray-400">
             Digite sua nova senha abaixo

@@ -1,0 +1,216 @@
+SENTINELA AUT — G6-2 — CLOSEOUT LIVE (READ-ONLY)
+Data/hora UTC:       2026-08-14T20:47:42Z → 2026-08-14T20:47:47Z
+Projeto:             zaemlxjwhzrfmowbckmk
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+APPLY evidência:     docs/evidence/results/SENTINELA-G6-2-APPLY-2026-08-14.txt
+  APPLY:             PASS (2026-08-14T20:29:33Z → 20:29:37Z)
+Migration:           20260814200000_006_api_confirmations.sql
+Nome lógico:         006_api_confirmations
+Deep Review:         APPROVED (SENTINELA-G6-2-DEEP-REVIEW-2026-08-14.txt)
+Pre-check LIVE:      PASS (SENTINELA-G6-2-PRECHECK-LIVE-2026-08-14.txt)
+Decisões:            DR1–DR20 CLOSED (SENTINELA-G6-2-DECISIONS-2026-08-14.txt)
+
+Método:              psql READ-ONLY (SELECT / information_schema / pg_*)
+Modo:                CLOSEOUT / PÓS-APPLY READ-ONLY
+WRITE OPERATIONS THIS STEP = 0
+MIGRATIONS EXECUTED THIS STEP = 0
+DATABASE CHANGES THIS STEP = 0
+Rollback:            NÃO EXECUTADO
+Wiring / API / n8n / WhatsApp / Event Store: NÃO
+Secrets no relatório: NENHUM
+psql_exit:           0
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+utc_now          = 2026-08-14 20:47:44.056288
+
+============================================================
+2. TABELA / ROWS / COLUNAS
+============================================================
+api_confirmations EXISTS = PASS (regclass = api_confirmations)
+ROW COUNT = 0 = PASS
+COLUMN COUNT = 15 = PASS
+
+#  name                    type         null   default
+1  confirmation_id         text         NO     —
+2  token_hash              text         NO     —
+3  organization_id         uuid         NO     —
+4  condominium_id          uuid         NO     —
+5  client_id               text         NO     —
+6  operation               text         NO     —
+7  resource_id             text         NO     —
+8  operation_fingerprint   text         NO     —
+9  status                  text         NO     —
+10 prompt                  text         NO     —
+11 requester_identity      text         YES    —
+12 created_request_id      text         YES    —
+13 created_at              timestamptz  NO     now()
+14 expires_at              timestamptz  NO     —
+15 consumed_at             timestamptz  YES    —
+
+Estrutura = conforme migration 006 = PASS
+
+============================================================
+3. PRIMARY KEY
+============================================================
+PK confirmation_id (api_confirmations_pkey)
+  tipo = text = PASS
+  alinhado DR1 (cnf_… / text PK) = PASS
+
+============================================================
+4. FKs
+============================================================
+FK organization_id → public.organizations(id)
+  delete_rule = RESTRICT = PASS (DR10)
+FK condominium_id → public.condominiums(id)
+  delete_rule = RESTRICT = PASS (DR10)
+fk_count = 2 (nenhuma FK inesperada; sem FK composta org↔condo) = PASS
+
+============================================================
+5. CAMPOS DE SEGURANÇA
+============================================================
+token_hash PRESENT NOT NULL = PASS (DR2)
+plaintext token columns = 0 = PASS (DR2/DR19)
+operation_fingerprint PRESENT NOT NULL = PASS (DR5)
+operation PRESENT = PASS (DR3)
+status PRESENT = PASS (DR9)
+expires_at PRESENT NOT NULL = PASS (DR6)
+consumed_at PRESENT NULLABLE = PASS (DR7)
+
+============================================================
+6. CONSTRAINTS / CHECKs (12)
+============================================================
+PASS — todos presentes e coerentes com SQL/DR:
+
+  api_confirmations_operation_check
+    IN (pickup_package, cancel_reservation)          DR3
+  api_confirmations_status_check
+    IN (pending, consumed)                           DR9
+  api_confirmations_pending_not_consumed_check       DR7
+  api_confirmations_consumed_coherence_check         DR7
+  api_confirmations_confirmation_id_prefix_check
+    LIKE cnf_%                                       DR1
+  api_confirmations_confirmation_id_nonempty_check
+  api_confirmations_token_hash_nonempty_check
+  api_confirmations_client_id_nonempty_check
+  api_confirmations_resource_id_nonempty_check
+  api_confirmations_fingerprint_nonempty_check
+  api_confirmations_prompt_nonempty_check
+  api_confirmations_expires_after_created_check
+    expires_at > created_at                          DR6
+
+============================================================
+7. TTL
+============================================================
+expires_at timestamptz NOT NULL = PASS
+CHECK expires_at > created_at = PASS
+Default TTL 300s / clamp 30–3600 = API only (não no DDL) = PASS (DR6)
+Nenhuma alteração inesperada de TTL no banco = PASS
+
+============================================================
+8. ÍNDICES (3 — conforme migration / DR11)
+============================================================
+PASS
+  api_confirmations_pkey
+  idx_api_confirmations_expires_at
+  idx_api_confirmations_tenant (organization_id, condominium_id)
+Sem índice em token_hash = PASS (DR11)
+index_count = 3 = PASS
+
+Nota informativa (não bloqueante):
+  auth.confirmation_token_idx existe no schema auth (plataforma Supabase Auth)
+  — NÃO criado por G6-2; ≠ public.api_confirmations
+
+============================================================
+9. OBJETOS NÃO CRIADOS PELA MIGRATION
+============================================================
+Triggers user em api_confirmations = 0 = PASS (DR13)
+Functions *api_confirmation* = 0 = PASS
+cron jobs referenciando confirmation(s) = 0 = PASS (DR14)
+  (job pré-existente data-retention-daily permanece; não é G6-2)
+policies em api_confirmations = 0 = PASS (DR12)
+Tabelas adicionais G6-2 = somente public.api_confirmations = PASS
+
+============================================================
+10. INTEGRIDADE ANTERIOR
+============================================================
+G6-1 api_idempotency_keys:
+  EXISTS · rows=0 · columns=13 = INTACT / CLOSED / PASS
+M1–M4:
+  organizations EXISTS rows=1 pilot(qualivida-admin)=1
+  condominiums  EXISTS rows=1 pilot(qualivida-club-residence)=1
+  units EXISTS rows=0
+  tenant_memberships EXISTS rows=0
+M1–M4 = INTACTOS = PASS
+Nenhuma tabela operacional legada alterada neste closeout = PASS
+
+============================================================
+11. DADOS
+============================================================
+api_confirmations rows = 0 = PASS
+Seed = 0 = PASS
+Backfill = 0 = PASS
+
+============================================================
+12. MIGRATION SCOPE
+============================================================
+Somente 006_api_confirmations no gate APPLY G6-2 (evidência APPLY)
+Neste CLOSEOUT: MIGRATIONS EXECUTED = 0
+OTHER MIGRATIONS = 0 = PASS
+
+============================================================
+13. RLS (observação)
+============================================================
+relrowsecurity (rls_enabled) = t
+relforcerowsecurity          = f
+policy_count                 = 0
+Interpretação (DR12):
+  Migration NÃO criou ENABLE RLS nem POLICY.
+  Estado rls_enabled=t com 0 policies = padrão observado pós-CREATE
+  na plataforma (igual G6-1) — NÃO é alteração deste step / NÃO FAIL.
+
+============================================================
+14. COMPARAÇÃO FINAL LIVE × SQL × DR1–DR20
+============================================================
+DR1  confirmation_id text PK + cnf_%              LIVE OK
+DR2  só token_hash / sem plaintext                LIVE OK
+DR3  ops pickup_package|cancel_reservation        LIVE OK
+DR4  org+condo NOT NULL + FKs                     LIVE OK
+DR5  operation_fingerprint                        LIVE OK
+DR6  expires_at + TTL API                         LIVE OK
+DR7  pending/consumed + consumed_at               LIVE OK
+DR8  consume atômico = wiring (DDL suporte)       N/A closeout OK
+DR9  status pending|consumed                      LIVE OK
+DR10 ON DELETE RESTRICT                           LIVE OK
+DR11 índices mínimos                              LIVE OK
+DR12 sem policies da migration                    LIVE OK
+DR13 sem trigger                                  LIVE OK
+DR14 sem cron G6-2                                LIVE OK
+DR15 zero DML/seed no APPLY                       LIVE OK (rows=0)
+DR16 rollback não executado                       OK
+DR17 ≠ G6-1; G6-1 intacta                         LIVE OK
+DR18 n8n fora                                     OK
+DR19 sem secrets/plaintext                        LIVE OK
+DR20 G1–G5/G6-1/M1–M4 intactos no artefato        LIVE OK
+
+HIGH / BLOCKING divergences = 0
+
+============================================================
+RESULTADO
+============================================================
+G6-2 = CLOSED / PASS
+
+DATABASE CHANGES THIS STEP = 0
+MIGRATIONS EXECUTED THIS STEP = 0
+WRITE OPERATIONS THIS STEP = 0
+G6-1 = CLOSED / PASS
+G6-2 = CLOSED / PASS
+M1–M4 = INTACTOS
+
+STOP OBRIGATÓRIO.
+NÃO iniciar o próximo gate automaticamente.
+(Wiring persistent store / liberar Core SENSITIVE = gates futuros separados.)

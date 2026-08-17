@@ -1,0 +1,151 @@
+SENTINELA AUT — G7-C — CLOSEOUT (READ-ONLY)
+Data/hora UTC:       2026-08-15T21:49:15Z → 2026-08-15T21:49:18Z
+Projeto:             zaemlxjwhzrfmowbckmk
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+APPLY evidência:     docs/evidence/results/SENTINELA-G7-C-APPLY-2026-08-15.txt
+Migration aplicada:  supabase/migrations/20260814210000_007_reservations_no_overlap.sql
+Nome lógico:         007_reservations_no_overlap
+
+Backup pré-APPLY:
+  docs/evidence/backups/backup-pre-g7c-007-2026-08-15-213436.dump
+SHA-256:
+  19ea0428ba6167aa4f78e74722e230bd0436ad02cc6b374866934a508a420933
+
+Método:              psql READ-ONLY (SELECT / to_regclass / information_schema / pg_*)
+WRITE OPERATIONS:    0
+MIGRATIONS THIS STEP: 0
+DATABASE CHANGES THIS STEP: 0
+Rollback:            NÃO EXECUTADO
+G7-D / Event Store / n8n / WhatsApp: NÃO
+
+============================================================
+RESULTADO
+============================================================
+G7-C = CLOSED / PASS
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+utc_now          = 2026-08-15 21:49:16.74998
+
+============================================================
+2–5. CONSTRAINT
+============================================================
+public.reservations EXISTS = t (regclass=reservations)
+
+Constraint:
+  name    = reservations_area_date_slot_excl
+  EXISTS  = t
+  contype = x (EXCLUDE)
+
+Definição efetiva (LIVE):
+  EXCLUDE USING gist (
+    area_id WITH =,
+    date WITH =,
+    tsrange(
+      ((date)::timestamp without time zone + (start_time)::interval),
+      ((date)::timestamp without time zone + (end_time)::interval),
+      '[)'::text
+    ) WITH &&
+  )
+  WHERE (status IN ('scheduled','active'))
+
+Predicate confirmado:
+  scheduled + active = na constraint
+  completed / canceled = ausentes do índice/predicate (t)
+
+Half-open smoke SELECT-only:
+  10:00–12:00 ∩ 11:00–13:00 = t (bloqueio esperado)
+  10:00–12:00 ∩ 12:00–14:00 = f (adjacente permitido)
+  10:00–12:00 ∩ 09:00–10:00 = f (adjacente permitido)
+
+Comportamento status (matriz):
+  Validado na definição LIVE (WHERE parcial) + Deep Review local
+  (SENTINELA-G7-C-CONSTRAINT-DEEP-REVIEW-2026-08-14.txt):
+    scheduled sobreposto = bloqueado
+    active sobreposto    = bloqueado
+    canceled não participa
+    completed não participa
+  CLOSEOUT: sem INSERT/UPDATE no LIVE (READ-ONLY).
+
+============================================================
+6–8. ESTRUTURA / OBJETOS
+============================================================
+reservations column_count = 11
+Colunas:
+  id, area_id, resident_id, resident_name, unit,
+  date, start_time, end_time, status, created_at, updated_at
+
+condominium_id (reservations) = ABSENT
+condominium_id (areas)        = ABSENT
+areas column_count            = 7 (inalterado vs pré-APPLY)
+
+Objetos criados pela 007 (somente):
+  CONSTRAINT/INDEX reservations_area_date_slot_excl
+
+NÃO criados pela 007 (pré-existentes listados):
+  triggers:
+    trigger_enforce_reservation_resident_from_auth
+    trigger_update_reservation_resident_cache
+    update_reservations_updated_at
+  policy:
+    Allow all operations on reservations
+  functions novas pela 007 = 0
+
+Constraints em reservations:
+  reservations_area_date_slot_excl (x) ← 007
+  reservations_area_id_fkey (f)
+  reservations_pkey (p)
+  reservations_resident_id_fkey (f)
+  reservations_status_check (c)
+
+btree_gist = EXISTS
+
+============================================================
+9–10. DADOS
+============================================================
+reservations_total       = 0
+overlapping_active_pairs = 0
+
+============================================================
+11–13. PLATAFORMA
+============================================================
+M1 organizations     = EXISTS
+M1 condominiums      = EXISTS
+M2 units             = EXISTS
+M3 tenant_memberships = EXISTS
+G6-1 api_idempotency_keys = EXISTS
+G6-2 api_confirmations    = EXISTS
+M1–M4 = INTACTOS
+G6-1  = INTACTO
+G6-2  = INTACTO
+
+============================================================
+14. ESCOPO DO GATE
+============================================================
+Somente migration 007 neste gate (APPLY já evidenciado).
+CLOSEOUT: nenhuma migration adicional.
+LEGACY ALTERATIONS this step = 0
+
+============================================================
+15. FRONTEIRAS DESTA ETAPA
+============================================================
+DATABASE CHANGES THIS STEP   = 0
+MIGRATIONS EXECUTED THIS STEP = 0
+WRITE OPERATIONS             = 0
+INSERT/UPDATE/DELETE/DDL         = 0
+
+Residuais documentados (não bloqueiam CLOSEOUT):
+  MEDIUM — API mapear 23P01 → CONFLICT (G7-D)
+  MEDIUM — Core grafia canceled vs cancelled/cancelada
+  MEDIUM — empty range start=end (CHECK futuro opcional)
+
+============================================================
+STOP
+============================================================
+G7-C = CLOSED / PASS
+G7-D = NÃO INICIADO
+Event Store / n8n / WhatsApp = NÃO

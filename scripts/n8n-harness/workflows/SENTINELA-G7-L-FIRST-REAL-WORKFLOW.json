@@ -1,0 +1,124 @@
+{
+  "name": "SENTINELA AUT — G7-L — FIRST REAL WORKFLOW",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * G7-L — Normalize + route intent (orchestration only).\n * No SQL. No Supabase. No Core business rules.\n * Credentials ONLY via $env (never hardcode).\n */\nconst input = $json || {};\nconst scenario = String($env.SENTINELA_G7L_SCENARIO || input.scenario || 'identify_resident');\nconst externalMessageId = String(\n  input.external_message_id || $env.SENTINELA_G7L_EXTERNAL_MESSAGE_ID || 'g7l-pilot-msg-001'\n);\nconst requestId = String(input.request_id || `req_g7l_${externalMessageId}`.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 128));\nconst baseUrl = String($env.SENTINELA_PILOT_BASE || 'http://127.0.0.1:3099');\nconst clientId = String($env.SENTINELA_N8N_CLIENT_ID || $env.SENTINELA_HARNESS_CLIENT_ID || 'n8n-pilot-test');\n\nfunction idemKey(intent) {\n  // STABLE — same external message → same key on retry (never Date.now())\n  return `n8n:${clientId}:${intent}:${externalMessageId}:v1`.slice(0, 128);\n}\n\nconst routes = {\n  identify_resident: {\n    intent: 'IDENTIFY_RESIDENT',\n    method: 'GET',\n    path: '/api/v1/residents/identify?name=Maria%20Pilot&unit=101',\n    auth: true,\n    classification: 'READ'\n  },\n  create_package: {\n    intent: 'CREATE_PACKAGE',\n    method: 'POST',\n    path: '/api/v1/operations/packages',\n    auth: true,\n    classification: 'WRITE',\n    body: {\n      recipient: 'G7-L-N8N-TEST',\n      unit: '101',\n      type: 'caixa',\n      input_type: 'text',\n      text: 'pilot package G7-L',\n      metadata: { source: 'n8n', gate: 'G7-L' }\n    },\n    idempotencyKey: idemKey('CREATE_PACKAGE')\n  },\n  health: {\n    intent: 'HEALTH',\n    method: 'GET',\n    path: '/api/v1/health',\n    auth: false,\n    classification: 'READ'\n  },\n  unknown: {\n    intent: 'UNKNOWN',\n    method: null,\n    path: null,\n    auth: false,\n    not_supported: true,\n    decision: 'NOT_SUPPORTED'\n  }\n};\n\nconst cfg = routes[scenario] || routes.identify_resident;\nif (cfg.not_supported) {\n  return [{ json: { ok: false, decision: 'NOT_SUPPORTED', intent: cfg.intent, whatsapp: 0, sql: 0 } }];\n}\n\nreturn [{\n  json: {\n    gate: 'G7-L',\n    scenario,\n    intent: cfg.intent,\n    method: cfg.method,\n    path: cfg.path,\n    body: cfg.body || null,\n    idempotencyKey: cfg.idempotencyKey || '',\n    auth: cfg.auth !== false,\n    classification: cfg.classification,\n    baseUrl,\n    requestId,\n    external_message_id: externalMessageId,\n    whatsapp: 0,\n    postgres_node: 0\n  }\n}];"
+      },
+      "id": "normalize-route",
+      "name": "Normalize + Route Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 320],
+      "notes": "Orchestration only. No business rules. No SQL."
+    },
+    {
+      "parameters": {
+        "jsCode": "const method = String($json.method || 'GET').toUpperCase();\nconst pathWithQuery = String($json.path || '/api/v1/health');\nconst bodyObj = $json.body;\nconst body =\n  bodyObj === undefined || bodyObj === null\n    ? ''\n    : typeof bodyObj === 'string'\n      ? bodyObj\n      : JSON.stringify(bodyObj);\nconst idempotencyKey = String($json.idempotencyKey || '');\nconst baseUrl = String($json.baseUrl || $env.SENTINELA_PILOT_BASE || 'http://127.0.0.1:3099');\nconst requestId = String($json.requestId || `req_g7l_${Date.now()}`);\n\nif ($json.auth === false) {\n  return [{\n    json: {\n      ...$json,\n      method,\n      path: pathWithQuery,\n      body,\n      url: `${baseUrl}${pathWithQuery}`,\n      headers: { 'X-Request-Id': requestId },\n      meta: { canonical_version: 'v1', auth: false }\n    }\n  }];\n}\n\nconst nodeCrypto = require('crypto');\nconst secret = $env.SENTINELA_N8N_SECRET || $env.SENTINELA_HARNESS_SECRET;\nconst clientId = $env.SENTINELA_N8N_CLIENT_ID || $env.SENTINELA_HARNESS_CLIENT_ID;\nconst org = $env.SENTINELA_N8N_ORGANIZATION_ID || $env.SENTINELA_HARNESS_ORG;\nconst condo = $env.SENTINELA_N8N_CONDOMINIUM_ID || $env.SENTINELA_HARNESS_CONDO;\n\nif (!secret || !clientId || !org || !condo) {\n  throw new Error('Missing Sentinela n8n credential env vars');\n}\n\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst bodySha = nodeCrypto.createHash('sha256').update(body).digest('hex');\nconst canonical = ['v1', timestamp, method, pathWithQuery, bodySha, org, condo, idempotencyKey].join('\\n');\nconst signature = nodeCrypto.createHmac('sha256', secret).update(canonical, 'utf8').digest('hex');\n\nreturn [{\n  json: {\n    ...$json,\n    method,\n    path: pathWithQuery,\n    body,\n    url: `${baseUrl}${pathWithQuery}`,\n    headers: {\n      'X-Sentinela-Client-Id': clientId,\n      'X-Sentinela-Timestamp': timestamp,\n      'X-Sentinela-Signature': signature,\n      'X-Organization-Id': org,\n      'X-Condominium-Id': condo,\n      'X-Request-Id': requestId,\n      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),\n      ...(body ? { 'Content-Type': 'application/json' } : {})\n    },\n    meta: { canonical_version: 'v1', body_sha256: bodySha }\n  }\n}];"
+      },
+      "id": "generate-hmac",
+      "name": "Generate HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 320],
+      "notes": "Secret from env only. Never log secret/signature."
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Sentinela-Client-Id", "value": "={{ $json.headers['X-Sentinela-Client-Id'] }}" },
+            { "name": "X-Sentinela-Timestamp", "value": "={{ $json.headers['X-Sentinela-Timestamp'] }}" },
+            { "name": "X-Sentinela-Signature", "value": "={{ $json.headers['X-Sentinela-Signature'] }}" },
+            { "name": "X-Organization-Id", "value": "={{ $json.headers['X-Organization-Id'] }}" },
+            { "name": "X-Condominium-Id", "value": "={{ $json.headers['X-Condominium-Id'] }}" },
+            { "name": "X-Request-Id", "value": "={{ $json.headers['X-Request-Id'] }}" },
+            { "name": "Idempotency-Key", "value": "={{ $json.headers['Idempotency-Key'] }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body ? JSON.parse($json.body) : {} }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-request",
+      "name": "HTTP Request → Sentinela API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 320],
+      "notes": "API v1 only. No PostgreSQL node. No Supabase node. Timeout 30s."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Treat API envelope — never log secrets / confirmation tokens / HMAC.\n */\nconst prev = $('Generate HMAC').item.json;\nconst body = $json;\nconst requestId = body.request_id || prev.requestId || null;\nconst success = body.success === true;\nconst errorCode = body.error && body.error.code ? body.error.code : null;\nconst httpHint = body.error && body.error.details ? body.error.details : null;\nconst core = body.data && body.data.core_executed;\n\nconst NO_AUTO_RETRY = new Set([\n  'INVALID_REQUEST','INVALID_TIME_RANGE','FORBIDDEN','TENANT_MISMATCH',\n  'TENANT_REQUIRED','TENANT_NOT_FOUND','UNAUTHENTICATED','INVALID_SIGNATURE',\n  'TIMESTAMP_EXPIRED','IDEMPOTENCY_FINGERPRINT_MISMATCH','DUPLICATE_REQUEST',\n  'CONFIRMATION_REQUIRED','CONFIRMATION_INVALID','CONFIRMATION_EXPIRED',\n  'CONFIRMATION_ALREADY_CONSUMED','NEEDS_CONFIRMATION','RESOURCE_NOT_FOUND'\n]);\n\nlet retry_action = 'no_retry';\nif (!success) {\n  if (errorCode === 'CONFIRMATION_REQUIRED' || errorCode === 'NEEDS_CONFIRMATION') retry_action = 'confirmation_flow';\n  else if (errorCode === 'INVALID_SIGNATURE' || errorCode === 'TIMESTAMP_EXPIRED') retry_action = 're_sign';\n  else if (errorCode === 'CONFLICT') retry_action = 'retry_after_change';\n  else if (errorCode === 'INTERNAL_ERROR' || errorCode === 'IDEMPOTENCY_STORE_UNAVAILABLE') retry_action = 'retry_same_key';\n  else if (NO_AUTO_RETRY.has(errorCode)) retry_action = 'no_retry';\n}\n\nreturn [{ json: {\n  gate: 'G7-L',\n  ok: success,\n  request_id: requestId,\n  idempotency_key: prev.idempotencyKey || null,\n  intent: prev.intent,\n  operation: body.operation || (body.data && body.data.operation) || null,\n  success,\n  error_code: errorCode,\n  core_executed: core ?? false,\n  retry_action,\n  user_safe: success === true && prev.classification === 'READ',\n  whatsapp: 0,\n  sql_access: 0,\n  event_store_direct: 0,\n  note: 'Do not log headers, signature, secret, or confirmation_token'\n}}];"
+      },
+      "id": "treat-result",
+      "name": "Treat Result + Retry Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  pilot: 'G7-L',\n  workflow_active: false,\n  result: $json,\n  whatsapp: 0,\n  n8n_prod: 0,\n  postgres_node: 0,\n  supabase_direct: 0\n}}];"
+      },
+      "id": "structured-result",
+      "name": "Structured Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 320]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Normalize + Route Intent", "type": "main", "index": 0 }]]
+    },
+    "Normalize + Route Intent": {
+      "main": [[{ "node": "Generate HMAC", "type": "main", "index": 0 }]]
+    },
+    "Generate HMAC": {
+      "main": [[{ "node": "HTTP Request → Sentinela API", "type": "main", "index": 0 }]]
+    },
+    "HTTP Request → Sentinela API": {
+      "main": [[{ "node": "Treat Result + Retry Decision", "type": "main", "index": 0 }]]
+    },
+    "Treat Result + Retry Decision": {
+      "main": [[{ "node": "Structured Output", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "sentinela_gate": "G7-L",
+    "whatsapp": 0,
+    "sql": 0,
+    "active_required": false
+  },
+  "tags": [
+    { "name": "sentinela" },
+    { "name": "g7-l" },
+    { "name": "pilot" }
+  ]
+}

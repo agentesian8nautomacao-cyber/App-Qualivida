@@ -29,11 +29,10 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
   calculatePermanence,
   role = 'PORTEIRO'
 }) => {
-  const isResident = role === 'MORADOR';
   const isDoorman = role === 'PORTEIRO';
-  const canCreateVisitor = isResident; // Novo fluxo: morador cadastra antecipadamente
-  const canConfirmVisitor = isDoorman; // Porteiro confirma entrada
-  const canCheckoutVisitor = isResident; // Morador finaliza quando sair (mantém histórico)
+  const canCreateVisitor = isDoorman || ['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role);
+  const canConfirmVisitor = isDoorman;
+  const canCheckoutVisitor = isDoorman;
   const displayVisitors = visitorLogs.filter(v => {
     const displayName = v.visitorName || v.visitorNames || '';
     const matchSearch = (displayName || '').toLowerCase().includes(visitorSearch.toLowerCase()) ||
@@ -41,11 +40,10 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
                         (v.unit || '').toLowerCase().includes(visitorSearch.toLowerCase());
 
     const st = String(v.status || '').toLowerCase();
-    const showToResident = !isResident || true;
 
-    if (visitorTab === 'pending') return (st === 'pendente') && matchSearch && showToResident;
-    if (visitorTab === 'confirmed') return (st === 'confirmado') && matchSearch && showToResident;
-    if (visitorTab === 'history') return (st === 'finalizado') && matchSearch && showToResident;
+    if (visitorTab === 'pending') return (st === 'pendente') && matchSearch;
+    if (visitorTab === 'confirmed') return (st === 'confirmado') && matchSearch;
+    if (visitorTab === 'history') return (st === 'finalizado') && matchSearch;
     return false;
   });
 
@@ -90,7 +88,7 @@ const VisitorsView: React.FC<VisitorsViewProps> = ({
                : 'bg-white/5 text-white/40 hover:bg-white/10'
              }`}
            >
-             {tab === 'pending' && (isDoorman ? 'Aguardando' : 'Pendentes')}
+             {tab === 'pending' && 'Aguardando'}
              {tab === 'confirmed' && 'Confirmados'}
              {tab === 'history' && 'Histórico'}
            </button>

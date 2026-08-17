@@ -1,0 +1,191 @@
+SENTINELA AUT — G7-K-RBAC — EVIDÊNCIA
+Data: 2026-08-15
+Revalidação local: 2026-08-16 (testes + build; APPLY ainda não autorizado)
+Project: zaemlxjwhzrfmowbckmk
+
+=============================================================================
+1. STATUS
+=============================================================================
+G7-K-RBAC = PRE-CHECK PASS / AWAITING APPLY
+
+APPLY: NÃO executado
+GET /api/v1/events: NÃO iniciado
+WhatsApp: 0
+n8n produção: 0
+
+=============================================================================
+2. DECISÃO
+=============================================================================
+OPÇÃO 1 — criar permission dedicada events.view
+NÃO reutilizar sentinela.view
+NÃO criar sentinela.events.view
+
+=============================================================================
+3. PERMISSION
+=============================================================================
+key   = events.view
+label = Eventos — visualizar auditoria
+(sem coluna description no schema public.permissions)
+
+LIVE antes do APPLY:
+  events.view_count = 0 (ABSENT — OK)
+
+=============================================================================
+4. ROLES ANALISADAS
+=============================================================================
+administradora  GRANT_TARGET
+sindico         GRANT_TARGET
+cabo_turma      NO_GRANT
+porteiro        NO_GRANT
+morador         NO_GRANT
+
+=============================================================================
+5. GRANTS PROPOSTOS (migration 009)
+=============================================================================
+sindico        → events.view
+administradora → events.view
+
+Racional:
+  Event Store = auditoria/observabilidade operacional tenant-scoped.
+  Porteiro/cabo_turma/morador sem necessidade operacional de leitura do Event Store.
+  Grants explícitos; sem auto-grant a todas as roles; sem bypass por role name.
+
+=============================================================================
+6. MIGRATION
+=============================================================================
+supabase/migrations/20260815230000_009_events_view_permission.sql
+
+- INSERT permissions (key,label) ON CONFLICT DO NOTHING
+- INSERT role_permissions para sindico + administradora ON CONFLICT DO NOTHING
+- Idempotente
+- Sem DROP / CASCADE
+- Sem DML fora de permissions / role_permissions
+- Sem alteração de api_domain_events / M1–M4 / G6 / G7-C
+
+=============================================================================
+7. ROLLBACK
+=============================================================================
+supabase/migrations/20260815230000_009_events_view_permission.rollback.sql
+
+Ordem:
+  1) DELETE role_permissions WHERE permission = events.view
+  2) DELETE permissions WHERE key = events.view
+Sem CASCADE.
+
+=============================================================================
+8. PRE-CHECK LIVE
+=============================================================================
+Arquivo: docs/evidence/M-G7K-EVENTS-VIEW-RBAC-PRECHECK-LIVE.sql
+Modo: READ-ONLY
+Resultado:
+  events_view_absent       = true
+  sindico_ok               = true
+  administradora_ok        = true
+  grants_absent            = true
+  sentinela_view_intact    = true
+  permissions_count_before = 50
+  m_g7k_create_safe        = true
+
+Integridade informativa:
+  organizations / condominiums / units / tenant_memberships = EXISTS
+  api_idempotency_keys (G6-1) = EXISTS
+  api_confirmations (G6-2) = EXISTS
+  api_domain_events (G7-J) = EXISTS
+  reservations_area_date_slot_excl (G7-C) = EXISTS (contype x)
+
+=============================================================================
+9. DEEP REVIEW
+=============================================================================
+HIGH / BLOCKING findings: 0
+
+Checklist:
+  [OK] duplicate permission mitigado (ON CONFLICT DO NOTHING)
+  [OK] duplicate grants mitigado (ON CONFLICT DO NOTHING)
+  [OK] rollback remove grants antes da permission
+  [OK] roles incorretas evitadas (só sindico + administradora)
+  [OK] sem privilege escalation para morador/porteiro/cabo_turma
+  [OK] permissions existentes não UPDATE/DELETE
+  [OK] sentinela.view não alterada / não reutilizada
+  [OK] sem CASCADE no rollback
+  [OK] sem DML fora do RBAC
+  [OK] api_domain_events / RLS Event Store intocados
+  [OK] M1–M4 / G6-1 / G6-2 / G7-C intocados
+  [OK] sem endpoint / OpenAPI / Core ops neste gate
+
+MEDIUM (não bloqueante):
+  - Matriz de grants é proposta explícita; APPLY deve confirmar se cabo_turma
+    deve receber events.view no futuro (hoje: NÃO).
+
+=============================================================================
+10. TS MIRROR
+=============================================================================
+api/v1/_lib/authz/catalog.ts
+  + 'events.view' em KNOWN_RBAC_PERMISSION_KEYS
+authorizeOperation / OPERATION_PERMISSION_MAP: sem nova Core operation
+(reconhecimento via isKnownPermissionKey / filterKnownPermissionKeys)
+
+=============================================================================
+11. TESTES
+=============================================================================
+npm run test:run (2026-08-16 revalidação)
+  Test Files  19 passed
+  Tests       260 passed  (inclui 9 G7-K-RBAC)
+
+Arquivo: api/v1/_lib/authz/g7k.rbac.test.ts
+  1 events.view reconhecida
+  2 ausente → deny operação mapeada
+  3 presente no perfil
+  4 sentinela.view NÃO concede events.view
+  5 porteiro sem grant → deny
+  6 sindico/administradora com grant → allow
+  7 permissions existentes intactas no mirror
+  8 sem bypass por role name
+  + intersection permission_keys exige grant na role
+
+=============================================================================
+12. BUILD
+=============================================================================
+npm run build (2026-08-16) → PASS (vite build ✓ built in 2m 27s)
+
+=============================================================================
+13. DATABASE CHANGES (LIVE)
+=============================================================================
+0 — APPLY não executado
+Nenhuma INSERT/UPDATE/DELETE neste gate além de leitura do pre-check.
+
+=============================================================================
+14. MIGRATIONS EXECUTED
+=============================================================================
+0 — 009 AWAITING APPLY
+
+=============================================================================
+15. INTEGRIDADE
+=============================================================================
+M1–M4   intactos (não alterados)
+G6-1    intacto
+G6-2    intacto
+G7-C    intacto (reservations_area_date_slot_excl)
+G7-J    intacto (api_domain_events)
+G7-J-W  intacto (wiring não tocado)
+
+=============================================================================
+16. N8N / WHATSAPP
+=============================================================================
+N8N produção = 0
+WhatsApp     = 0
+
+=============================================================================
+17. FORA DE ESCOPO
+=============================================================================
+GET /api/v1/events — NÃO
+OpenAPI endpoint — NÃO
+Event Store query — NÃO
+painel / purge / retenção — NÃO
+
+=============================================================================
+18. PRÓXIMO GATE
+=============================================================================
+1) Autorizar APPLY 009 (confirmar grants sindico + administradora)
+2) Closeout LIVE
+3) Depois: G7-K — API events.view
+NÃO avançar automaticamente.

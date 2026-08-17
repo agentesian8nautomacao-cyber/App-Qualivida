@@ -1,0 +1,20 @@
+{
+  "source": "harness",
+  "input_type": "text",
+  "external_message_id": "harness-msg-text-001",
+  "sender": { "phone": "5511999990001" },
+  "content": {
+    "recipient": "Maria",
+    "unit": "101",
+    "type": "caixa"
+  },
+  "metadata": { "scenario": "create_package_text" },
+  "api_body": {
+    "input_type": "text",
+    "recipient": "Maria",
+    "unit": "101",
+    "type": "caixa",
+    "text": "encomenda para Maria apto 101",
+    "metadata": { "source": "n8n", "scenario": "text" }
+  }
+}

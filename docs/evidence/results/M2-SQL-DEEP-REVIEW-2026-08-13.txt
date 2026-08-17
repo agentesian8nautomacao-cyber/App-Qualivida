@@ -1,0 +1,242 @@
+# M2 SQL — Deep Review (arquivo real)
+
+Data/hora UTC: 2026-08-13T19:55:04Z
+Modo: SOMENTE LEITURA / ANÁLISE
+Migration / rollback / pré-check LIVE / APPLY: NÃO EXECUTADOS
+SQL NÃO modificado nesta tarefa
+
+================================================================================
+1. Arquivos revisados
+================================================================================
+  supabase/migrations/20260813160000_002_units.sql
+  supabase/migrations/20260813160000_002_units.rollback.sql
+  docs/evidence/M2-PRECHECK-LIVE.sql
+  docs/FASE-1-ARQUITETURA-MULTITENANT.md (§4 UNIT)
+  docs/FASE-1-MIGRATION-PLAN.md (§ M2)
+  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md
+  docs/evidence/results/M2-DECISIONS-2026-08-13.txt
+  docs/evidence/results/M2-READINESS-REVIEW-2026-08-13.txt
+  docs/evidence/results/M2-SQL-CREATION-REVIEW-2026-08-13.txt
+  docs/evidence/results/M1-CLOSEOUT-2026-08-13.txt
+
+Git (read-only):
+  pre-m1-checkpoint = aec1f5f2150633519b8a6136b9ddbff61bfed513 INTACTO
+  HEAD = 31731e7 docs: finalize gate 3 checkpoint evidence
+  Worktree DIRTY (artefatos M1/M2; esperado)
+
+================================================================================
+2. Migration
+================================================================================
+Arquivo: 20260813160000_002_units.sql (linhas 1–101)
+Status artefato: PREPARED / NOT EXECUTED
+Nome lógico: 002_units
+
+Fluxo executável:
+  L37 BEGIN
+  L40–46 DO $$ guard to_regclass('public.units') → RAISE EXCEPTION
+  L52–69 CREATE TABLE public.units (...)
+  L71–93 COMMENT ON TABLE/COLUMN
+  L101 COMMIT
+
+================================================================================
+3. Rollback
+================================================================================
+Arquivo: …002_units.rollback.sql
+  L20 BEGIN
+  L22 DROP TABLE IF EXISTS public.units;
+  L24 COMMIT
+CASCADE: ausente no DDL executável
+Compatível M5+: DROP falha se FKs unit_id existirem (sem CASCADE) — SAFE FOR M2
+
+ROLLBACK = SAFE FOR M2 (antes de FKs posteriores)
+
+================================================================================
+4. Pré-check
+================================================================================
+Arquivo: docs/evidence/M2-PRECHECK-LIVE.sql
+READ-ONLY: SIM (apenas SELECT / to_regclass)
+Verifica:
+  organizations EXISTS (L19–24)
+  condominiums EXISTS (L27–32)
+  units ABSENT (L35–40)
+  m2_create_safe (L43–51)
+CREATE/ALTER/DROP/DML: ausentes
+NÃO EXECUTADO nesta revisão
+
+PRECHECK = ADEQUADO
+
+================================================================================
+5. Estrutura
+================================================================================
+Tabela única: public.units
+
+| Campo | SQL real (linha) | Esperado | OK |
+|-------|------------------|----------|-----|
+| id | uuid PK DEFAULT gen_random_uuid() L53 | igual | SIM |
+| condominium_id | uuid NOT NULL L54 | igual | SIM |
+| code | text NOT NULL L55 | igual | SIM |
+| block | text NULL L56 | igual | SIM |
+| number | text NULL L57 | igual | SIM |
+| label | text NULL L58 | igual | SIM |
+| status | text NOT NULL DEFAULT 'active' L59 | igual | SIM |
+| metadata | jsonb NULL L60 | igual | SIM |
+| created_at | timestamptz NOT NULL DEFAULT now() L61 | igual | SIM |
+| updated_at | timestamptz NOT NULL DEFAULT now() L62 | igual | SIM |
+
+Campos extras: NENHUM
+Campos ausentes: NENHUM
+
+================================================================================
+6. Tenant boundary
+================================================================================
+units.condominium_id → condominiums.id (L63–66)
+units.organization_id: AUSENTE (executável)
+tenant_id: AUSENTE (executável)
+Cadeia: organizations → condominiums → units
+Escape do boundary: só via condominium_id inválido/errado no app;
+  FK impede condo inexistente; autorização cross-condo = M12+ (fora M2)
+
+================================================================================
+7. FK
+================================================================================
+L63–66:
+  CONSTRAINT units_condominium_id_fkey
+  FOREIGN KEY (condominium_id)
+  REFERENCES public.condominiums (id)
+  ON DELETE RESTRICT
+FK para organizations: NÃO
+ON DELETE CASCADE: NÃO
+ON UPDATE: não especificado (default NO ACTION) — OK
+FKs adicionais: NÃO
+
+================================================================================
+8. UNIQUE
+================================================================================
+L67–68: UNIQUE (condominium_id, code) — exatamente 1 no executável
+UNIQUE(code): AUSENTE
+UNIQUE(slug): AUSENTE
+Índice global em code: AUSENTE
+
+Teste conceitual:
+  A + "101" → permitido
+  B + "101" → permitido
+  A + "101" duplicado → rejeitado UNIQUE(condominium_id, code)
+
+================================================================================
+9. Índices
+================================================================================
+PK (id) — implícito L53
+UNIQUE (condominium_id, code) — L67–68
+CREATE INDEX extras: AUSENTE (scan executável)
+  sem INDEX condominium_id / status / metadata / code separados
+
+================================================================================
+10. Nullability
+================================================================================
+NOT NULL: id, condominium_id, code, status, created_at, updated_at — PASS
+NULL: block, number, label, metadata — PASS
+
+================================================================================
+11. Defaults
+================================================================================
+id: gen_random_uuid()
+status: 'active'
+created_at/updated_at: now()
+metadata: sem DEFAULT — PASS
+
+================================================================================
+12. Status
+================================================================================
+text NOT NULL DEFAULT 'active' L59
+ENUM: NÃO | CHECK: NÃO | trigger: NÃO
+
+================================================================================
+13. Metadata
+================================================================================
+jsonb NULL L60
+DEFAULT '{}': NÃO | GIN: NÃO | CHECK JSON: NÃO | trigger: NÃO
+
+================================================================================
+14. Timestamps
+================================================================================
+L61–62 conforme DR1
+trigger / function / ON UPDATE automático: NÃO
+
+================================================================================
+15. Guard
+================================================================================
+CREATE TABLE IF NOT EXISTS: NÃO
+Guard L40–46: RAISE se units EXISTS — PASS
+(Pré-check cobre pais M1; FK falharia se condominiums ausente)
+
+================================================================================
+16. Transação
+================================================================================
+BEGIN L37 … COMMIT L101
+Estado parcial: só se crash mid-transaction (rollback automático PG)
+COMMENT após CREATE dentro da mesma tx — OK
+
+================================================================================
+17. Escopo negativo (executável vs comentário)
+================================================================================
+Operações executáveis fora de CREATE/COMMENT units: NENHUMA
+Menções em comentários (organizations, seed, RLS, etc.): documentação — OK
+Falso positivo possível: "ON DELETE RESTRICT" contém DELETE (DDL FK, não DML)
+
+ALTER/INSERT/UPDATE/MERGE/POLICY/TRIGGER/FUNCTION/Storage: AUSENTES no executável
+
+================================================================================
+18. Compatibilidade M1
+================================================================================
+FK → public.condominiums(id) uuid — alinhado M1 CLOSEOUT
+Schema public — OK
+M1 não modificado
+Pré-requisito: M1 CLOSED/PASS (organizations + condominiums existem)
+
+================================================================================
+19. Compatibilidade M3+
+================================================================================
+M3 memberships: independente de units (condo/org/auth) — OK
+M4 seed org/site: não popula units no plano M4 — OK
+M5+ unit_id / backfill: units.id disponível como alvo futuro — OK
+RLS M12–M14: filtrar por condominium_id — documentado “sem RLS” no M2 — OK
+Rollback M2 após FKs M5+: bloqueado sem CASCADE — intencional
+
+================================================================================
+20. Riscos
+================================================================================
+| Nível | Risco | Nota |
+|-------|-------|------|
+| LOW | Flag RLS auto ON pós-CREATE (como M1) | Observação; policies M12+ |
+| LOW | Guard não valida pais M1 no arquivo | Pré-check + FK cobrem |
+| LOW | status 'active' vs prosa occupied/vacant | Decisão DR5 aprovada |
+| — | Bypass tenant / policy permissiva / SECURITY DEFINER | Ausentes no M2 |
+
+CRITICAL/HIGH no artefato SQL: nenhum
+
+================================================================================
+21. Divergências
+================================================================================
+Nenhuma divergência bloqueante vs decisões DR1–DR7 / escopo autorizado.
+Documental apenas: prosa §4 occupied/vacant/maintenance vs DEFAULT active (DR5).
+
+================================================================================
+22. Correções necessárias
+================================================================================
+NENHUMA antes do LIVE PRE-CHECK.
+
+================================================================================
+23. Resultado final
+================================================================================
+
+APPROVED FOR LIVE PRE-CHECK
+
+Significado:
+  SQL M2 revisado; próximo gate = M2-PRECHECK-LIVE.sql READ-ONLY
+  (autorização separada).
+
+NÃO autoriza APPLY.
+M2 APPLY permanece BLOCKED.
+
+Nenhuma alteração de banco foi executada.
+================================================================================

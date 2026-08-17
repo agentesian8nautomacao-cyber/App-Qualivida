@@ -1,0 +1,121 @@
+SENTINELA AUT — G7-A — SERVER ADAPTER
+Data: 2026-08-14
+Status: G7-A = PASS
+
+Pré-requisitos:
+  G7 audit = READY FOR IMPLEMENTATION
+  G6-1 / G6-2 = CLOSED / PASS
+  M1–M4 = CLOSED / PASS
+
+============================================================
+ESCOPO CONFIRMADO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+G7-B / G7-C / G7-D / G7-E / G7-F = NÃO
+Event Store / M5+ = NÃO
+Handlers API wiring = NÃO (composition root futuro)
+Gates flip = NÃO
+
+============================================================
+ARQUIVOS CRIADOS
+============================================================
+api/v1/_lib/supabase/adminClient.ts
+  createServerSupabaseClient(env) — service-role only; null se credencial ausente
+  (sem fallback anon / memória)
+
+api/v1/_lib/execution/dbStatus.ts
+  mappers de status package/occurrence (sem dataService)
+
+api/v1/_lib/execution/supabasePersistence.ts
+  createSupabaseCorePersistence({ organizationId, condominiumId, client, tenantDirectory? })
+  getPersistenceTenantBinding(persistence)
+  Implementa CorePersistence:
+    savePackage / updatePackage / getPackageById
+    saveOccurrence / updateOccurrence
+    saveReservation / deleteReservation
+    getBoletos
+    createNotification
+  Tenant fail-closed (ausente / mismatch via directory)
+  Binding org+condo imutável por instância
+  Sem Dexie / IndexedDB / localStorage / React / browser APIs
+  Sem fallback silencioso para memória
+
+api/v1/_lib/execution/fakePersistenceDb.ts
+  Fake client TEST_ONLY (não é fallback de produção)
+
+api/v1/_lib/execution/g7a.server-adapter.test.ts
+  Cenários A–I
+
+============================================================
+ARQUIVOS MODIFICADOS
+============================================================
+api/v1/_lib/auth/tenant.ts
+  getAdminClient → reutiliza createServerSupabaseClient
+
+.env.example
+  nota SUPABASE_URL server-only
+
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+  G7-A = PASS
+
+Preservado (não removido):
+  sentinela/core/adapters/persistence.ts getDefaultPersistence → dataService/Dexie (browser)
+  api/v1/_lib/execution/memoryPersistence.ts (TEST_ONLY)
+
+============================================================
+FRONTEIRA
+============================================================
+Browser:  Core → getDefaultPersistence() → dataService (Dexie) — intacto
+Server:   Core → createSupabaseCorePersistence(...) → Supabase/Postgres
+
+API handlers ainda NÃO injetam o Server Adapter (G7-B+ / composition root).
+
+identify_resident / identify_unit:
+  não usam CorePersistence; ResidentsProvider = G7-B (não nesta etapa).
+  Adapter G7-A cobre persistência das ops que escrevem/leem DB via Core.
+
+============================================================
+TENANT / M5 RESIDUAL
+============================================================
+Adapter exige organization_id + condominium_id.
+Com tenantDirectory: valida condo∈org (TENANT_MISMATCH fail-closed).
+Tabelas operacionais sem colunas org/condo: isolamento de linha = M5+ (documentado).
+Sem inferência de tenant global.
+
+============================================================
+TESTES
+============================================================
+G7-A (9):
+  A leitura válida
+  B escrita válida
+  C tenant ausente
+  D tenant diferente / mismatch
+  E resource inexistente
+  F erro do banco
+  G sem browser APIs
+  H sem fallback silencioso
+  I isolamento org+condo binding
+
+Suíte completa:
+  Test Files  9 passed (9)
+  Tests       117 passed (117)
+  Exit        0
+
+============================================================
+BUILD
+============================================================
+npm run build → PASS (exit 0)
+  vite build ✓ built
+  Sem TypeScript errors bloqueantes
+
+============================================================
+RESULTADO
+============================================================
+G7-A = PASS
+
+STOP OBRIGATÓRIO.
+Não implementar G7-B automaticamente.

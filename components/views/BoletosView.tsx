@@ -109,9 +109,10 @@ const BoletosView: React.FC<BoletosViewProps> = ({
       return;
     }
 
-    // Verificar permissões - apenas administradores
-    if (role === 'MORADOR') {
-      console.log('[BoletosView] Acesso negado: usuário MORADOR');
+    // Verificar permissões - apenas administradores e portaria
+    const staffRoles = ['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA', 'PORTEIRO'];
+    if (!staffRoles.includes(role)) {
+      console.log('[BoletosView] Acesso negado: perfil sem permissão de importação');
       toast.error('Acesso restrito. Apenas síndicos e porteiros podem importar boletos.');
       return;
     }
@@ -462,21 +463,6 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                     </button>
                   )}
 
-                  {role === 'MORADOR' && onDeleteBoleto && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (window.confirm(`Tem certeza que deseja excluir o boleto de ${boleto.referenceMonth}?`)) {
-                          onDeleteBoleto(boleto);
-                        }
-                      }}
-                      className="p-2 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all opacity-80 group-hover:opacity-100"
-                      title="Excluir boleto"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  )}
                 </div>
 
                 <button
@@ -713,20 +699,6 @@ const BoletosView: React.FC<BoletosViewProps> = ({
                       </button>
                     )}
 
-                    {role === 'MORADOR' && onDeleteBoleto && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Tem certeza que deseja excluir o boleto de ${selectedBoleto.referenceMonth}?`)) {
-                            onDeleteBoleto(selectedBoleto);
-                            setSelectedBoleto(null);
-                          }
-                        }}
-                        className="w-full px-6 py-4 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-all flex items-center justify-center gap-3 text-sm font-black uppercase tracking-wider text-red-300"
-                        title="Excluir boleto"
-                      >
-                        <Trash2 className="w-5 h-5" /> EXCLUIR BOLETO
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>

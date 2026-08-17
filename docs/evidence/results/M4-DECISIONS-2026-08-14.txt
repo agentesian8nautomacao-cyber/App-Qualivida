@@ -1,0 +1,514 @@
+# M4 DECISIONS — Preparação de fechamento DR1–DR6
+
+Data/hora UTC (preparação): 2026-08-14T11:28:00Z
+Data/hora UTC (HUMAN DR2/DR3): 2026-08-14 (aprovação explícita)
+Projeto:              zaemlxjwhzrfmowbckmk
+Modo:                 SOMENTE DOCUMENTAÇÃO DE DECISÃO
+SQL M4:               NÃO CRIADO
+Rollback M4:          NÃO CRIADO
+Banco:                NÃO ALTERADO
+DDL/DML/seed/APPLY:   NÃO EXECUTADOS
+M4 APPLY:             BLOCKED
+Status atual:         M4 = READY FOR SQL CREATION (DR1–DR6 CLOSED)
+
+Fonte readiness: docs/evidence/results/M4-READINESS-REVIEW-2026-08-14.txt
+Fontes normativas:
+  docs/FASE-1-MIGRATION-PLAN.md § M4 + regras DML/runbook
+  docs/FASE-1-ARQUITETURA-MULTITENANT.md §2/§3/§14
+  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md (site = condominiums)
+  Decisões M1–M3 (schema LIVE + evidências CLOSED)
+  LIVE READ-ONLY (readiness 2026-08-14): org/condo/units/memberships rows=0;
+    roles=5, residents=4, staff=1
+
+Regra desta preparação:
+  Fechar só o que a documentação (ou padrão M1–M3 já fechado) determina.
+  Caso contrário: DECISION REQUIRED / HUMAN APPROVAL.
+  Não inventar name legal, slugs, UUIDs literais, nem expandir escopo do seed.
+
+================================================================================
+ESCOPO M4 — CONFIRMAÇÕES DOCUMENTAIS (não são DRs; base para decisões)
+================================================================================
+1) M4 deve criar registros piloto?
+   SIM — plano: seed Organization + site Qualivida (004_pilot_seed).
+
+2) Qual organização recebe o piloto?
+   A organization criada pelo próprio M4 (única org piloto).
+   Não há org pré-existente (LIVE rows=0).
+
+3) Qual condomínio/site recebe o piloto?
+   O site criado pelo M4 com name = "Qualivida Club Residence"
+   (arquitetura §14; vertical='condominium').
+
+4) Units criadas ou referenciadas?
+   NÃO em M4. units existe (M2) vazia; população fora de M4.
+
+5) residents/staff existentes reutilizados em M4?
+   NÃO em M4. Contagens legado intactas; associação → M11 / M5+.
+
+6) tenant_memberships criadas em M4?
+   NÃO — M11 (plano + readiness D-CLOSED-5).
+
+7) roles existentes reutilizadas?
+   SIM como catálogo futuro; M4 NÃO INSERT em roles.
+   LIVE names: morador, porteiro, cabo_turma, administradora, sindico.
+
+8) IDs preservados ou gerados?
+   Ver DR4 (não inventar UUIDs literais sem aprovação humana).
+
+9–12) Duplicação / rollback / reexecução / idempotência:
+   Ver DR5 e DR6.
+
+Tenant isolation:
+  organization → condominium/site → (units depois) → (memberships M11)
+  M4 só cria org + 1 site; sem tenant_id; sem organization_id extra.
+  Cross-tenant imediato: baixo (1:1 piloto; memberships=0).
+  DR7 M3 (org↔membership) adiado — M4 não popula memberships.
+
+Compatibilidade: NÃO alterar schema de
+  organizations, condominiums, units, tenant_memberships, roles, residents, staff.
+
+================================================================================
+ROLLBACK — MATRIZ (documental; NOT EXECUTED)
+================================================================================
+A) Rollback somente de schema (M1–M3 DDL):
+   Independente de M4 enquanto org/condo rows=0.
+   Após M4 populado: DROP organizations/condominiums exige limpar seed antes
+   (ou restore); M1 rollback já condicionava “só se M4 não rodou”.
+
+B) Rollback após seed (só M4, sem M5+):
+   DELETE condominiums (piloto) → DELETE organizations (piloto).
+   Ordem obrigatória por ON DELETE RESTRICT.
+   Snapshot pré-M4 preferível (plano); snapshot pós-M4 (runbook).
+
+C) Rollback após relacionamentos (units/memberships apontando ao site):
+   DELETE seed pode falhar por RESTRICT.
+   Sem CASCADE. Preferir restore snapshot.
+
+D) Rollback depois que M5+ / app dependem do M4:
+   Rollback DELETE simples = INSEGURO / PROIBIDO operacionalmente.
+   Recuperação = restore snapshot.
+
+================================================================================
+RESUMO DO STATUS DAS DRs
+================================================================================
+| DR | Tema                         | Status                       |
+|----|------------------------------|------------------------------|
+| DR1| organizations.name           | CLOSED (literal §14)         |
+| DR2| organizations.slug           | CLOSED (HUMAN 2026-08-14)    |
+| DR3| condominiums.slug            | CLOSED (HUMAN 2026-08-14)    |
+| DR4| IDs fixos vs gerados         | CLOSED (gerar + capturar)    |
+| DR5| Idempotência / reexecução    | CLOSED (fail-closed guard)   |
+| DR6| Rollback concreto            | CLOSED (snapshot + DELETE)   |
+
+Decisões abertas restantes: nenhuma
+→ M4 = READY FOR SQL CREATION
+   (NÃO autoriza APPLY; NÃO cria SQL nesta tarefa de aprovação)
+
+Histórico: até 2026-08-14T11:28Z, DR2/DR3 estavam HUMAN APPROVAL
+→ M4 = NEEDS REVISION. Fechadas abaixo por autorização explícita.
+
+================================================================================
+DR1 — ORGANIZATION NAME
+================================================================================
+1. Pergunta:
+   Qual valor exato de organizations.name no seed M4?
+
+2. Contexto:
+   Arquitetura §14: Organization = "Empresa/Administradora piloto"
+   (nome legal a confirmar com negócio).
+   Plano M4: seed Organization piloto; não define outro nome.
+
+3. Estado atual:
+   LIVE organizations.rows = 0.
+   Schema: name text NOT NULL (sem default).
+
+4. Opções:
+   A) Literal "Empresa/Administradora piloto"
+   B) Nome legal real (negócio) — não documentado no repo
+   C) Placeholder técnico distinto (ex. Operaut…) — não documentado
+
+5. Recomendação:
+   A
+
+6. Justificativa:
+   Único valor explícito na documentação normativa (§14).
+   A frase “nome legal a confirmar” autoriza rename futuro pelo negócio,
+   não exige inventar outro literal agora nem bloquear o seed com valor
+   ausente no repo.
+   Opções B/C exigiriam inventar ou input humano externo ao documento.
+
+7. Impacto em M4:
+   INSERT organizations.name = 'Empresa/Administradora piloto'
+
+8. Impacto em M5+:
+   Display/runbook; UPDATE futuro de name não quebra FKs/UUIDs.
+   Storage paths usam UUID (arquitetura), não name.
+
+9. Dependências:
+   Nenhuma hard. Rename legal posterior = mudança de dados fora do SQL M4.
+
+10. Risco:
+    LOW — placeholder documentado; possível UPDATE cosmético depois.
+
+11. Decisão proposta:
+    CLOSED
+    organizations.name = 'Empresa/Administradora piloto'
+    Residual: se o negócio fornecer razão social antes do APPLY, pode
+    substituir via HUMAN UPDATE desta decisão (sem mudar schema).
+
+================================================================================
+DR2 — ORGANIZATION SLUG
+================================================================================
+1. Pergunta:
+   Qual organizations.slug (UNIQUE global) no seed?
+
+2. Contexto:
+   Schema M1: slug text NOT NULL + UNIQUE (slug).
+   Docs Fase 1 / addendum NÃO fixam o slug da org piloto.
+   Storage paths: organizations/{org_id}/… (UUID), não slug.
+
+3. Estado atual:
+   LIVE: nenhuma row; UNIQUE vazia.
+   Sem valor normativo no plano/arquitetura.
+
+4. Opções:
+   A) "piloto" / "pilot"
+   B) "qualivida-admin" / "qualivida"
+   C) derivado do name legal (depende de DR1/B)
+
+5. Recomendação (não fechada):
+   B — "qualivida-admin"
+   (legível, amarra ao piloto Qualivida, evita colisão genérica "piloto")
+
+6. Justificativa da NÃO-fechamento:
+   Fechar exigiria inventar string não presente nas fontes.
+   Regras desta tarefa: não inventar requisitos / valores não documentados.
+   Recomendação existe para acelerar aprovação humana; não é fechamento.
+
+7. Impacto em M4:
+   Bloqueia redação final do INSERT até HUMAN APPROVAL.
+
+8. Impacto em M5+:
+   UNIQUE global; scripts futuros podem filtrar por slug.
+   Paths Storage não dependem do slug.
+
+9. Dependências:
+   Preferível alinhamento com DR1; independente de schema.
+
+10. Risco:
+    HIGH se SQL for escrito antes da aprovação (valor inventado).
+
+11. Decisão proposta (preparação 11:28Z):
+    DECISION REQUIRED / HUMAN APPROVAL
+    Precisa decidir o literal exato de organizations.slug.
+    Sugestão para aprovação: 'qualivida-admin'
+
+12. HUMAN APPROVAL (2026-08-14 — autorização explícita do operador):
+    CLOSED
+    organizations.slug = 'qualivida-admin'
+    Compatível com UNIQUE global (organizations_slug_key).
+    Validação URL-safe: ASCII, lowercase, hífens, sem espaços, sem acentos = PASS.
+
+================================================================================
+DR3 — CONDOMINIUM SLUG
+================================================================================
+1. Pergunta:
+   Qual condominiums.slug (UNIQUE por organization_id) no seed?
+
+2. Contexto:
+   name do site FECHADO: "Qualivida Club Residence" (§14 + plano M4).
+   Schema: slug NOT NULL + UNIQUE (organization_id, slug).
+   Docs NÃO fixam o slug do site.
+
+3. Estado atual:
+   LIVE condominiums.rows = 0.
+
+4. Opções:
+   A) "qualivida-club-residence" (slugify do name)
+   B) "qualivida"
+   C) "qcr" / curto
+
+5. Recomendação (não fechada):
+   A — "qualivida-club-residence"
+
+6. Justificativa da NÃO-fechamento:
+   Embora A seja derivação natural do name documentado, o literal do slug
+   não está nas fontes. Inventar slug viola a regra desta preparação.
+   Recomendação A fica para aprovação humana explícita.
+
+7. Impacto em M4:
+   Bloqueia INSERT condominiums até HUMAN APPROVAL.
+
+8. Impacto em M5+:
+   Identificador URL-safe scoped; runbook; filtros por slug.
+   Isolamento operacional permanece em condominium_id (UUID).
+
+9. Dependências:
+   Nenhuma hard com DR2 (escopos UNIQUE diferentes).
+
+10. Risco:
+    HIGH se SQL inventar slug sem aprovação.
+
+11. Decisão proposta (preparação 11:28Z):
+    DECISION REQUIRED / HUMAN APPROVAL
+    Precisa decidir o literal exato de condominiums.slug.
+    Sugestão para aprovação: 'qualivida-club-residence'
+    name permanece: 'Qualivida Club Residence'
+    vertical permanece: 'condominium'
+
+12. HUMAN APPROVAL (2026-08-14 — autorização explícita do operador):
+    CLOSED
+    condominiums.slug = 'qualivida-club-residence'
+    Compatível com UNIQUE (organization_id, slug)
+      (condominiums_organization_id_slug_key).
+    Validação URL-safe: ASCII, lowercase, hífens, sem espaços, sem acentos = PASS.
+    name permanece: 'Qualivida Club Residence'
+    vertical permanece: 'condominium'
+
+================================================================================
+DR4 — IDS FIXOS vs gen_random_uuid()
+================================================================================
+1. Pergunta:
+   IDs piloto devem ser UUIDs fixos no SQL ou gerados e capturados no runbook?
+
+2. Contexto:
+   Critério M4: "IDs piloto no runbook".
+   Schema LIVE: id DEFAULT gen_random_uuid() (M1).
+   Regras: não assumir / inventar IDs.
+   Opção A (UUIDs literais no SQL) exigiria inventar valores sem fonte.
+
+3. Estado atual:
+   Tabelas vazias; nenhum ID piloto reservado em docs.
+
+4. Opções:
+   A) UUIDs fixos no migration
+   B) DEFAULT gen_random_uuid() + SELECT/RETURNING gravado na evidência APPLY/runbook
+   C) CTE/RETURNING em evidência (variante de B)
+
+5. Recomendação:
+   B (equivalente C operacionalmente)
+
+6. Justificativa:
+   Satisfaz “IDs no runbook” sem inventar UUIDs no repositório.
+   Alinha ao DEFAULT já CLOSED em M1.
+   Opção A só seria CLOSED se o operador fornecer UUIDs explícitos
+   (HUMAN) — não há esses valores nas fontes.
+
+7. Impacto em M4:
+   INSERT sem id explícito (ou DEFAULT).
+   Pós-INSERT obrigatório: capturar organization_id e condominium_id
+   em docs/evidence/results (APPLY) + runbook.
+
+8. Impacto em M5+:
+   Scripts seguintes referenciam IDs do runbook/evidência, não hardcoded
+   no SQL M4.
+   Rollback DELETE usa os IDs capturados.
+
+9. Dependências:
+   DR5 (guard por slug/existência, não só por UUID fixo).
+   DR6 (DELETE por IDs capturados).
+
+10. Risco:
+    MEDIUM — IDs diferem entre ambientes se M4 for reaplicado em outro DB;
+    mitiga com evidência por ambiente. Aceitável no piloto single-prod.
+
+11. Decisão proposta:
+    CLOSED
+    Gerar via gen_random_uuid() (default M1).
+    Capturar IDs no APPLY evidence / runbook.
+    NÃO embutir UUIDs literais inventados no SQL M4.
+    (Se no futuro o operador quiser IDs fixos, reabrir DR4 com valores
+     fornecidos explicitamente.)
+
+================================================================================
+DR5 — IDEMPOTÊNCIA / REEXECUÇÃO
+================================================================================
+1. Pergunta:
+   Como o SQL M4 se comporta se reaplicado? Deve ser estritamente idempotente?
+
+2. Contexto:
+   Plano: DML M4 em transação; não especifica ON CONFLICT.
+   M1–M3: guards fail-closed (EXCEPTION se pré-condição falhar).
+   LIVE hoje: rows=0 — primeira aplicação limpa.
+
+3. Estado atual:
+   Sem seed; reexecução hoje criaria 1ª vez.
+
+4. Opções:
+   A) Guard DO $$: se piloto já existir → RAISE EXCEPTION BLOCKED
+   B) INSERT ON CONFLICT DO NOTHING + asserts 1/1
+   C) Sem guard (só doc “aplicar uma vez”)
+
+5. Recomendação:
+   A — fail-closed (não estritamente idempotente “silent success”)
+
+6. Justificativa:
+   Consistência com M1–M3 (não aplicar em silêncio se estado inesperado).
+   Idempotência “estrita” (B) não é exigida pelo plano; risco de mascarar
+   estado parcial.
+   Critério de existência do guard (sem inventar UUID):
+     - COUNT(*) FROM organizations > 0 OR condominiums > 0
+       OU match por slug aprovado (DR2/DR3) quando disponíveis.
+   Até DR2/DR3 fecharem, o critério COUNT>0 nas duas tabelas piloto
+   (esperado 0→1) é suficiente no piloto single-tenant inicial.
+
+7. Impacto em M4:
+   Pré-INSERT guard; transação única; 2ª execução = BLOCKED (não duplica).
+
+8. Impacto em M5+:
+   Evita segundo site/org acidental antes de backfills.
+
+9. Dependências:
+   DR2/DR3 melhoram precisão do guard por slug; não bloqueiam a escolha A.
+   DR4: guard não depende de UUID fixo.
+
+10. Risco:
+    LOW — fail-closed é mais seguro que DO NOTHING silencioso.
+
+11. Decisão proposta:
+    CLOSED
+    Fail-closed guard (padrão M1–M3).
+    M4 NÃO é silent-idempotent.
+    Reexecução segura = NÃO (deve falhar se seed já presente).
+    Duplicação impedida por UNIQUE(slug) + guard explícito.
+
+================================================================================
+DR6 — ROLLBACK CONCRETO PÓS-SEED
+================================================================================
+1. Pergunta:
+   Artefato rollback M4 = DELETE por IDs, snapshot-only, ou ambos?
+
+2. Contexto:
+   Plano: “Snapshot pré-M4 preferível”; runbook “Snapshot pós-M4”.
+   M1 rollback DROP condicionado a M4 não ter rodado.
+   FK ON DELETE RESTRICT (M1).
+
+3. Estado atual:
+   Sem seed; rollback M4 ainda não necessário.
+
+4. Opções:
+   A) Snapshot-only
+   B) DELETE por IDs apenas
+   C) DELETE por IDs (válido só sem dependentes) + snapshot obrigatório;
+      PROIBIDO DELETE após M5+ / FKs → restore
+
+5. Recomendação:
+   C
+
+6. Justificativa:
+   Combina o que o plano exige (snapshot) com caminho operacional
+   imediato pós-M4 (DELETE ordenado) documentado no readiness.
+   Não inventa CASCADE.
+   Explicitamente registra limite de segurança (matriz A–D acima).
+
+7. Impacto em M4:
+   Rollback file documental deve conter:
+     - pré-requisito: snapshot
+     - DELETE site piloto → DELETE org piloto (IDs do runbook/evidência)
+     - verificação rows=0
+     - aviso: não usar após dependentes
+
+8. Impacto em M5+:
+   Após units/memberships/legado com FK ao site: rollback M4 DELETE = PROIBIDO;
+   usar restore snapshot.
+
+9. Dependências:
+   DR4 (IDs capturados para DELETE).
+   Snapshot pré-APPLY (gate operacional, não SQL creation).
+
+10. Risco:
+    HIGH se operador rodar DELETE após M5+ sem restore.
+    Mitigação: texto PROIBIDO no rollback + evidência.
+
+11. Decisão proposta:
+    CLOSED
+    Snapshot pré-M4 obrigatório antes de APPLY futuro.
+    Script rollback = DELETE ordenado por IDs capturados, somente enquanto
+    não houver FKs dependentes.
+    Após M5+ / relacionamentos: rollback = restore snapshot apenas.
+    Nesta etapa: rollback = NOT EXECUTED.
+
+================================================================================
+COMPATIBILIDADE / ISOLAMENTO — CHECKLIST
+================================================================================
+[x] Sem CREATE/ALTER em M1–M3 schemas
+[x] Sem INSERT units / memberships / roles / residents / staff
+[x] Sem tenant_id
+[x] Sem organization_id redundante além do FK site→org (já M1)
+[x] organization_id do site = id da org piloto (mesma TX) — D-CLOSED readiness
+[x] Cross-tenant residual membership (DR7 M3) fora de M4
+[x] roles reutilizadas depois (M11); não tocadas em M4
+
+================================================================================
+GIT
+================================================================================
+git status --short: DIRTY (evidências/migrations untracked; plan modified)
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 — NÃO movida
+Sem commit / push / tag / reset / clean.
+
+================================================================================
+RESULTADO (histórico preparação 2026-08-14T11:28Z — PRESERVADO)
+================================================================================
+DR1 = CLOSED
+DR2 = DECISION REQUIRED / HUMAN APPROVAL  (slug org)
+DR3 = DECISION REQUIRED / HUMAN APPROVAL  (slug site)
+DR4 = CLOSED
+DR5 = CLOSED
+DR6 = CLOSED
+
+Decisões abertas restantes (naquele momento):
+  - DR2 organizations.slug (sugestão: qualivida-admin)
+  - DR3 condominiums.slug (sugestão: qualivida-club-residence)
+
+M4 = NEEDS REVISION  (estado histórico)
+
+Motivo histórico: slugs piloto não estavam nas fontes; exigiam aprovação humana.
+
+================================================================================
+ADDENDUM — HUMAN APPROVAL DR2/DR3 (2026-08-14)
+================================================================================
+Autorização explícita do operador — somente documentação.
+Banco: NÃO ALTERADO
+SQL M4: NÃO CRIADO
+Migration / seed / INSERT / UPDATE / rollback / APPLY: NÃO EXECUTADOS
+
+DR2 CLOSED = organizations.slug = 'qualivida-admin'
+  UNIQUE: global (organizations_slug_key) — PASS (compatível)
+  Formato: ASCII / URL-safe / lowercase / hífens / sem espaços / sem acentos — PASS
+
+DR3 CLOSED = condominiums.slug = 'qualivida-club-residence'
+  UNIQUE: (organization_id, slug) — PASS (compatível)
+  Formato: ASCII / URL-safe / lowercase / hífens / sem espaços / sem acentos — PASS
+
+Valores finais do seed (documentais — ainda NÃO aplicados):
+  organizations.name = 'Empresa/Administradora piloto'   (DR1)
+  organizations.slug = 'qualivida-admin'                 (DR2)
+  condominiums.name  = 'Qualivida Club Residence'        (doc §14)
+  condominiums.slug  = 'qualivida-club-residence'        (DR3)
+  condominiums.vertical = 'condominium'                  (CHECK M1)
+  status defaults = 'active'                             (M1)
+  IDs = gen_random_uuid() + captura runbook              (DR4)
+  Guard fail-closed                                      (DR5)
+  Rollback = snapshot + DELETE ordenado (pré-deps)       (DR6)
+
+Status consolidado:
+  DR1 = CLOSED
+  DR2 = CLOSED
+  DR3 = CLOSED
+  DR4 = CLOSED
+  DR5 = CLOSED
+  DR6 = CLOSED
+
+Decisões abertas restantes: nenhuma
+
+M4 = READY FOR SQL CREATION
+
+IMPORTANTE:
+  READY FOR SQL CREATION NÃO autoriza criar SQL automaticamente nesta tarefa.
+  READY FOR SQL CREATION NÃO autoriza APPLY.
+  M4 APPLY permanece BLOCKED.
+  Nenhuma alteração de banco foi executada.
+  Nenhum SQL M4 foi criado.
+
+Git (somente status): worktree DIRTY; pre-m1-checkpoint intacta
+  aec1f5f2150633519b8a6136b9ddbff61bfed513

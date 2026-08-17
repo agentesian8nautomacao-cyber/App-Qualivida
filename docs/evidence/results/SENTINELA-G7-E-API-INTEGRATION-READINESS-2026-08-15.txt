@@ -1,0 +1,85 @@
+SENTINELA AUT — G7-E — API INTEGRATION READINESS
+Data: 2026-08-15
+Status: G7-E = PASS
+
+Pré-requisito: G7-D = PASS
+  (docs/evidence/results/SENTINELA-G7-D-CONTRACT-2026-08-15.txt)
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+n8n workflow        = 0
+WhatsApp            = 0
+Event Store         = 0
+OCR/STT/vision      = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+G7-C constraint 007 = INTACTA
+G7-D contract       = PRESERVADO
+
+============================================================
+OBJETIVO
+============================================================
+Preparar a API Sentinela para consumo determinístico, seguro,
+idempotente e observável pelo n8n como orquestrador externo.
+NÃO conectar WhatsApp. NÃO criar workflow n8n.
+
+Fluxo oficial documentado:
+n8n → API → HMAC → Tenant → AuthZ → classificação →
+Idempotency/Confirmation → Core → Adapter → PostgreSQL
+
+============================================================
+ENTREGÁVEIS
+============================================================
+1. docs/SENTINELA-AUT-API-CONTRACT.md
+   - Inventário READ / WRITE / SENSITIVE
+   - HMAC + canonical v1
+   - Idempotency / Confirmation / Tenant / request_id
+   - Multimídia normalizada + barcode→create_package
+   - Erros, HTTP status, retry, timeout, limits, observability
+
+2. docs/openapi/sentinela-api-v1.yaml
+   - Schema OpenAPI versionado (documenta handlers existentes;
+     não gera API paralela)
+
+3. Testes externos: api/v1/_lib/execution/g7e.api-contract.test.ts
+   - request válido, HMAC inválido, timestamp expirado
+   - tenant inválido, permission denied
+   - idempotency retry + fingerprint mismatch
+   - confirmation required + consumed
+   - reservation conflict / INVALID_TIME_RANGE
+   - not found / needs confirmation path
+   - sanitized errors + HTTP map + limits + body oversized
+
+4. Ajustes de readiness (sem regra de negócio duplicada):
+   - api/v1/_lib/requestIds.ts — aceita X-Request-Id seguro ou gera
+   - api/v1/_lib/withCoreExecution.ts — MAX_API_BODY_BYTES 256KiB
+   - api/v1/_lib/execution/payload.ts — PAYLOAD_LIMITS + input_type
+     text|voice|photo|qrcode|barcode → mesma create_package
+   - api/v1/health.ts — stage ETAPA_G7_E_API_INTEGRATION_READINESS
+
+============================================================
+VERIFICAÇÃO
+============================================================
+TESTES: 189 passed (14 files) — inclui 15 G7-E
+BUILD:  npm run build → PASS (vite production)
+MIGRATIONS: nenhuma criada/executada neste gate
+BANCO LIVE: nenhum write
+
+============================================================
+CRITÉRIOS PASS
+============================================================
+[x] contrato completo
+[x] testes passando
+[x] build OK
+[x] nenhuma regra de negócio duplicada no contrato (Core permanece autoridade)
+[x] nenhuma alteração de banco
+[x] nenhum n8n
+[x] nenhum WhatsApp
+
+RESULTADO FINAL: G7-E = PASS
+
+STOP.

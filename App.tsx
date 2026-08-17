@@ -3,10 +3,9 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { AlertCircle, Volume2, VolumeX, Eye, EyeOff, Lock, X, Sun } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './components/Login';
-import ResidentRegister from './components/ResidentRegister';
 import ScreenSaver from './components/ScreenSaver';
 import AcceptStaffInvitePage from './components/AcceptStaffInvitePage';
-import AcceptResidentInvitePage from './components/AcceptResidentInvitePage';
+import MasterApp from './components/master/MasterApp';
 import { UserRole, Package, Resident, VisitorLog, PackageItem, Occurrence, Notice, ChatMessage, QuickViewCategory, Staff, Boleto, Notification } from './types';
 import SentinelaConciergeApp from './sentinela/App';
 import type { OccurrenceItem } from './sentinela/types';
@@ -26,12 +25,8 @@ import ResidentsView from './components/views/ResidentsView';
 import OccurrencesView from './components/views/OccurrencesView';
 import StaffView from './components/views/StaffView';
 import SettingsView from './components/views/SettingsView';
-import MoradorSettingsView from './components/views/MoradorSettingsView';
 import AdminPermissionsView from './components/views/AdminPermissionsView';
-import BoletosView from './components/views/BoletosView';
 import FinanceiroView from './components/views/FinanceiroView';
-import MoradorDashboardView from './components/views/MoradorDashboardView';
-import NotificationsView from './components/views/NotificationsView';
 import PresentationView from './components/views/PresentationView';
 
 // Contexts
@@ -47,22 +42,30 @@ import { openWhatsApp } from './utils/phoneNormalizer';
 
 // Services
 import {
-  getResidents, getPackages, savePackage, updatePackage, hidePackageForResident, deletePackage,
+  getResidents, getPackages, deletePackage,
   saveResident, deleteResident,
   getVisitors, saveVisitor, updateVisitor, confirmExpectedVisitor,
-  getOccurrences, getOccurrenceById, saveOccurrence, updateOccurrence, deleteOccurrence,
+  getOccurrences, getOccurrenceById, deleteOccurrence,
   getBoletos, saveBoleto, updateBoleto, deleteBoleto,
   getNotices, saveNotice, updateNotice, deleteNotice,
   getChatMessages, getChatMessagesFromServer, saveChatMessage, deleteAllChatMessages,
   getStaff, saveStaff, deleteStaff, getPorteiroLoginInfo,
-  getAreas, getReservations, saveReservation, updateReservation, deleteReservation,
-  markOccurrenceAsRead
+  getAreas, getReservations, updateReservation
 } from './services/dataService';
-import { getNotifications, createNotification, deleteNotification, markNotificationAsRead, markAllNotificationsAsRead } from './services/notificationService';
+import {
+  createPackage as coreCreatePackage,
+  pickupPackage as corePickupPackage,
+  createOccurrence as coreCreateOccurrence,
+  updateOccurrence as coreUpdateOccurrence,
+  createReservation as coreCreateReservation,
+  cancelReservation as coreCancelReservation,
+  type OperationContext
+} from './sentinela/core';
+import { createNotification } from './services/notificationService';
 import { supabase, isSupabasePlaceholder } from './services/supabase';
 
 // Modals
-import { NewReservationModal, NewVisitorModal, NewExpectedVisitorModal, NewPackageModal, StaffFormModal, StaffInviteModal, ResidentInviteModal, AdminUserModal, type StaffFormData } from './components/modals/ActionModals';
+import { NewReservationModal, NewVisitorModal, NewPackageModal, StaffFormModal, StaffInviteModal, AdminUserModal, type StaffFormData } from './components/modals/ActionModals';
 import { ResidentProfileModal, PackageDetailModal, VisitorDetailModal, OccurrenceDetailModal, ResidentFormModal, NewOccurrenceModal, NoticeEditModal } from './components/modals/DetailModals';
 import { processImportFile } from './components/modals/ImportResidentsModal';
 // Temporariamente comentado até resolver dependências
@@ -71,8 +74,6 @@ import ImportPackagesModal from './components/modals/ImportPackagesModal';
 import CameraScanModal from './components/modals/CameraScanModal';
 import ImportStaffModal from './components/modals/ImportStaffModal';
 
-// Services
-import { registerResident, loginResident, updateResidentPassword } from './services/residentAuth';
 import { checkUserSession, User as AdminUser, updateUserProfile, changeUserPassword, changeUsername } from './services/userAuth';
 
 // Helper para calcular permanência
@@ -102,14 +103,11 @@ const App: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState<UserRole>('PORTEIRO');
-  const [currentResident, setCurrentResident] = useState<Resident | null>(null);
   const [activeTab, _setActiveTab] = useState('dashboard');
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
-  const [residentAvatar, setResidentAvatar] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isScreenSaverActive, setIsScreenSaverActive] = useState(false);
-  const [showResidentRegister, setShowResidentRegister] = useState(false);
   // Controle de áudio do vídeo (legacy – mantido por compatibilidade, mesmo sem vídeo)
   const [isVideoMuted, setIsVideoMuted] = useState<boolean>(true);
   // Página de apresentação (landing) — exibida apenas no primeiro acesso
@@ -128,35 +126,14 @@ const App: React.FC = () => {
   }, [role]);
 
   // ============================================================
-  // RESTAURAR SESSÃO (SESSIONSTORAGE)
-  // - Admin: sessionStorage.currentUser (via checkUserSession)
-  // - Morador: sessionStorage.currentResident
+  // RESTAURAR SESSÃO (SESSIONSTORAGE) — staff via checkUserSession
   // ============================================================
   useEffect(() => {
-    // Preferir restaurar MORADOR quando existir currentResident
-    try {
-      const rawResident = sessionStorage.getItem('currentResident');
-      if (rawResident) {
-        const resident = JSON.parse(rawResident) as Resident;
-        if (resident && typeof resident === 'object' && (resident as any).id && (resident as any).unit) {
-          setCurrentResident(resident);
-          setRole('MORADOR');
-          setIsAuthenticated(true);
-          _setActiveTab('dashboard');
-          return;
-        }
-      }
-    } catch {
-      // ignore (sessão inválida/corrompida)
-    }
-
-    // Fallback: restaurar usuário admin/porteiro/síndico
     try {
       const user = checkUserSession();
       if (user) {
         const r = String((user as any).role || '').toUpperCase();
         const nextRole: UserRole = r === 'SINDICO' ? 'SINDICO' : 'PORTEIRO';
-        setCurrentResident(null);
         setRole(nextRole);
         setIsAuthenticated(true);
         _setActiveTab('dashboard');
@@ -180,38 +157,25 @@ const App: React.FC = () => {
     if (!isAuthenticated) {
       setCurrentAdminUser(null);
       setAdminAvatar(null);
-      setResidentAvatar(null);
       setAuthUser(null);
       return;
     }
 
-    if (role === 'MORADOR' && currentResident) {
-      setAuthUser({
-        id: currentResident.id,
-        username: currentResident.email || '',
-        role: 'MORADOR',
-        name: currentResident.name,
-        email: currentResident.email || null,
-        phone: currentResident.phone || null,
-        is_active: true
-      });
-    } else {
-      const user = checkUserSession();
-      setCurrentAdminUser(user);
-      if (user) {
-        setAuthUser(user);
-        try {
-          const stored = localStorage.getItem(`admin_avatar_${user.id}`);
-          setAdminAvatar(stored || null);
-        } catch {
-          setAdminAvatar(null);
-        }
-      } else {
-        setAuthUser(null);
+    const user = checkUserSession();
+    setCurrentAdminUser(user);
+    if (user) {
+      setAuthUser(user);
+      try {
+        const stored = localStorage.getItem(`admin_avatar_${user.id}`);
+        setAdminAvatar(stored || null);
+      } catch {
         setAdminAvatar(null);
       }
+    } else {
+      setAuthUser(null);
+      setAdminAvatar(null);
     }
-  }, [isAuthenticated, role, currentResident, setAuthUser]);
+  }, [isAuthenticated, setAuthUser]);
 
   // Mostrar página de apresentação apenas no primeiro acesso do SÍNDICO (por navegador)
   useEffect(() => {
@@ -244,37 +208,7 @@ const App: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Carregar avatar do morador autenticado (perfil "Meu Perfil")
-  useEffect(() => {
-    if (!currentResident) {
-      setResidentAvatar(null);
-      return;
-    }
-    try {
-      const stored = localStorage.getItem(`resident_avatar_${currentResident.id}`);
-      setResidentAvatar(stored || null);
-    } catch {
-      setResidentAvatar(null);
-    }
-  }, [currentResident]);
-
-  const handleResidentAvatarChange = (file: File | null) => {
-    if (!file || !currentResident) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
-      if (!dataUrl) return;
-      setResidentAvatar(dataUrl);
-      try {
-        localStorage.setItem(`resident_avatar_${currentResident.id}`, dataUrl);
-      } catch (err) {
-        console.warn('Falha ao salvar avatar do morador localmente:', err);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Estados para edição de perfil
+  // Estados para edição de perfil (staff)
   const [isEditingAdminProfile, setIsEditingAdminProfile] = useState(false);
   const [adminProfileData, setAdminProfileData] = useState({ name: '', email: '', phone: '' });
   const [adminProfilePasswordData, setAdminProfilePasswordData] = useState({ current: '', new: '', confirm: '' });
@@ -282,21 +216,6 @@ const App: React.FC = () => {
   const [adminPasswordData, setAdminPasswordData] = useState({ current: '', new: '', confirm: '' });
   const [adminUsernameData, setAdminUsernameData] = useState({ currentPassword: '', newUsername: '', confirmUsername: '' });
   const [isAdminCredentialsModalOpen, setIsAdminCredentialsModalOpen] = useState(false);
-  const [isEditingResidentProfile, setIsEditingResidentProfile] = useState(false);
-  const [residentProfileData, setResidentProfileData] = useState({
-    email: '',
-    phone: '',
-    whatsapp: '',
-    cpf: '',
-    vehiclePlate: '',
-    vehicleModel: '',
-    vehicleColor: ''
-  });
-  const [residentPasswordData, setResidentPasswordData] = useState({ current: '', new: '', confirm: '' });
-  const [isChangingResidentPassword, setIsChangingResidentPassword] = useState(false);
-  // Estados para visibilidade de senhas (olhinho)
-  const [showResidentPasswords, setShowResidentPasswords] = useState({ current: false, new: false, confirm: false });
-  const [openResidentPasswordOnProfile, setOpenResidentPasswordOnProfile] = useState(false);
   const [showAdminPasswords, setShowAdminPasswords] = useState({ current: false, new: false, confirm: false });
   const [showFirstLoginChangePasswordModal, setShowFirstLoginChangePasswordModal] = useState(false);
   const [firstLoginPasswordData, setFirstLoginPasswordData] = useState({ new: '', confirm: '' });
@@ -441,113 +360,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Handlers para perfil do morador
-  const handleStartEditResidentProfile = () => {
-    if (currentResident) {
-      const onlyDigitsLocal = (v: string) => (v || '').replace(/\\D+/g, '');
-      const extra = (currentResident as any)?.extraData || {};
-      const cpfCandidates = [
-        extra?.cpf,
-        extra?.CPF,
-        extra?.cpf_cnpj,
-        extra?.cpfCnpj,
-        extra?.['CPF/CNPJ'],
-        extra?.['cpf/cnpj'],
-        extra?.documento,
-        extra?.document
-      ].filter(Boolean);
-      let cpfDigits = '';
-      for (const c of cpfCandidates) {
-        const d = onlyDigitsLocal(String(c));
-        if (d.length >= 11) {
-          cpfDigits = d;
-          break;
-        }
-      }
-      setResidentProfileData({
-        email: currentResident.email || '',
-        phone: currentResident.phone || '',
-        whatsapp: currentResident.whatsapp || '',
-        cpf: cpfDigits,
-        vehiclePlate: currentResident.vehiclePlate || '',
-        vehicleModel: currentResident.vehicleModel || '',
-        vehicleColor: currentResident.vehicleColor || ''
-      });
-      setIsEditingResidentProfile(true);
-    }
-  };
-
-  const handleSaveResidentProfile = async () => {
-    if (!currentResident) return;
-    const cpfDigits = String(residentProfileData.cpf || '').replace(/\\D+/g, '');
-    if (cpfDigits && cpfDigits.length !== 11) {
-      toast.error('CPF inválido. Informe 11 dígitos (com ou sem pontuação).');
-      return;
-    }
-
-    const nextExtraData: Record<string, any> = { ...((currentResident as any)?.extraData || {}) };
-    if (cpfDigits) {
-      nextExtraData.cpf = cpfDigits;
-    } else {
-      // se usuário apagar o CPF, remover (melhor esforço)
-      if ('cpf' in nextExtraData) {
-        try { delete nextExtraData.cpf; } catch {}
-      }
-    }
-    const updatedResident: Resident = {
-      ...currentResident,
-      email: residentProfileData.email,
-      phone: residentProfileData.phone,
-      whatsapp: residentProfileData.whatsapp,
-      extraData: Object.keys(nextExtraData).length ? nextExtraData : undefined,
-      vehiclePlate: residentProfileData.vehiclePlate,
-      vehicleModel: residentProfileData.vehicleModel,
-      vehicleColor: residentProfileData.vehicleColor
-    };
-    const result = await saveResident(updatedResident);
-    if (result.success) {
-      setCurrentResident(updatedResident);
-      setIsEditingResidentProfile(false);
-      if (!cpfDigits) {
-        toast.info('Perfil salvo. Dica: informe seu CPF para que boletos importados sejam associados automaticamente.');
-      } else {
-        toast.success('Perfil atualizado com sucesso!');
-      }
-    } else {
-      toast.error(result.error || 'Erro ao atualizar perfil');
-    }
-  };
-
-  const handleChangeResidentPassword = async () => {
-    if (!currentResident) return;
-    if (residentPasswordData.new !== residentPasswordData.confirm) {
-      toast.error('As senhas não coincidem');
-      return;
-    }
-    const pwdRes = residentPasswordData.new.trim();
-    if (pwdRes.length < 6 || pwdRes.length > 32 || !/^[A-Za-z0-9]+$/.test(pwdRes) || !/[A-Za-z]/.test(pwdRes) || !/[0-9]/.test(pwdRes)) {
-      toast.error('A nova senha deve ter 6 caracteres, apenas letras e números. O sistema diferencia maiúsculas de minúsculas.');
-      return;
-    }
-    // Validar senha atual
-    const loginResult = await loginResident(currentResident.unit, residentPasswordData.current);
-    if (!loginResult.success) {
-      toast.error('Senha atual incorreta');
-      return;
-    }
-    const result = await updateResidentPassword(currentResident.id, pwdRes);
-    if (result.success) {
-      setIsChangingResidentPassword(false);
-      setResidentPasswordData({ current: '', new: '', confirm: '' });
-      toast.success('Senha alterada com sucesso!');
-    } else {
-      toast.error(result.error || 'Erro ao alterar senha');
-    }
-  };
-  
-  // Link ?morador=true ou ?resident=true: apenas preseleciona perfil Morador no Login (cadastro só por "Criar conta")
-  // (não abre mais ResidentRegister automaticamente)
-
   // Atalhos de teclado
   useKeyboardShortcuts({ onNavigate: setActiveTab });
   
@@ -564,13 +376,6 @@ const App: React.FC = () => {
   
   const [selectedVisitorForDetail, setSelectedVisitorForDetail] = useState<any | null>(null);
 
-  // Novo fluxo (morador): pré-cadastro de visitante
-  const [isExpectedVisitorModalOpen, setIsExpectedVisitorModalOpen] = useState(false);
-  const [expectedVisitorData, setExpectedVisitorData] = useState<{ visitorName: string; observation: string }>({
-    visitorName: '',
-    observation: ''
-  });
-  
   const [newVisitorData, setNewVisitorData] = useState({
     unit: '',
     name: '',
@@ -634,11 +439,10 @@ const App: React.FC = () => {
   // Função para carregar visitantes (lazy)
   const loadVisitors = useCallback(async () => {
     if (visitorsLoaded || !isAuthenticated) return;
-    const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
-    const res = await getVisitors(unitFilter);
+    const res = await getVisitors();
     if (res.data) setVisitorLogs(res.data);
     setVisitorsLoaded(true);
-  }, [isAuthenticated, role, currentResident, visitorsLoaded]);
+  }, [isAuthenticated, visitorsLoaded]);
 
   // Merge ocorrências: dados do servidor + itens já em estado (ex.: ocorrência aberta pelo clique na notificação).
   const mergeOccurrences = useCallback((serverList: Occurrence[] | undefined, prev: Occurrence[]) => {
@@ -712,11 +516,6 @@ const App: React.FC = () => {
         loadOccurrences();
         break;
       case 'dashboard':
-        // Morador: carregar boletos e ocorrências (para notificações de resposta e lista ao abrir aba).
-        if (role === 'MORADOR') {
-          loadBoletos();
-          loadOccurrences();
-        }
         // Admin/síndico/porteiro: carregar ocorrências para o sino mostrar alerta de ocorrências abertas.
         if (['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA', 'PORTEIRO'].includes(role)) loadOccurrences();
         break;
@@ -852,62 +651,13 @@ const App: React.FC = () => {
   const [allOccurrences, setAllOccurrences] = useState<Occurrence[]>([]);
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
   const [allNotices, setAllNotices] = useState<Notice[]>([]);
-  const [dismissedNoticeIds, setDismissedNoticeIds] = useState<string[]>([]);
   const [allBoletos, setAllBoletos] = useState<Boleto[]>([]);
   const [boletoSearch, setBoletoSearch] = useState('');
-
-  // Estado de notificações (fonte única de verdade; evita reidratação ao voltar na aba)
-  const [allNotifications, setAllNotifications] = useState<Notification[]>([]);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const recentlyDeletedNotificationIds = useRef<Set<string>>(new Set());
-  const recentlyMarkedAsReadIds = useRef<Set<string>>(new Set());
-
-  // Persistir avisos de mural dispensados pelo morador em localStorage (por morador)
-  useEffect(() => {
-    if (role !== 'MORADOR' || !currentResident) return;
-    try {
-      const key = `dismissed_notices_${currentResident.id}`;
-      const raw = window.localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setDismissedNoticeIds(parsed.filter((v) => typeof v === 'string'));
-        }
-      }
-    } catch {
-      // ignore erros de leitura/JSON
-    }
-  }, [role, currentResident?.id]);
-
-  useEffect(() => {
-    if (role !== 'MORADOR' || !currentResident) return;
-    try {
-      const key = `dismissed_notices_${currentResident.id}`;
-      window.localStorage.setItem(key, JSON.stringify(dismissedNoticeIds));
-    } catch {
-      // ignore erros de escrita
-    }
-  }, [role, currentResident?.id, dismissedNoticeIds]);
-
-  // Regra do sino: notifica o DESTINATÁRIO (quem recebe), nunca o emissor.
-  // — Morador registra ocorrência → sino do ADMIN (staffOpenOccurrencesCount).
-  // — Admin/síndico/porteiro responde ou resolve → sino do MORADOR (notificações type occurrence + mural type other).
-  const unreadNotificationsForBell = useMemo((): Notification[] => {
-    if (role !== 'MORADOR' || !currentResident) return [];
-    // Sino do morador: só quando recebe resposta/resolução (type occurrence) ou aviso do mural (type other).
-    const occurrenceNotificationItems = (allNotifications || []).filter((n) => n.type === 'occurrence' && !n.read);
-    const otherItems = (allNotifications || []).filter((n) => n.type === 'other' && !n.read);
-    return [...occurrenceNotificationItems, ...otherItems];
-  }, [role, currentResident, allNotifications]);
-
-  const unreadCountForBell = unreadNotificationsForBell.length;
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [staffSearch, setStaffSearch] = useState('');
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
-  const [isResidentInviteModalOpen, setIsResidentInviteModalOpen] = useState(false);
   const [isAdminUserModalOpen, setIsAdminUserModalOpen] = useState(false);
   const [staffFormData, setStaffFormData] = useState<StaffFormData>({});
   const [adminUserData, setAdminUserData] = useState({
@@ -1071,20 +821,6 @@ const App: React.FC = () => {
   const [showResSuggestions, setShowResSuggestions] = useState(false);
   const [newReservationData, setNewReservationData] = useState({ area: '', areaId: '', resident: '', unit: '', residentId: '', date: '', startTime: '', endTime: '' });
 
-  useEffect(() => {
-    if (!isReservationModalOpen) return;
-    if (role === 'MORADOR' && currentResident?.id) {
-      setNewReservationData((prev) => ({
-        ...prev,
-        resident: currentResident.name,
-        unit: currentResident.unit,
-        residentId: currentResident.id
-      }));
-      setReservationSearchQuery(currentResident.name);
-      setShowResSuggestions(false);
-    }
-  }, [isReservationModalOpen, role, currentResident]);
-
   const hasTimeConflict = useMemo(() => {
     if (!newReservationData.date || !newReservationData.startTime || !newReservationData.endTime || !newReservationData.area) return false;
     const toMins = (t: string) => { const [h, m] = (t || '0:0').split(':').map(Number); return h * 60 + m; };
@@ -1113,38 +849,61 @@ const App: React.FC = () => {
   };
 
   const handleDeleteReservation = async (id: string) => {
-    const res = await deleteReservation(id);
+    const res = await coreCancelReservation(
+      { reservationId: id },
+      {
+        channel: 'panel',
+        actorDisplayName: currentAdminUser?.name || currentAdminUser?.username || null,
+        actorRole: role
+      }
+    );
     if (res.success) {
       setReservationsData((prev) => prev.filter((r) => r.id !== id));
       toast.success('Reserva excluída.');
     } else {
-      toast.error('Erro ao excluir reserva: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao excluir reserva: ' + (res.error.message || 'Erro desconhecido'));
     }
   };
 
   const handleCreateReservation = async () => {
-    const isMorador = role === 'MORADOR' && !!currentResident?.id;
-    const residentId = isMorador ? currentResident!.id : newReservationData.residentId;
-    const residentName = isMorador ? currentResident!.name : newReservationData.resident;
-    const unit = isMorador ? currentResident!.unit : newReservationData.unit;
+    const residentId = newReservationData.residentId;
+    const residentName = newReservationData.resident;
+    const unit = newReservationData.unit;
 
     if (!residentName || !newReservationData.date || !newReservationData.areaId || !residentId || hasTimeConflict) return;
-    const res = await saveReservation({
-      areaId: newReservationData.areaId,
-      residentId,
-      residentName,
-      unit,
-      date: newReservationData.date,
-      startTime: newReservationData.startTime,
-      endTime: newReservationData.endTime,
-      status: 'scheduled'
-    });
+    const opCtx: OperationContext = {
+      channel: 'panel',
+      actorDisplayName: currentAdminUser?.name || currentAdminUser?.username || null,
+      actorRole: role
+    };
+    const existingSlots = reservationsData.map((r) => ({
+      areaIdOrName: r.areaName || r.areaId,
+      date: r.date,
+      startTime: r.startTime,
+      endTime: r.endTime
+    }));
+    const res = await coreCreateReservation(
+      {
+        areaId: newReservationData.areaId,
+        areaName: newReservationData.area,
+        residentId,
+        residentName,
+        unit,
+        date: newReservationData.date,
+        startTime: newReservationData.startTime,
+        endTime: newReservationData.endTime,
+        status: 'scheduled',
+        existingSlots,
+        enforceConflictCheck: true
+      },
+      opCtx
+    );
     if (res.success) {
       // Atualização otimista: exibir a nova reserva na lista e nos cards de área imediatamente.
       // Não chamar fetchReservations() aqui para não sobrescrever com resposta da API que pode
       // ainda não incluir a reserva (RLS/atraso) e fazer a reserva sumir da tela do morador.
       const newRow = {
-        id: res.id!,
+        id: res.data.id,
         areaId: newReservationData.areaId,
         areaName: newReservationData.area,
         residentId,
@@ -1162,7 +921,7 @@ const App: React.FC = () => {
       setReservationSearchQuery('');
       setShowResSuggestions(false);
     } else {
-      toast.error('Erro ao criar reserva: ' + (res.error || 'Erro desconhecido'));
+      toast.error('Erro ao criar reserva: ' + (res.error.message || 'Erro desconhecido'));
     }
   };
 
@@ -1187,6 +946,53 @@ const App: React.FC = () => {
       hasNewNotice: allNotices.some(n => isWithin(n.date, 1440))
     };
   }, [allPackages, visitorLogs, allOccurrences, allNotices, dayReservations]);
+
+  /** Contagens do painel operacional (porteiro) — só leitura sobre estado já carregado */
+  const operationalPendingPackages = useMemo(
+    () => allPackages.filter((p) => p.status === 'pendente' && !p.hiddenForResident),
+    [allPackages]
+  );
+  const operationalOpenOccurrences = useMemo(
+    () => allOccurrences.filter((o) => o.status === 'Aberto' && !o.deletedByAdmin),
+    [allOccurrences]
+  );
+  const operationalActiveVisitors = useMemo(
+    () =>
+      visitorLogs.filter((v) => {
+        const st = String(v.status || '').toLowerCase();
+        return st === 'confirmado' || st === 'active';
+      }),
+    [visitorLogs]
+  );
+  const operationalCounts = useMemo(() => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const receivedToday = allPackages.filter((p) => {
+      if (!p.receivedAt) return false;
+      return new Date(p.receivedAt).getTime() >= startOfDay.getTime();
+    }).length;
+    const pickedUp = allPackages.filter((p) => p.status === 'recebida').length;
+    const d = new Date();
+    const month = d.toLocaleString('pt-BR', { month: 'short' }).toUpperCase().replace('.', '');
+    const todayLabel = `${month} ${d.getDate()}`;
+    const reservationsToday = dayReservations.filter(
+      (r) => r.date === todayLabel && (r.status === 'scheduled' || r.status === 'active')
+    ).length;
+    return {
+      packagesPending: operationalPendingPackages.length,
+      packagesReceivedToday: receivedToday,
+      packagesPickedUp: pickedUp,
+      occurrencesOpen: operationalOpenOccurrences.length,
+      visitorsActive: operationalActiveVisitors.length,
+      reservationsToday
+    };
+  }, [
+    allPackages,
+    dayReservations,
+    operationalPendingPackages.length,
+    operationalOpenOccurrences.length,
+    operationalActiveVisitors.length
+  ]);
 
   const quickViewData = useMemo(() => {
     if (!quickViewCategory) return [];
@@ -1349,126 +1155,13 @@ const App: React.FC = () => {
     if (activeTab === 'notifications') setActiveTab('occurrences');
   }, [activeTab, setActiveTab]);
 
-  // Carregar notificações e pacotes quando morador estiver autenticado (e ao abrir dashboard para manter cards em sync com o badge)
-  useEffect(() => {
-    if (!isAuthenticated || role !== 'MORADOR' || !currentResident) return;
-
-    const loadNotifications = async () => {
-      setNotificationsLoading(true);
-      const result = await getNotifications(currentResident.id);
-      if (result.data) {
-        setAllNotifications(result.data);
-        setUnreadNotificationCount(result.data.filter(n => !n.read).length);
-      }
-      setNotificationsLoading(false);
-    };
-
-    const loadPackages = async () => {
-      const result = await getPackages();
-      if (result.data) setAllPackages(result.data);
-    };
-
-    loadNotifications();
-    loadPackages();
-
-    // TEMPORARIAMENTE DESABILITADO: Configurar Realtime listener para notificações
-    // Problema: está causando chamada para /rest/v1/users com erro 409
-    console.log('[Realtime] Listener de notificações DESABILITADO temporariamente');
-
-    // TODO: Reabilitar quando o problema for resolvido
-    /*
-    const channel = supabase
-      .channel(`notifications-${currentResident.id}`)
-      .on('postgres_changes', { ... })
-      .subscribe((status) => { ... });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-    */
-  }, [isAuthenticated, role, currentResident]);
-
-  // Refetch notificações quando o morador volta à aba/janela do app (fallback se Realtime não entregar)
-  useEffect(() => {
-    if (!isAuthenticated || role !== 'MORADOR' || !currentResident) return;
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
-      getNotifications(currentResident.id).then((result) => {
-        if (result.data) {
-          setAllNotifications(result.data);
-          setUnreadNotificationCount(result.data.filter(n => !n.read).length);
-        }
-      });
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, [isAuthenticated, role, currentResident]);
-
-  // Refetch pacotes e notificações quando morador abre o dashboard (mantém cards e badge em sync)
-  useEffect(() => {
-    if (!isAuthenticated || role !== 'MORADOR' || !currentResident || activeTab !== 'dashboard') return;
-    getPackages().then((res) => { if (res.data) setAllPackages(res.data); });
-    getNotifications(currentResident.id).then((result) => {
-      if (result.data) {
-        setAllNotifications(result.data);
-        setUnreadNotificationCount(result.data.filter(n => !n.read).length);
-      }
-    });
-  }, [isAuthenticated, role, currentResident, activeTab]);
-
-  // Abrir formulário de alterar senha quando o morador vem de Configurações
-  useEffect(() => {
-    if (openResidentPasswordOnProfile && activeTab === 'residentProfile') {
-      setIsChangingResidentPassword(true);
-      setOpenResidentPasswordOnProfile(false);
-    }
-  }, [openResidentPasswordOnProfile, activeTab]);
-
-  const handleDeleteNotification = useCallback(async (notificationId: string) => {
-    const result = await deleteNotification(notificationId);
-    if (!result.success) {
-      toast.error('Erro ao excluir notificação: ' + (result.error || 'Erro desconhecido'));
-      return;
-    }
-    const notification = allNotifications.find(n => n.id === notificationId);
-    const wasUnread = notification?.read === false;
-    recentlyDeletedNotificationIds.current.add(notificationId);
-    setTimeout(() => recentlyDeletedNotificationIds.current.delete(notificationId), 5000);
-    setAllNotifications(prev => prev.filter(n => n.id !== notificationId));
-    if (wasUnread) {
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-    }
-  }, [allNotifications, toast]);
-
-  const handleMarkNotificationAsRead = useCallback(async (notificationId: string) => {
-    const result = await markNotificationAsRead(notificationId);
-    if (result.success) {
-      recentlyMarkedAsReadIds.current.add(notificationId);
-      setTimeout(() => recentlyMarkedAsReadIds.current.delete(notificationId), 5000);
-      setAllNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
-      );
-      setUnreadNotificationCount(prev => Math.max(0, prev - 1));
-    }
-  }, []);
-
-  const handleMarkAllNotificationsAsRead = useCallback(async () => {
-    if (!currentResident) return;
-    const result = await markAllNotificationsAsRead(currentResident.id);
-    if (result.success) {
-      setAllNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setUnreadNotificationCount(0);
-    }
-  }, [currentResident]);
-
   const handleVisitorCheckOut = async (id: string) => {
     const visitor = visitorLogs.find((v) => v.id === id);
     if (!visitor) return;
     const updatedVisitor = { ...visitor, status: 'finalizado' as const, exitTime: new Date().toISOString() };
     const result = await updateVisitor(updatedVisitor);
     if (result.success) {
-      const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
-      const { data } = await getVisitors(unitFilter);
+      const { data } = await getVisitors();
       if (data) setVisitorLogs(data);
     } else {
       console.error('Erro ao atualizar visitante:', result.error);
@@ -1479,42 +1172,11 @@ const App: React.FC = () => {
   const handleConfirmExpectedVisitor = async (id: string) => {
     const result = await confirmExpectedVisitor(id);
     if (result.success) {
-      const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
-      const { data } = await getVisitors(unitFilter);
+      const { data } = await getVisitors();
       if (data) setVisitorLogs(data);
       toast.success('Entrada confirmada com sucesso');
     } else {
       toast.error('Erro ao confirmar entrada: ' + (result.error || 'Erro desconhecido'));
-    }
-  };
-
-  const handleResidentRegisterExpectedVisitor = async () => {
-    if (role !== 'MORADOR' || !currentResident) return;
-    const name = expectedVisitorData.visitorName.trim();
-    const obs = expectedVisitorData.observation.trim();
-    if (!name || !obs) return;
-
-    const newVisitor: VisitorLog = {
-      id: `temp-${Date.now()}`,
-      moradorId: currentResident.id,
-      residentName: currentResident.name,
-      unit: currentResident.unit,
-      visitorCount: 1,
-      visitorName: name,
-      observation: obs,
-      entryTime: '', // será preenchido ao confirmar entrada
-      status: 'pendente'
-    };
-    const result = await saveVisitor(newVisitor);
-    if (result.success) {
-      const unitFilter = currentResident.unit;
-      const { data } = await getVisitors(unitFilter);
-      if (data) setVisitorLogs(data);
-      setIsExpectedVisitorModalOpen(false);
-      setExpectedVisitorData({ visitorName: '', observation: '' });
-      toast.success('Visitante cadastrado. A portaria confirmará na chegada.');
-    } else {
-      toast.error('Erro ao cadastrar visitante: ' + (result.error || 'Erro desconhecido'));
     }
   };
   const resetVisitorModal = () => { setIsVisitorModalOpen(false); setNewVisitorStep(1); setNewVisitorData({ unit: '', name: '', doc: '', type: 'Visita', vehicle: '', plate: '', residentName: '' }); setSearchResident(''); };
@@ -1534,8 +1196,7 @@ const App: React.FC = () => {
     };
     const result = await saveVisitor(newVisitor);
     if (result.success) {
-      const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
-      const { data } = await getVisitors(unitFilter);
+      const { data } = await getVisitors();
       if (data) setVisitorLogs(data);
       resetVisitorModal();
     } else {
@@ -1604,9 +1265,27 @@ const App: React.FC = () => {
         receivedByName: porteiroName
       };
 
-      const result = await savePackage(newPkg);
-      if (result.success && result.id) {
-        const savedId = result.id;
+      const result = await coreCreatePackage(
+        {
+          recipient: newPkg.recipient,
+          unit: newPkg.unit,
+          type: newPkg.type,
+          items: newPkg.items,
+          residentPhone: newPkg.residentPhone,
+          recipientId: newPkg.recipientId,
+          imageUrl: newPkg.imageUrl,
+          qrCodeData: newPkg.qrCodeData,
+          receivedByName: porteiroName,
+          residents: allResidents
+        },
+        {
+          channel: pendingPackageQrData ? 'qr' : pendingPackageImage ? 'photo' : 'panel',
+          actorDisplayName: porteiroName,
+          actorRole: role
+        }
+      );
+      if (result.success && result.data.id) {
+        const savedId = result.data.id;
         // Recarregar pacotes para garantir histórico completo (evitar substituição indevida)
         const packagesResult = await getPackages();
         let nextList = packagesResult.data ?? [];
@@ -1618,7 +1297,7 @@ const App: React.FC = () => {
         setAllPackages(nextList);
         
         // Feedback de sucesso
-        // A notificação automática no app já foi criada pelo savePackage
+        // A notificação automática no app já foi criada pelo savePackage (via Core adapter)
         const feedbackMessages = ['✅ Encomenda registrada', '📱 Notificação enviada no app'];
         
         if (sendNotify) {
@@ -1643,8 +1322,8 @@ const App: React.FC = () => {
           // O sistema já criou a notificação automaticamente
         }, 100);
       } else {
-        console.error('Erro ao salvar pacote:', result.error);
-        toast.error('Erro ao salvar encomenda: ' + (result.error || 'Erro desconhecido'));
+        console.error('Erro ao salvar pacote:', result.success ? undefined : result.error);
+        toast.error('Erro ao salvar encomenda: ' + (!result.success ? result.error.message : 'Erro desconhecido'));
         return;
       }
       
@@ -1658,34 +1337,34 @@ const App: React.FC = () => {
     const pkg = allPackages.find(p => p.id === id);
     if (!pkg) return;
     
-    // Verificar se é morador tentando dar baixa em encomenda que não é dele
-    if (role === 'MORADOR' && currentResident) {
-      const sameRecipient = pkg.recipientId ? pkg.recipientId === currentResident.id : false;
-      const sameUnitLegacy = pkg.unit === currentResident.unit;
-      // Morador só pode dar baixa em encomendas da sua conta (fallback por unidade para legado)
-      if (!sameRecipient && !sameUnitLegacy) {
-        toast.error('Você só pode dar baixa em encomendas da sua unidade/conta.');
-        return;
-      }
-    }
-    
     // Determinar quem está dando a baixa
     let deliveredBy: string | null = null;
     if (['PORTEIRO', 'SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA'].includes(role)) {
-      // Se for porteiro/síndico/admin, usar o ID do usuário admin
       deliveredBy = currentAdminUser?.id || null;
     }
     
-    const updatedPkg = { ...pkg, status: 'recebida' as const, receiptAt: new Date().toISOString() };
-    const result = await updatePackage(updatedPkg, deliveredBy);
+    const result = await corePickupPackage(
+      {
+        packageId: id,
+        package: pkg,
+        deliveredBy,
+        actorIsResident: false,
+        currentResident: null
+      },
+      {
+        channel: 'panel',
+        actorDisplayName: currentAdminUser?.name || currentAdminUser?.username || null,
+        actorRole: role
+      }
+    );
     
     if (result.success) {
-      setAllPackages(prev => prev.map(p => p.id === id ? updatedPkg : p));
+      setAllPackages(prev => prev.map(p => p.id === id ? result.data.package : p));
       setSelectedPackageForDetail(null);
       toast.success('Encomenda marcada como recebida com sucesso!');
     } else {
       console.error('Erro ao atualizar pacote:', result.error);
-      toast.error('Erro ao marcar como recebida: ' + (result.error || 'Erro desconhecido'));
+      toast.error(result.error.message || 'Erro ao marcar como recebida');
     }
   };
 
@@ -1698,21 +1377,6 @@ const App: React.FC = () => {
       console.log('Removendo encomenda temporária do estado local:', id);
       setAllPackages(prev => prev.filter(p => p.id !== id));
       setSelectedPackageForDetail(prev => (prev?.id === id ? null : prev));
-      return;
-    }
-
-    // Morador: "apagar" = ocultar (não deletar)
-    if (role === 'MORADOR') {
-      if (!confirm('Ocultar esta encomenda? Ela não aparecerá mais para você.')) return;
-      const result = await hidePackageForResident(id);
-      if (result.success) {
-        setAllPackages(prev => prev.filter(p => p.id !== id));
-        setSelectedPackageForDetail(prev => (prev?.id === id ? null : prev));
-        toast.success('Encomenda ocultada com sucesso.');
-      } else {
-        console.error('Erro ao ocultar encomenda:', result.error);
-        toast.error('Erro ao ocultar encomenda: ' + (result.error || 'Erro desconhecido'));
-      }
       return;
     }
 
@@ -1731,7 +1395,10 @@ const App: React.FC = () => {
     const occurrence = occurrenceFromModal ?? allOccurrences.find((occ) => occ.id === id);
     if (!occurrence) return;
     const updatedOccurrence = { ...occurrence, status: 'Resolvido' as const };
-    const result = await updateOccurrence(updatedOccurrence);
+    const result = await coreUpdateOccurrence(
+      { occurrence: updatedOccurrence },
+      { channel: 'panel', actorDisplayName: currentAdminUser?.name || null, actorRole: role }
+    );
     if (result.success) {
       const { data } = await getOccurrences();
       if (data) setAllOccurrences(data);
@@ -1744,7 +1411,7 @@ const App: React.FC = () => {
       }
     } else {
       console.error('Erro ao resolver ocorrência:', result.error);
-      toast.error('Erro ao resolver ocorrência: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao resolver ocorrência: ' + (result.error.message || 'Erro desconhecido'));
     }
   };
   const handleDeleteOccurrence = async (id: string) => {
@@ -1757,7 +1424,7 @@ const App: React.FC = () => {
       return;
     }
     // Morador: oculta só para ele; Admin/Síndico/Porteiro: oculta só para staff. A ocorrência permanece visível para o outro.
-    const by = role === 'MORADOR' ? 'resident' : 'admin';
+    const by = 'admin';
     const result = await deleteOccurrence(id, { by });
     if (result.success) {
       setAllOccurrences(prev => prev.map(occ =>
@@ -1772,7 +1439,10 @@ const App: React.FC = () => {
   };
   const handleSaveOccurrenceDetails = async () => {
     if (!selectedOccurrenceForDetail) return;
-    const result = await updateOccurrence(selectedOccurrenceForDetail);
+    const result = await coreUpdateOccurrence(
+      { occurrence: selectedOccurrenceForDetail },
+      { channel: 'panel', actorDisplayName: currentAdminUser?.name || null, actorRole: role }
+    );
     if (result.success) {
       const { data } = await getOccurrences();
       if (data) setAllOccurrences(data);
@@ -1796,15 +1466,18 @@ const App: React.FC = () => {
       setSelectedOccurrenceForDetail(null);
     } else {
       console.error('Erro ao salvar ocorrência:', result.error);
-      toast.error('Erro ao salvar ocorrência: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao salvar ocorrência: ' + (result.error.message || 'Erro desconhecido'));
     }
   };
 
   /** Persiste a mensagem no backend ao admin/síndico/porteiro enviar no modal; morador passa a ver na lista e recebe notificação no sino. */
   const handlePersistOccurrenceMessage = useCallback(async (occ: Occurrence) => {
-    const result = await updateOccurrence(occ);
+    const result = await coreUpdateOccurrence(
+      { occurrence: occ },
+      { channel: 'panel', actorDisplayName: currentAdminUser?.name || null, actorRole: role }
+    );
     if (!result.success) {
-      toast.error('Erro ao enviar mensagem: ' + (result.error || 'Erro desconhecido'));
+      toast.error('Erro ao enviar mensagem: ' + (result.error.message || 'Erro desconhecido'));
       return;
     }
     const { data } = await getOccurrences();
@@ -1867,7 +1540,6 @@ const App: React.FC = () => {
   };
   const handleAddPkgCategory = () => { if (!newPkgCatName.trim()) return; setPackageCategories([...packageCategories, newPkgCatName.trim()]); setPackageType(newPkgCatName.trim()); setNewPkgCatName(''); setIsAddingPkgCategory(false); };
   const handleAcknowledgeNotice = (id: string) => { setAllNotices(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); };
-  const handleDismissNotice = (id: string) => { setDismissedNoticeIds(prev => prev.includes(id) ? prev : [...prev, id]); };
   const onlyDigits = (v: string) => (v || '').replace(/\D+/g, '');
   const getResidentCpfDigits = (r?: Resident | null): string => {
     const extra = (r as any)?.extraData || {};
@@ -2079,22 +1751,26 @@ const App: React.FC = () => {
   };
   const handleImportPackages = async (packagesToImport: Package[]) => {
     for (const p of packagesToImport) {
-      const pkg: Package = {
-        ...p,
-        id: '', // novo registro
-        recipient: p.recipient,
-        unit: p.unit,
-        type: p.type || 'Outros',
-        receivedAt: p.receivedAt || new Date().toISOString(),
-        displayTime: p.displayTime || new Date(p.receivedAt || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        status: (String((p as any)?.status ?? '').trim().toLowerCase() === 'recebida' || String((p as any)?.status ?? '').trim().toLowerCase() === 'entregue') ? 'recebida' : 'pendente',
-        deadlineMinutes: p.deadlineMinutes ?? 45,
-        items: p.items
-      };
-      const res = await savePackage(pkg);
+      const res = await coreCreatePackage(
+        {
+          recipient: p.recipient,
+          unit: p.unit,
+          type: p.type || 'Outros',
+          items: p.items,
+          recipientId: p.recipientId,
+          status:
+            String((p as any)?.status ?? '').trim().toLowerCase() === 'recebida' ||
+            String((p as any)?.status ?? '').trim().toLowerCase() === 'entregue'
+              ? 'recebida'
+              : 'pendente',
+          deadlineMinutes: p.deadlineMinutes ?? 45,
+          residents: allResidents
+        },
+        { channel: 'import', actorDisplayName: currentAdminUser?.name || null, actorRole: role }
+      );
       if (!res.success) {
-        toast.error(`Erro ao importar "${p.recipient}": ${res.error || 'Erro desconhecido'}`);
-        throw new Error(res.error);
+        toast.error(`Erro ao importar "${p.recipient}": ${res.error.message || 'Erro desconhecido'}`);
+        throw new Error(res.error.message);
       }
     }
     const { data } = await getPackages();
@@ -2364,19 +2040,17 @@ const App: React.FC = () => {
 
     try {
       if (item.type === 'Encomenda') {
-        const newPkg: Package = {
-          id: `temp-${Date.now()}`,
-          recipient: resident?.name ?? (item.involvedParties || 'A confirmar'),
-          unit: resident?.unit ?? (item.involvedParties || '—'),
-          type: item.title || 'Encomenda',
-          receivedAt: new Date().toISOString(),
-          displayTime: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-          status: 'pendente',
-          deadlineMinutes: 45,
-          recipientId: resident?.id ?? undefined,
-          receivedByName: reporterName
-        };
-        const result = await savePackage(newPkg);
+        const result = await coreCreatePackage(
+          {
+            recipient: resident?.name ?? (item.involvedParties || 'A confirmar'),
+            unit: resident?.unit ?? (item.involvedParties || '—'),
+            type: item.title || 'Encomenda',
+            recipientId: resident?.id,
+            receivedByName: reporterName,
+            residents: allResidents
+          },
+          { channel: 'voice', actorDisplayName: reporterName, actorRole: role }
+        );
         if (result.success) {
           const { data } = await getPackages();
           if (data) setAllPackages(data);
@@ -2385,26 +2059,27 @@ const App: React.FC = () => {
           } else {
             toast.info('Encomenda registrada por voz. Informe a unidade ou nome do morador na próxima vez para enviar a notificação.');
           }
-        } else toast.error(result.error || 'Erro ao salvar encomenda.');
+        } else toast.error(result.error.message || 'Erro ao salvar encomenda.');
         return;
       }
 
       if (item.type === 'Ocorrência' || item.type === 'Serviço') {
-        const occ: Occurrence = {
-          id: `temp-${Date.now()}`,
-          residentName: resident?.name ?? (item.involvedParties || 'Condomínio'),
-          unit: resident?.unit ?? (item.involvedParties || '—'),
-          description: [item.title, item.description].filter(Boolean).join(' — '),
-          status: 'Aberto',
-          date: new Date().toISOString(),
-          reportedBy: reporterName
-        };
-        const result = await saveOccurrence(occ);
+        const result = await coreCreateOccurrence(
+          {
+            description: [item.title, item.description].filter(Boolean).join(' — '),
+            residentName: resident?.name ?? (item.involvedParties || 'Condomínio'),
+            unit: resident?.unit ?? (item.involvedParties || '—'),
+            residentId: resident?.id,
+            reportedBy: reporterName,
+            residents: allResidents
+          },
+          { channel: 'voice', actorDisplayName: reporterName, actorRole: role }
+        );
         if (result.success) {
           const { data } = await getOccurrences();
           if (data) setAllOccurrences(data);
           toast.success('Ocorrência registrada por voz. O morador foi notificado.');
-        } else toast.error(result.error || 'Erro ao salvar ocorrência.');
+        } else toast.error(result.error.message || 'Erro ao salvar ocorrência.');
         return;
       }
 
@@ -2441,8 +2116,7 @@ const App: React.FC = () => {
         };
         const result = await saveVisitor(visitor);
         if (result.success) {
-          const unitFilter = role === 'MORADOR' && currentResident ? currentResident.unit : undefined;
-          const { data } = await getVisitors(unitFilter);
+          const { data } = await getVisitors();
           if (data) setVisitorLogs(data);
           toast.success('Visitante registrado por voz.');
         } else toast.error(result.error || 'Erro ao registrar visitante.');
@@ -2451,84 +2125,14 @@ const App: React.FC = () => {
       console.error('[handleVoiceEventPersist]', err);
       toast.error('Erro ao persistir registro de voz: ' + (err?.message || 'Erro desconhecido'));
     }
-  }, [currentAdminUser, role, currentResident, resolveResidentFromVoiceEvent, toast]);
+  }, [currentAdminUser, role, resolveResidentFromVoiceEvent, toast]);
 
   const [isOccurrenceModalOpen, setIsOccurrenceModalOpen] = useState(false);
   const [occurrenceDescription, setOccurrenceDescription] = useState('');
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   
-  // Função para registrar morador (já cadastrado no Supabase pelo ResidentRegister)
-  const handleResidentRegister = (resident: Resident, password: string) => {
-    // Morador já foi cadastrado no Supabase pelo componente ResidentRegister
-    // Apenas atualizar estado local e adicionar à lista se não existir
-    if (!allResidents.find(r => r.id === resident.id || r.unit === resident.unit)) {
-      setAllResidents(prev => [...prev, resident]);
-    }
-    
-    // Evitar mistura de sessões: ao logar como MORADOR, limpar sessão admin anterior
-    try {
-      sessionStorage.removeItem('currentUser');
-      sessionStorage.removeItem('userRole');
-    } catch {
-      // ignore
-    }
-
-    // Salvar sessão
-    sessionStorage.setItem('currentResident', JSON.stringify(resident));
-    sessionStorage.setItem('residentRole', 'MORADOR');
-    
-    setCurrentResident(resident);
-    setRole('MORADOR');
-    setIsAuthenticated(true);
-    setShowResidentRegister(false);
-    setActiveTab('dashboard');
-  };
-
-  // Função para login de morador (autenticação via Supabase)
-  const handleResidentLogin = async (unit: string, password: string) => {
-    try {
-      const result = await loginResident(unit, password);
-      
-      if (!result.success || !result.resident) {
-        throw new Error(result.error || 'Unidade ou senha incorretos');
-      }
-
-      // Atualizar lista de moradores
-      const existingIndex = allResidents.findIndex(r => r.id === result.resident!.id);
-      if (existingIndex >= 0) {
-        setAllResidents(prev => prev.map((r, idx) => idx === existingIndex ? result.resident! : r));
-      } else {
-        setAllResidents(prev => [...prev, result.resident!]);
-      }
-
-      // Evitar mistura de sessões: ao logar como MORADOR, limpar sessão admin anterior
-      try {
-        sessionStorage.removeItem('currentUser');
-        sessionStorage.removeItem('userRole');
-      } catch {
-        // ignore
-      }
-
-      // Salvar sessão
-      sessionStorage.setItem('currentResident', JSON.stringify(result.resident));
-      sessionStorage.setItem('residentRole', 'MORADOR');
-      
-      setCurrentResident(result.resident);
-      setRole('MORADOR');
-      setIsAuthenticated(true);
-      setShowResidentRegister(false);
-      setActiveTab('dashboard');
-    } catch (error: any) {
-      throw error;
-    }
-  };
-
   const handleLogin = (selectedRole: UserRole, options?: { mustChangePassword?: boolean }) => {
-    // MORADOR: permanece no modal Login; cadastro só abre via "Criar conta"
-    if (selectedRole === 'MORADOR') return;
-
-    // Evitar mistura de sessões: ao logar como admin/porteiro/síndico, limpar sessão de MORADOR anterior
     try {
       sessionStorage.removeItem('currentResident');
       sessionStorage.removeItem('residentRole');
@@ -2537,24 +2141,18 @@ const App: React.FC = () => {
     }
 
     setRole(selectedRole);
-    setCurrentResident(null);
     setIsAuthenticated(true);
     setActiveTab('dashboard');
     setShowFirstLoginChangePasswordModal(!!options?.mustChangePassword);
     if (options?.mustChangePassword) setFirstLoginPasswordData({ new: '', confirm: '' });
   };
   
-  const handleLogout = () => { 
-    setIsAuthenticated(false); 
-    setCurrentResident(null);
-    setShowResidentRegister(false);
+  const handleLogout = () => {
+    setIsAuthenticated(false);
     setAuthUser(null);
-    // Não reexibir vídeo após logout — deve exibir-se apenas uma vez
     setActiveTab('dashboard');
-    // Limpar dados do morador da sessão
     sessionStorage.removeItem('currentResident');
     sessionStorage.removeItem('residentRole');
-    // Limpar dados do usuário da sessão
     sessionStorage.removeItem('currentUser');
     sessionStorage.removeItem('userRole');
   };
@@ -2717,49 +2315,7 @@ const App: React.FC = () => {
           </div>
         );
       }
-      // Dashboard do Morador: visão simplificada, sem registro de encomendas
-      if (role === 'MORADOR' && currentResident) {
-        return (
-          <MoradorDashboardView
-            currentResident={currentResident}
-            allBoletos={allBoletos}
-            allNotices={allNotices}
-            allPackages={allPackages}
-            allReservations={dayReservations}
-            onViewBoleto={async (boleto) => {
-              try {
-                // Preferir PDF original (novo sistema). Fallback: pdfUrl (legado).
-                if (boleto.pdf_original_path) {
-                  const { downloadBoletoOriginalPdf } = await import('./services/dataService');
-                  const result = await downloadBoletoOriginalPdf(boleto.pdf_original_path, boleto.checksum_pdf);
-                  if (result.url) {
-                    window.open(result.url, '_blank');
-                    return;
-                  }
-                  toast.error(result.error || 'Erro ao abrir PDF original.');
-                  return;
-                }
-                if (boleto.pdfUrl) {
-                  window.open(boleto.pdfUrl, '_blank');
-                  return;
-                }
-                toast.error('Este boleto não possui PDF disponível.');
-              } catch (e) {
-                console.error('[Dashboard Morador] Erro ao visualizar boleto:', e);
-                toast.error('Erro ao abrir o boleto.');
-              }
-            }}
-            onDownloadBoleto={async (boleto) => {
-              await handleDownloadBoleto(boleto);
-            }}
-            onViewPackage={setSelectedPackageForDetail}
-            onViewNotice={(_notice) => {
-              setActiveTab('notices');
-            }}
-          />
-        );
-      }
-      if (role !== 'MORADOR' && role !== 'PORTEIRO') {
+      if (role !== 'PORTEIRO' && role !== 'SINDICO') {
         const staffOccurrences = allOccurrences.filter(o => !o.deletedByAdmin);
         return (
           <SindicoDashboardView 
@@ -2772,7 +2328,7 @@ const App: React.FC = () => {
           />
         );
       }
-      // Dashboard do Porteiro (Original)
+      // Painel operacional da portaria / síndico (DashboardView evoluído — Etapa 2)
       return (
         <DashboardView 
           globalSearchQuery={globalSearchQuery} 
@@ -2791,6 +2347,16 @@ const App: React.FC = () => {
           setSelectedVisitorForDetail={setSelectedVisitorForDetail}
           setSelectedOccurrenceForDetail={setSelectedOccurrenceForDetail}
           setReservationFilter={setReservationFilter}
+          operationalCounts={operationalCounts}
+          pendingPackages={operationalPendingPackages}
+          openOccurrences={operationalOpenOccurrences}
+          activeVisitors={operationalActiveVisitors}
+          onOpenCameraScan={() => {
+            setCameraScanInitialMode('qr');
+            setIsCameraScanModalOpen(true);
+          }}
+          onOpenOccurrenceModal={() => setIsOccurrenceModalOpen(true)}
+          onOpenSentinela={() => setActiveTab('sentinela')}
         />
       );
     }
@@ -2809,7 +2375,6 @@ const App: React.FC = () => {
           );
         }
         const filteredNotices = allNotices
-          .filter(n => !dismissedNoticeIds.includes(n.id))
           .filter(n => {
             if (noticeFilter === 'urgent') return n.category === 'Urgente';
             if (noticeFilter === 'unread') return !n.read;
@@ -2833,7 +2398,6 @@ const App: React.FC = () => {
             handleSendChatMessage={handleSendChatMessage}
             chatEndRef={chatEndRef}
             handleAcknowledgeNotice={handleAcknowledgeNotice}
-            onDismissNotice={handleDismissNotice}
             onRefreshChat={handleRefreshChatMessages}
             onClearChat={handleClearChatMessages}
             onAddNotice={hasPermission('notices.create') ? () => setSelectedNoticeForEdit(createDraftNotice()) : undefined}
@@ -2865,7 +2429,7 @@ const App: React.FC = () => {
             handleReservationAction={hasPermission('reservations.update') ? handleReservationAction : () => {}}
             onDeleteReservation={hasPermission('reservations.delete') ? handleDeleteReservation : undefined}
             canCreateReservation={hasPermission('reservations.create')}
-            canManageAreaPrices={role !== 'MORADOR' && hasPermission('settings.update')}
+            canManageAreaPrices={hasPermission('settings.update')}
           />
         );
       case 'residents':
@@ -2895,377 +2459,8 @@ const App: React.FC = () => {
             allPackages={allPackages}
             visitorLogs={visitorLogs}
             onImportClick={canManageResidents ? () => importResidentsFileInputRef.current?.click() : undefined}
-            onInviteClick={canManageResidents ? () => setIsResidentInviteModalOpen(true) : undefined}
             canManageResidents={canManageResidents}
           />
-        );
-      case 'residentProfile':
-        if (role === 'MORADOR' && currentResident) {
-          return (
-            <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-              <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter" style={{ color: 'var(--text-primary)' }}>
-                    Meu Perfil
-                  </h3>
-                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    Dados do morador
-                  </p>
-                </div>
-                {!isEditingResidentProfile && !isChangingResidentPassword && (
-                  <button
-                    onClick={handleStartEditResidentProfile}
-                    className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
-                    style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                  >
-                    Editar Perfil
-                  </button>
-                )}
-              </header>
-              <div className="premium-glass rounded-2xl p-6 sm:p-8 border" style={{ borderColor: 'var(--border-color)' }}>
-                <div className="flex items-center gap-4 mb-6">
-                  <label className="relative cursor-pointer group">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        if (file) handleResidentAvatarChange(file);
-                      }}
-                    />
-                    <div className="w-14 h-14 rounded-full bg-[var(--text-primary)] flex items-center justify-center text-[var(--bg-color)] font-black text-xl overflow-hidden relative">
-                      {residentAvatar ? (
-                        <img
-                          src={residentAvatar}
-                          alt="Foto do morador"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span>{currentResident.name?.charAt(0) || '?'}</span>
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] font-bold uppercase tracking-widest transition-opacity">
-                        Alterar
-                      </div>
-                    </div>
-                  </label>
-                  <div>
-                    <h4 className="text-xl font-black uppercase tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                      {currentResident.name}
-                    </h4>
-                    <p className="text-xs font-bold uppercase tracking-widest opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                      Unidade {currentResident.unit}
-                    </p>
-                  </div>
-                </div>
-
-                {isEditingResidentProfile ? (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2 sm:col-span-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                          CPF (necessário para associação automática de boletos)
-                        </label>
-                        <input
-                          type="text"
-                          value={residentProfileData.cpf}
-                          onChange={(e) => setResidentProfileData({ ...residentProfileData, cpf: e.target.value })}
-                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="003.641.765-39"
-                        />
-                        {!String(residentProfileData.cpf || '').trim() && (
-                          <p className="text-[11px] opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                            Sem CPF, o sistema não consegue associar boletos importados (PDF) ao seu perfil.
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                          E-mail
-                        </label>
-                        <input
-                          type="email"
-                          value={residentProfileData.email}
-                          onChange={(e) => setResidentProfileData({ ...residentProfileData, email: e.target.value })}
-                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="email@exemplo.com"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                          Telefone
-                        </label>
-                        <input
-                          type="tel"
-                          value={residentProfileData.phone}
-                          onChange={(e) => setResidentProfileData({ ...residentProfileData, phone: e.target.value })}
-                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="(00) 00000-0000"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                          WhatsApp
-                        </label>
-                        <input
-                          type="tel"
-                          value={residentProfileData.whatsapp}
-                          onChange={(e) => setResidentProfileData({ ...residentProfileData, whatsapp: e.target.value })}
-                          className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="(00) 00000-0000"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
-                      <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3" style={{ color: 'var(--text-secondary)' }}>
-                        Dados do veículo
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                            Placa
-                          </label>
-                          <input
-                            type="text"
-                            value={residentProfileData.vehiclePlate}
-                            onChange={(e) => setResidentProfileData({ ...residentProfileData, vehiclePlate: e.target.value.toUpperCase() })}
-                            className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)] tracking-[0.2em]"
-                            style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                            placeholder="ABC1D23"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                            Modelo
-                          </label>
-                          <input
-                            type="text"
-                            value={residentProfileData.vehicleModel}
-                            onChange={(e) => setResidentProfileData({ ...residentProfileData, vehicleModel: e.target.value })}
-                            className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                            style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                            placeholder="Ex: Corolla XEi"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                            Cor
-                          </label>
-                          <input
-                            type="text"
-                            value={residentProfileData.vehicleColor}
-                            onChange={(e) => setResidentProfileData({ ...residentProfileData, vehicleColor: e.target.value })}
-                            className="w-full px-4 py-2 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                            style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                            placeholder="Ex: Prata"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        onClick={handleSaveResidentProfile}
-                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
-                      >
-                        Salvar
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsEditingResidentProfile(false);
-                          setResidentProfileData({
-                            email: '',
-                            phone: '',
-                            whatsapp: '',
-                            cpf: '',
-                            vehiclePlate: '',
-                            vehicleModel: '',
-                            vehicleColor: ''
-                          });
-                        }}
-                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : isChangingResidentPassword ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                        Senha Atual
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showResidentPasswords.current ? 'text' : 'password'}
-                          value={residentPasswordData.current}
-                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, current: e.target.value })}
-                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="Digite sua senha atual"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, current: !showResidentPasswords.current })}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {showResidentPasswords.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                        Nova Senha
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showResidentPasswords.new ? 'text' : 'password'}
-                          value={residentPasswordData.new}
-                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, new: e.target.value })}
-                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="Digite a nova senha"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, new: !showResidentPasswords.new })}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {showResidentPasswords.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest opacity-50 block" style={{ color: 'var(--text-secondary)' }}>
-                        Confirmar Nova Senha
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showResidentPasswords.confirm ? 'text' : 'password'}
-                          value={residentPasswordData.confirm}
-                          onChange={(e) => setResidentPasswordData({ ...residentPasswordData, confirm: e.target.value })}
-                          className="w-full px-4 py-2 pr-10 rounded-xl border bg-transparent text-sm font-medium outline-none transition-all focus:border-[var(--text-primary)]"
-                          style={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                          placeholder="Confirme a nova senha"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowResidentPasswords({ ...showResidentPasswords, confirm: !showResidentPasswords.confirm })}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {showResidentPasswords.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        onClick={handleChangeResidentPassword}
-                        className="px-6 py-2 rounded-xl font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
-                      >
-                        Alterar Senha
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsChangingResidentPassword(false);
-                          setResidentPasswordData({ current: '', new: '', confirm: '' });
-                          setShowResidentPasswords({ current: false, new: false, confirm: false });
-                        }}
-                        className="px-6 py-2 rounded-xl border font-bold uppercase tracking-widest text-sm transition-all hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                          E-mail
-                        </p>
-                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.email || 'Não informado'}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                          Telefone
-                        </p>
-                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.phone || 'Não informado'}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                          WhatsApp
-                        </p>
-                        <p style={{ color: 'var(--text-primary)' }}>{currentResident.whatsapp || 'Não informado'}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 pt-6 border-t space-y-3" style={{ borderColor: 'var(--border-color)' }}>
-                      <p className="text-[10px] font-black uppercase tracking-widest opacity-60" style={{ color: 'var(--text-secondary)' }}>
-                        Dados do veículo
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                            Placa
-                          </p>
-                          <p style={{ color: 'var(--text-primary)' }}>
-                            {currentResident.vehiclePlate || 'Não informado'}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                            Modelo
-                          </p>
-                          <p style={{ color: 'var(--text-primary)' }}>
-                            {currentResident.vehicleModel || 'Não informado'}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest opacity-50" style={{ color: 'var(--text-secondary)' }}>
-                            Cor
-                          </p>
-                          <p style={{ color: 'var(--text-primary)' }}>
-                            {currentResident.vehicleColor || 'Não informado'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 pt-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
-                      <button
-                        onClick={() => setIsChangingResidentPassword(true)}
-                        className="px-4 py-2 rounded-xl border text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
-                        style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}
-                      >
-                        Alterar Senha
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-            <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-            <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-            <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-              A página de perfil é exclusiva para o morador autenticado.
-            </p>
-          </div>
         );
       case 'sindicoProfile':
         if (['SINDICO', 'PORTEIRO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role) && currentAdminUser) {
@@ -3545,7 +2740,6 @@ const App: React.FC = () => {
           onDownloadBoleto={canDownloadBoletos ? handleDownloadBoleto : undefined}
           onDeleteBoleto={canDeleteBoletos ? handleDeleteBoleto : undefined}
           showImportButton={canCreateBoletos}
-          currentResident={currentResident}
           role={role}
           isLoadingBoletos={!boletosLoaded}
           onImportSuccess={async () => {
@@ -3571,19 +2765,7 @@ const App: React.FC = () => {
             visitorLogs={visitorLogs}
             visitorSearch={visitorSearch}
             setVisitorSearch={setVisitorSearch}
-            setIsVisitorModalOpen={(val) => {
-              if (!val) {
-                setIsVisitorModalOpen(false);
-                setIsExpectedVisitorModalOpen(false);
-                return;
-              }
-              if (role === 'MORADOR') {
-                setIsExpectedVisitorModalOpen(true);
-              } else {
-                // Porteiro e Síndico: acesso total ao cadastro de visitantes.
-                setIsVisitorModalOpen(true);
-              }
-            }}
+            setIsVisitorModalOpen={setIsVisitorModalOpen}
             visitorTab={visitorTab}
             setVisitorTab={setVisitorTab}
             handleVisitorCheckOut={handleVisitorCheckOut}
@@ -3596,43 +2778,6 @@ const App: React.FC = () => {
         // Página removida do menu; redireciona para Ocorrências (useEffect acima)
         return null;
       case 'packages': 
-        if (role === 'MORADOR' && currentResident) {
-          // Normalizar unidades para comparação (remover espaços, converter para maiúsculas)
-          const normalizeUnit = (unit: string) => unit?.trim().toUpperCase() || '';
-          const residentUnit = normalizeUnit(currentResident.unit);
-          
-          // Filtrar encomendas do morador e ordenar por data (mais recente primeiro)
-          const myPackages = allPackages
-            .filter(p => p.recipientId === currentResident.id && !p.hiddenForResident)
-            .sort((a, b) => {
-              const dateA = new Date(a.receivedAt).getTime();
-              const dateB = new Date(b.receivedAt).getTime();
-              return dateB - dateA; // Mais recente primeiro
-            });
-          
-          // Log para debug
-          console.log('[PackagesView - Morador]', {
-            residentUnit,
-            totalPackages: allPackages.length,
-            myPackagesCount: myPackages.length,
-            myPackages: myPackages.map(p => ({ id: p.id, unit: p.unit, status: p.status, receivedAt: p.receivedAt }))
-          });
-          
-          // Morador pode apenas visualizar suas encomendas, sem registrar novas
-          return (
-            <PackagesView
-              allPackages={myPackages}
-              allResidents={[]}
-              packageSearch={packageSearch}
-              setPackageSearch={setPackageSearch}
-              setIsNewPackageModalOpen={() => {}}
-              setSelectedPackageForDetail={setSelectedPackageForDetail}
-              onDeletePackage={handleDeletePackage}
-              onCameraScan={undefined}
-              canRegister={false}
-            />
-          );
-        }
         if (!hasPermission('packages.view')) {
           return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -3673,17 +2818,6 @@ const App: React.FC = () => {
           <AdminPermissionsView onBack={() => setActiveTab('settings')} />
         );
       case 'settings':
-        if (role === 'MORADOR' || role === 'PORTEIRO') {
-          return (
-            <MoradorSettingsView
-              onGoToProfile={() => setActiveTab('residentProfile')}
-              onOpenChangePassword={() => {
-                setOpenResidentPasswordOnProfile(true);
-                setActiveTab('residentProfile');
-              }}
-            />
-          );
-        }
         if (!hasPermission('settings.view')) {
           return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -3721,47 +2855,6 @@ const App: React.FC = () => {
             </div>
           );
         }
-        if (role === 'MORADOR') {
-          if (!currentResident) {
-            return (
-              <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-                <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
-                <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
-                <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                  É necessário estar autenticado como morador para visualizar suas ocorrências.
-                </p>
-              </div>
-            );
-          }
-          const norm = (s: string | undefined) => (s ?? '').trim().toUpperCase();
-          // Morador vê só as suas; exclusão do morador oculta só para ele (deletedByResident). Admin pode ter excluído e mesmo assim morador vê.
-          const myOccurrences = allOccurrences.filter((occ) => {
-            if (occ.deletedByResident) return false;
-            if (occ.residentId && currentResident?.id) return String(occ.residentId).trim() === String(currentResident.id).trim();
-            return norm(occ.unit) === norm(currentResident?.unit) || norm(occ.residentName) === norm(currentResident?.name);
-          });
-          const handleOccurrenceClickResident = async (occ: Occurrence) => {
-            const { data } = await getOccurrenceById(occ.id);
-            const occurrenceToShow = data || occ;
-            markOccurrenceAsRead(occ.id).then((res) => {
-              if (res.success) setAllOccurrences((prev) => prev.map((o) => (o.id === occ.id ? { ...o, isRead: true } : o)));
-            });
-            setSelectedOccurrenceForDetail(occurrenceToShow);
-          };
-          return (
-            <OccurrencesView
-              allOccurrences={myOccurrences}
-              occurrenceSearch={occurrenceSearch}
-              setOccurrenceSearch={setOccurrenceSearch}
-              setIsOccurrenceModalOpen={setIsOccurrenceModalOpen}
-              handleDeleteOccurrence={handleDeleteOccurrence}
-              onOccurrenceClick={handleOccurrenceClickResident}
-              canAddOccurrence={hasPermission('occurrences.create')}
-              canResolve={false}
-              canDelete={hasPermission('occurrences.delete')}
-            />
-          );
-        }
         // Síndico/Admin/Portaria: só visualizar, resolver e responder. Nova ocorrência é só o morador.
         // Porteiro só visualiza; Síndico/Admin podem resolver e excluir.
         const staffOccurrences = allOccurrences.filter(o => !o.deletedByAdmin);
@@ -3789,7 +2882,7 @@ const App: React.FC = () => {
               <AlertCircle className="w-16 h-16 text-red-500 opacity-50" />
               <h3 className="text-2xl font-black uppercase tracking-tight">Acesso Restrito</h3>
               <p className="text-sm text-[var(--text-secondary)] max-w-md text-center">
-                Você não tem permissão para acessar Sentinela AI.
+                Você não tem permissão para acessar o Sentinela.
               </p>
             </div>
           );
@@ -3837,11 +2930,14 @@ const App: React.FC = () => {
     }
   };
 
+  if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname.replace(/\/$/, '') || '/';
+    if (pathname === '/master' || pathname.startsWith('/master/')) {
+      return <MasterApp />;
+    }
+  }
   if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/accept-invite') {
     return <AcceptStaffInvitePage />;
-  }
-  if (typeof window !== 'undefined' && window.location.pathname.replace(/\/$/, '') === '/accept-resident-invite') {
-    return <AcceptResidentInvitePage />;
   }
 
   let content: React.ReactNode;
@@ -3862,23 +2958,10 @@ const App: React.FC = () => {
         }}
       />
     );
-  } else if (!isAuthenticated && showResidentRegister) {
-    content = (
-      <ResidentRegister
-        onRegister={handleResidentRegister}
-        onLogin={handleResidentLogin}
-        onBack={() => setShowResidentRegister(false)}
-        theme={theme}
-        toggleTheme={toggleTheme}
-        existingResidents={allResidents}
-      />
-    );
   } else if (!isAuthenticated) {
     content = (
       <Login
         onLogin={handleLogin}
-        onMoradorLogin={handleResidentLogin}
-        onRequestResidentRegister={() => setShowResidentRegister(true)}
         theme={theme}
         toggleTheme={toggleTheme}
       />
@@ -3895,50 +2978,13 @@ const App: React.FC = () => {
         theme={theme}
         toggleTheme={toggleTheme}
         notificationCount={
-          role === 'MORADOR'
-            ? unreadCountForBell
-            : ['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA', 'PORTEIRO'].includes(role)
-              ? staffOpenOccurrencesCount
-              : 0
+          ['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA', 'PORTEIRO'].includes(role)
+            ? staffOpenOccurrencesCount
+            : 0
         }
         onOpenNotifications={undefined}
-        notifications={role === 'MORADOR' ? unreadNotificationsForBell : staffNotificationsForBell}
-        onNotificationClick={role === 'MORADOR' ? async (n) => {
-          if (n.type === 'occurrence' && n.related_id) {
-            const idStr = String(n.related_id).trim();
-            await markOccurrenceAsRead(idStr);
-            if (n.id) {
-              await markNotificationAsRead(n.id);
-              setAllNotifications((prev) => prev.map((notif) => (notif.id === n.id ? { ...notif, read: true } : notif)));
-            }
-            setAllOccurrences((prev) => prev.map((o) => (String(o.id) === idStr ? { ...o, isRead: true } : o)));
-            const { data } = await getOccurrenceById(idStr);
-            if (data) {
-              setAllOccurrences((prev) => {
-                const byId = new Map(prev.map((o) => [String(o.id), o]));
-                byId.set(idStr, data);
-                return Array.from(byId.values());
-              });
-              setSelectedOccurrenceForDetail(data);
-            } else {
-              const occ = allOccurrences.find((o) => String(o.id) === idStr);
-              if (occ) setSelectedOccurrenceForDetail({ ...occ, isRead: true });
-            }
-            setActiveTab('occurrences');
-          } else if (n.type === 'other') {
-            await markNotificationAsRead(n.id);
-            setAllNotifications((prev) => prev.map((notif) => (notif.id === n.id ? { ...notif, read: true } : notif)));
-            setActiveTab('notices');
-          } else if (n.type === 'visitor') {
-            await markNotificationAsRead(n.id);
-            setAllNotifications((prev) => prev.map((notif) => (notif.id === n.id ? { ...notif, read: true } : notif)));
-            setActiveTab('visitors');
-          } else if (n.type === 'package') {
-            await markNotificationAsRead(n.id);
-            setAllNotifications((prev) => prev.map((notif) => (notif.id === n.id ? { ...notif, read: true } : notif)));
-            setActiveTab('packages');
-          }
-        } : (['PORTEIRO', 'SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role) ? (n) => {
+        notifications={staffNotificationsForBell}
+        onNotificationClick={(['PORTEIRO', 'SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role) ? (n) => {
           if (n.type === 'occurrence' && n.related_id) {
             const idStr = String(n.related_id).trim();
             const occ = allOccurrences.find((o) => String(o.id) === idStr);
@@ -3946,23 +2992,13 @@ const App: React.FC = () => {
             setActiveTab('occurrences');
           }
         } : undefined)}
-        onDeleteNotification={role === 'MORADOR' ? handleDeleteNotification : undefined}
         currentAdminUser={currentAdminUser}
-        currentResident={currentResident}
       >
         {renderContent()}
       </Layout>
       <QuickViewModal 
         category={quickViewCategory} data={quickViewData} onClose={() => setQuickViewCategory(null)} onGoToPage={(tab) => setActiveTab(tab)}
-        onAddNew={() => {
-          if (quickViewCategory === 'visitors') {
-            setQuickViewCategory(null);
-            if (role === 'MORADOR') {
-              setIsExpectedVisitorModalOpen(true);
-            }
-          }
-        }}
-        onSelectItem={(item) => { 
+                onSelectItem={(item) => { 
           if (quickViewCategory === 'packages') { setSelectedPackageForDetail(item); setQuickViewCategory(null); } 
           else if (quickViewCategory === 'visitors') { setSelectedVisitorForDetail(item); setQuickViewCategory(null); } 
           else if (quickViewCategory === 'occurrences') { setSelectedOccurrenceForDetail(item); setQuickViewCategory(null); } 
@@ -3985,21 +3021,11 @@ const App: React.FC = () => {
         filteredResidents={filteredResForReservation}
         hasConflict={hasTimeConflict}
         onConfirm={handleCreateReservation}
-        currentRole={role}
-        currentResident={currentResident}
       />
       <NewVisitorModal isOpen={isVisitorModalOpen} onClose={resetVisitorModal} step={newVisitorStep} setStep={setNewVisitorStep} data={newVisitorData} setData={setNewVisitorData} searchResident={searchResident} setSearchResident={setSearchResident} filteredResidents={filteredResidents} accessTypes={visitorAccessTypes} handleRemoveAccessType={handleRemoveAccessType} isAddingAccessType={isAddingAccessType} setIsAddingAccessType={setIsAddingAccessType} newAccessTypeInput={newAccessTypeInput} setNewAccessTypeInput={setNewAccessTypeInput} handleAddAccessType={handleAddAccessType} onConfirm={handleRegisterVisitor} />
-      <NewExpectedVisitorModal
-        isOpen={isExpectedVisitorModalOpen}
-        onClose={() => { setIsExpectedVisitorModalOpen(false); setExpectedVisitorData({ visitorName: '', observation: '' }); }}
-        data={expectedVisitorData}
-        setData={setExpectedVisitorData}
-        onConfirm={handleResidentRegisterExpectedVisitor}
-      />
       <NewPackageModal isOpen={isNewPackageModalOpen} onClose={resetPackageModal} step={packageStep} setStep={setPackageStep} searchResident={searchResident} setSearchResident={setSearchResident} selectedResident={selectedResident} setSelectedResident={setSelectedResident} filteredResidents={filteredResidents} allResidents={allResidents} residentsLoading={residentsLoading} residentsError={residentsError} onRetryResidents={() => fetchResidents(false)} packageSaving={packageSaving} pendingImage={pendingPackageImage} pendingQrData={pendingPackageQrData} packageType={packageType} setPackageType={setPackageType} packageCategories={packageCategories} isAddingPkgCategory={isAddingPkgCategory} setIsAddingPkgCategory={setIsAddingPkgCategory} newPkgCatName={newPkgCatName} setNewPkgCatName={setNewPkgCatName} handleAddPkgCategory={handleAddPkgCategory} numItems={numItems} packageItems={packageItems} handleAddItemRow={handleAddItemRow} handleRemoveItemRow={handleRemoveItemRow} updateItem={updateItem} packageMessage={packageMessage} setPackageMessage={setPackageMessage} onConfirm={handleRegisterPackageFinal} onOpenCameraScan={(mode: 'camera' | 'gallery') => { setCameraScanInitialMode(mode === 'gallery' ? 'photo' : 'qr'); setIsCameraScanModalOpen(true); }} onOpenGalleryPick={() => packageGalleryInputRef.current?.click()} />
       <StaffFormModal isOpen={isStaffModalOpen} onClose={() => setIsStaffModalOpen(false)} data={staffFormData} setData={setStaffFormData} onSave={handleSaveStaff} />
       <StaffInviteModal isOpen={isStaffInviteModalOpen} onClose={() => setIsStaffInviteModalOpen(false)} createdByName={currentAdminUser?.name ?? null} />
-      <ResidentInviteModal isOpen={isResidentInviteModalOpen} onClose={() => setIsResidentInviteModalOpen(false)} createdByName={currentAdminUser?.name ?? null} />
       <AdminUserModal
         isOpen={isAdminUserModalOpen}
         onClose={() => setIsAdminUserModalOpen(false)}
@@ -4188,7 +3214,6 @@ const App: React.FC = () => {
         onNotify={handleSendReminder} 
         calculatePermanence={calculatePermanence}
         currentRole={role}
-        currentResident={currentResident}
       />
       <VisitorDetailModal visitor={selectedVisitorForDetail} onClose={() => setSelectedVisitorForDetail(null)} onCheckout={handleVisitorCheckOut} calculatePermanence={calculatePermanence} />
       <OccurrenceDetailModal
@@ -4197,11 +3222,10 @@ const App: React.FC = () => {
         onSave={handleSaveOccurrenceDetails}
         onDelete={handleDeleteOccurrence}
         onResolve={handleResolveOccurrence}
-        canDelete={role === 'MORADOR' || hasPermission('occurrences.delete')}
+        canDelete={hasPermission('occurrences.delete')}
         canResolve={hasPermission('occurrences.update')}
         setOccurrence={setSelectedOccurrenceForDetail}
         currentRole={role}
-        currentResident={currentResident}
         currentAdminUser={currentAdminUser}
         onPersistMessage={handlePersistOccurrenceMessage}
       />
@@ -4261,48 +3285,47 @@ const App: React.FC = () => {
           toast.error('Por favor, descreva a ocorrência');
           return;
         }
-        
-        const newOccurrence: Occurrence = {
-          id: `temp-${Date.now()}`,
-          residentId: role === 'MORADOR' && currentResident ? currentResident.id : undefined,
-          residentName: role === 'MORADOR' && currentResident ? currentResident.name : 'Sistema',
-          unit: role === 'MORADOR' && currentResident ? currentResident.unit : 'N/A',
-          description: occurrenceDescription,
-          status: 'Aberto',
-          date: new Date().toISOString(),
-          reportedBy: role === 'PORTEIRO' ? 'Porteiro' : role === 'SINDICO' ? 'Síndico' : ['ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role) ? 'Admin' : 'Morador',
-          imageUrl: imageDataUrl ?? null
-        };
-        
-        const result = await saveOccurrence(newOccurrence);
-        if (result.success && result.id) {
+
+        const reportedBy = role === 'PORTEIRO' ? 'Porteiro' : role === 'SINDICO' ? 'Síndico' : ['ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(role) ? 'Admin' : 'Staff';
+        const result = await coreCreateOccurrence(
+          {
+            description: occurrenceDescription,
+            residentName: 'Sistema',
+            unit: 'N/A',
+            reportedBy,
+            imageUrl: imageDataUrl ?? null,
+            residents: allResidents
+          },
+          { channel: 'panel', actorDisplayName: reportedBy, actorRole: role }
+        );
+
+        if (result.success && result.data.id) {
           const optimisticOccurrence: Occurrence = {
-            ...newOccurrence,
-            id: result.id,
-            residentId: role === 'MORADOR' && currentResident ? currentResident.id : undefined,
-            messages: newOccurrence.messages ?? []
+            ...result.data.occurrence,
+            id: result.data.id,
+            messages: result.data.occurrence.messages ?? []
           };
           // Garantir que a ocorrência aparece na interface do morador e do admin imediatamente
-          setAllOccurrences(prev => [optimisticOccurrence, ...prev.filter(o => String(o.id) !== String(result.id))]);
+          setAllOccurrences(prev => [optimisticOccurrence, ...prev.filter(o => String(o.id) !== String(result.data.id))]);
           setOccurrenceDescription('');
           setIsOccurrenceModalOpen(false);
           // Refetch para alinhar com o servidor; mantém a otimista se o servidor ainda não tiver
           getOccurrences({
             onRemoteUpdate: (data) => {
               setAllOccurrences(prev => {
-                const hasNew = data?.some(o => String(o.id).trim() === String(result.id).trim());
+                const hasNew = data?.some(o => String(o.id).trim() === String(result.data.id).trim());
                 if (hasNew && data?.length) return data;
-                return [optimisticOccurrence, ...(data ?? []).filter(o => String(o.id).trim() !== String(result.id).trim())];
+                return [optimisticOccurrence, ...(data ?? []).filter(o => String(o.id).trim() !== String(result.data.id).trim())];
               });
             }
           }).then(({ data }) => {
             if (!data?.length) return;
-            const hasNew = data.some(o => String(o.id).trim() === String(result.id).trim());
-            setAllOccurrences(prev => hasNew ? data : [optimisticOccurrence, ...data.filter(o => String(o.id).trim() !== String(result.id).trim())]);
+            const hasNew = data.some(o => String(o.id).trim() === String(result.data.id).trim());
+            setAllOccurrences(prev => hasNew ? data : [optimisticOccurrence, ...data.filter(o => String(o.id).trim() !== String(result.data.id).trim())]);
           });
         } else if (!result.success) {
           console.error('Erro ao salvar ocorrência:', result.error);
-          toast.error('Erro ao registrar ocorrência: ' + (result.error || 'Erro desconhecido'));
+          toast.error('Erro ao registrar ocorrência: ' + (result.error.message || 'Erro desconhecido'));
         }
       }} />
       <NoticeEditModal notice={selectedNoticeForEdit} onClose={() => setSelectedNoticeForEdit(null)} onChange={setSelectedNoticeForEdit} onSave={handleSaveNoticeChanges} onDelete={handleDeleteNotice} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 interface InviteInfo {
   email: string;
@@ -107,7 +108,7 @@ const AcceptStaffInvitePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#050505] p-4">
+      <div className="sentinela-page min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4" />
           <p className="text-sm text-zinc-400">Validando link...</p>
@@ -118,7 +119,7 @@ const AcceptStaffInvitePage: React.FC = () => {
 
   if (error && !invite) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#050505] p-4">
+      <div className="sentinela-page min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full backdrop-blur-3xl border border-white/10 rounded-[48px] p-8 shadow-2xl bg-white/[0.03]">
           <div className="flex items-center gap-3 text-red-400 mb-6">
             <AlertCircle className="w-8 h-8 shrink-0" />
@@ -137,7 +138,7 @@ const AcceptStaffInvitePage: React.FC = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#050505] p-4">
+      <div className="sentinela-page min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full backdrop-blur-3xl border border-white/10 rounded-[48px] p-8 shadow-2xl bg-white/[0.03]">
           <div className="flex items-center gap-3 text-emerald-400 mb-6">
             <CheckCircle className="w-8 h-8 shrink-0" />
@@ -160,10 +161,12 @@ const AcceptStaffInvitePage: React.FC = () => {
   if (invite?.role === 'RONDISTA') roleLabel = 'Rondista';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505] p-4">
-      <div className="max-w-md w-full backdrop-blur-3xl border border-white/10 rounded-[48px] p-8 md:p-12 shadow-2xl bg-white/[0.03]">
+    <div className="sentinela-page min-h-screen flex items-center justify-center p-4">
+      <div className="sentinela-card max-w-md w-full backdrop-blur-3xl border rounded-[36px] p-8 md:p-12">
         <header className="text-center mb-8">
-          <p className="text-[10px] uppercase tracking-[0.3em] font-black text-zinc-500">Qualivida Gestão</p>
+          <img src={BRANDING.icon} alt="" aria-hidden="true" className="w-16 h-16 rounded-2xl object-cover mx-auto mb-4" />
+          <p className="text-sm font-black">{BRANDING.name}</p>
+          <p className="text-[9px] uppercase tracking-[0.2em] font-black text-[var(--sentinela-text-muted)]">{BRANDING.tagline}</p>
           <h1 className="text-xl font-black uppercase mt-2">Concluir cadastro</h1>
           <p className="text-xs text-zinc-500 mt-1">Você foi convidado como <strong className="text-white">{roleLabel}</strong></p>
         </header>

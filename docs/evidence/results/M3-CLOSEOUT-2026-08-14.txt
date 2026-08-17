@@ -1,0 +1,191 @@
+# M3 CLOSEOUT — FECHAMENTO FORMAL
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260814170000_003_tenant_memberships.sql
+Nome lógico:         003_tenant_memberships
+APPLY evidência:     docs/evidence/results/M3-APPLY-2026-08-14.txt
+APPLY timestamp:     2026-08-14T11:15:16Z → 2026-08-14T11:15:20Z
+APPLY resultado:     PASS
+
+Modo desta tarefa:   CLOSEOUT / FINAL LIVE VERIFICATION (READ-ONLY)
+UTC closeout:        2026-08-14T11:17:41Z
+Escrita no banco:    NENHUMA
+Migrations nesta tarefa: NENHUMA (M3 NÃO reaplicada; M4 NÃO executada)
+Rollback:            NOT EXECUTED
+
+================================================================================
+1. AUTENTICAÇÃO LIVE
+================================================================================
+current_database = postgres
+current_user     = postgres
+utc_now          = 2026-08-14 11:17:42.590989
+AUTH_OK          = YES
+psql_exit        = 0
+
+================================================================================
+2. M1 / M2 / M3 STATUS
+================================================================================
+M1 = CLOSED / PASS
+M2 = CLOSED / PASS
+M3 APPLY = PASS
+M3 CLOSEOUT LIVE = PASS (esta execução)
+
+================================================================================
+3. tenant_memberships
+================================================================================
+to_regclass('public.tenant_memberships') = tenant_memberships
+EXISTS = TRUE — PASS
+
+================================================================================
+4. ROWS
+================================================================================
+rows = 0 — PASS
+(confirma ausência de seed/backfill/DML)
+
+================================================================================
+5. CAMPOS (11)
+================================================================================
+id                 | uuid                     | NO  | gen_random_uuid()
+auth_user_id       | uuid                     | NO  |
+organization_id    | uuid                     | NO  |
+condominium_id     | uuid                     | NO  |
+role_id            | uuid                     | NO  |
+resident_id        | uuid                     | YES |
+staff_profile_id   | uuid                     | YES |
+status             | text                     | NO  | 'active'::text
+is_default         | boolean                  | NO  | false
+created_at         | timestamp with time zone | NO  | now()
+updated_at         | timestamp with time zone | NO  | now()
+column_count = 11 — PASS
+
+================================================================================
+6. PK
+================================================================================
+tenant_memberships_pkey PRIMARY KEY (id) — uuid — PASS
+
+================================================================================
+7. FKs (6)
+================================================================================
+tenant_memberships_auth_user_id_fkey
+  FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+tenant_memberships_organization_id_fkey
+  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE RESTRICT
+tenant_memberships_condominium_id_fkey
+  FOREIGN KEY (condominium_id) REFERENCES condominiums(id) ON DELETE RESTRICT
+tenant_memberships_role_id_fkey
+  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT
+tenant_memberships_resident_id_fkey
+  FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE RESTRICT
+tenant_memberships_staff_profile_id_fkey
+  FOREIGN KEY (staff_profile_id) REFERENCES staff(id) ON DELETE RESTRICT
+— PASS
+
+================================================================================
+8. ON DELETE
+================================================================================
+RESTRICT × 6 — PASS
+
+================================================================================
+9. UNIQUE
+================================================================================
+tenant_memberships_auth_user_id_condominium_id_key
+UNIQUE (auth_user_id, condominium_id) — PASS
+
+================================================================================
+10. ÍNDICES
+================================================================================
+tenant_memberships_pkey
+tenant_memberships_auth_user_id_condominium_id_key
+idx_tenant_memberships_condominium_id
+— PASS (PK + UNIQUE + índice condominium_id)
+
+================================================================================
+11. DEFAULTS
+================================================================================
+id         → gen_random_uuid()
+status     → 'active'::text
+is_default → false
+created_at → now()
+updated_at → now()
+— PASS
+
+================================================================================
+12. NULLABILITY
+================================================================================
+resident_id        = YES (NULL permitido) — PASS
+staff_profile_id   = YES (NULL permitido) — PASS
+demais campos NOT NULL conforme SQL aprovado — PASS
+
+================================================================================
+13. TIPOS
+================================================================================
+IDs (id, auth_user_id, organization_id, condominium_id, role_id,
+     resident_id, staff_profile_id) = uuid — PASS
+status = text — PASS
+is_default = boolean (udt bool) — PASS
+created_at / updated_at = timestamptz — PASS
+
+================================================================================
+14. RLS / POLICIES
+================================================================================
+pg_policies tenant_memberships = 0 — PASS
+relrowsecurity = true (observação somente; padrão Supabase como M1/M2)
+Nenhuma alteração de RLS nesta etapa.
+
+================================================================================
+15. LEGADO / DEPENDÊNCIAS
+================================================================================
+organizations EXISTS = TRUE
+condominiums  EXISTS = TRUE
+units         EXISTS = TRUE
+roles         EXISTS = TRUE
+residents     EXISTS = TRUE
+staff         EXISTS = TRUE
+
+Tabelas operacionais legadas presentes (sem ALTER nesta etapa):
+  users, packages, boletos, roles, residents, staff
+
+legado alterado nesta etapa = NÃO — PASS
+
+================================================================================
+16. SEED / BACKFILL
+================================================================================
+NÃO executado
+rows = 0 — PASS
+
+================================================================================
+17. ROLLBACK
+================================================================================
+rollback = NOT EXECUTED — PASS
+
+================================================================================
+18. M4
+================================================================================
+M4 = NÃO EXECUTADO — PASS
+
+================================================================================
+19. OUTRAS MIGRATIONS NESTA ETAPA
+================================================================================
+Nenhuma. Closeout 100% READ-ONLY.
+Nenhum: supabase db push / migration up / migration repair / psql -f migration.sql
+
+================================================================================
+20. GIT
+================================================================================
+git status --short: worktree DIRTY
+  M  docs/FASE-1-MIGRATION-PLAN.md
+  ?? evidências M1/M2/M3 + migrations untracked (esperado)
+pre-m1-checkpoint = aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta)
+HEAD              = 31731e7
+Sem commit / push / tag / reset / clean nesta etapa.
+
+================================================================================
+RESULTADO
+================================================================================
+M3 = CLOSED / PASS
+
+Confirmações:
+- Nenhuma migration foi executada nesta etapa.
+- Nenhuma alteração de banco foi executada nesta etapa.

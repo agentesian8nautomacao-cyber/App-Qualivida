@@ -1,0 +1,129 @@
+SENTINELA AUT — G7-J — EVENT STORE — DEEP REVIEW
+Data: 2026-08-15
+Migration:  supabase/migrations/20260815220000_008_api_domain_events.sql
+Rollback:   supabase/migrations/20260815220000_008_api_domain_events.rollback.sql
+Pré-check:  docs/evidence/M-G7J-EVENT-STORE-PRECHECK-LIVE.sql
+
+RESULTADO: G7-J = APPROVED FOR LIVE PRE-CHECK
+
+HIGH / BLOCKING findings: 0
+MEDIUM findings: 2 (documentados; sem correção automática)
+LOW findings: 2
+
+DATABASE CHANGES   = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+APPLY 008           = NÃO EXECUTADO
+Pré-check LIVE      = NÃO EXECUTADO (artefato pronto; aguarda SQL Editor)
+WIRING / WhatsApp / n8n prod / endpoint read = NÃO
+
+============================================================
+MÉTODO
+============================================================
+1) Review estático adversarial da migration + rollback vs G7-I
+2) Comparação com padrões G6-1/G6-2 (FK tenant, guards, sem seed)
+3) Matriz conceitual A–J (abaixo)
+4) Confirmação: nenhum ALTER M1–M4/G6/G7-C; sem api_domain_events prévio no repo
+5) Harness Docker Postgres: INDISPONÍVEL nesta máquina (daemon Docker Desktop offline)
+   — validação DDL fica para Pre-check/APPLY LIVE; review permanece estática + adversarial
+
+============================================================
+CENÁRIOS A–J (conceitual)
+============================================================
+A) Primeiro evento
+   INSERT com org/condo válidos + event_type permitido → OK
+   PASS (conceitual)
+
+B) Dois eventos do mesmo request_id
+   PK = event_id (não request_id) → múltiplas rows OK
+   Índice request_id cobre correlação
+   PASS
+
+C) Tenants diferentes
+   Rows isoladas por (organization_id, condominium_id)
+   Queries futuras DEVEM filtrar ambos
+   PASS
+
+D) Tenant inválido
+   FK RESTRICT → INSERT falha se org/condo inexistente
+   Wiring NÃO deve tentar persistir rejeição pré-tenant
+   PASS (fail-closed)
+
+E) Request ID repetido
+   Permitido (N eventos / hop)
+   PASS
+
+F) Eventos sensíveis
+   confirmation_id cnf_% permitido; token NÃO tem coluna
+   attributes jsonb — contrato redaction no wiring
+   PASS
+
+G) Payload redacted
+   Sem colunas body/raw/whatsapp; attributes pós-redact no app
+   PASS (DDL); MEDIUM-1: enforcement é app (G7-J-W)
+
+H) Tentativa de alteração
+   Sem triggers UPDATE; runtime proíbe UPDATE/DELETE
+   RLS sem policy bloqueia clientes JWT
+   service_role ainda PODE UPDATE se abusado — append-only = disciplina app + review
+   PASS com MEDIUM-2
+
+I) Consulta cross-tenant
+   Sem policy USING(true); cliente JWT não lê
+   API futura deve filtrar org+condo (AuthZ)
+   PASS (DDL); enforcement read = gate futuro
+
+J) Retenção futura
+   Sem cron nesta migration (correto)
+   Comentários 90/180d documentados
+   PASS
+
+============================================================
+FINDINGS
+============================================================
+MEDIUM-1
+  Integridade de conteúdo sensível depende do wiring (redact antes do INSERT).
+  Aceitável: G7-J-W obrigatório; safeEmit/redact já existem.
+
+MEDIUM-2
+  service_role bypassa RLS e tecnicamente pode UPDATE/DELETE.
+  Mitigação: contrato append-only + code review + sem grants extras;
+  trigger REVOKE UPDATE desnecessário nesta fase (complexidade).
+
+LOW-1
+  RLS ON diverge de G6-1/G6-2 (sem RLS). Justificado para auditoria.
+  Documentado em SENTINELA-AUT-G7-J-EVENT-STORE.md.
+
+LOW-2
+  request.rejected com tenant fake UUID que existe em outra org:
+  FK passa se UUID existir em organizations, mas condo pode ser
+  inconsistente org↔condo (mesmo residual M3/G6 — consistência na API).
+  Wiring deve validar tenant como G2 antes do INSERT.
+
+============================================================
+ROLLBACK REVIEW
+============================================================
+DROP TABLE public.api_domain_events — SEM CASCADE, SEM IF EXISTS
+Não toca M1–M4/G6/G7-C
+PASS
+
+============================================================
+RISCOS RESIDUAIS (não bloqueantes)
+============================================================
+- APPLY sem pre-check LIVE → operador deve executar M-G7J precheck
+- Wiring prematuro → proibido até G7-J-W
+- Volume futuro → subset event_type já limita
+
+============================================================
+VEREDICTO
+============================================================
+G7-J APPROVED FOR LIVE PRE-CHECK
+
+Próximo passo autorizado pelo processo:
+  1) Executar docs/evidence/M-G7J-EVENT-STORE-PRECHECK-LIVE.sql (READ-ONLY)
+  2) Se m_g7j_create_safe = true → G7-J PRE-CHECK PASS / AWAITING APPLY
+  3) APPLY somente com autorização explícita do usuário
+  4) Closeout READ-ONLY → então G7-J CLOSED / PASS
+  5) G7-J-W = autorização separada
+
+STOP: sem APPLY automático nesta etapa.

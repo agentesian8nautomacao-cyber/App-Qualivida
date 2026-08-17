@@ -1,0 +1,133 @@
+SENTINELA AUT — G7-J-W-LIVE — CONTROLLED LIVE EVENT STORE VALIDATION
+Data: 2026-08-15
+Status: G7-J-W-LIVE = PASS
+
+UTC aproximado piloto: 2026-08-16T02:18Z (sessão agent)
+Projeto: zaemlxjwhzrfmowbckmk
+Host DB: db.zaemlxjwhzrfmowbckmk.supabase.co
+Script: scripts/n8n-harness/live-event-store-pilot.ts
+Raw (sem secrets): docs/evidence/results/_tmp_g7jw_live_raw.json
+
+============================================================
+1. PRE-LIVE CHECK (READ-ONLY)
+============================================================
+api_domain_events EXISTS     = t
+rows_before                  = 0
+col_count                    = 21
+PK                           = api_domain_events_pkey
+indexes                      = pkey + tenant_occurred + request_id + tenant_type_occurred
+RLS                          = t
+policies                     = 0
+triggers                     = 0
+M1 org/condo                 = t/t
+G6-1 api_idempotency_keys    = t
+G6-2 api_confirmations       = t
+G7-C exclusion               = t
+
+============================================================
+2. TENANT / CLIENT (sem secrets)
+============================================================
+organization_id = 0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+condominium_id  = 3f383313-5ec0-4d21-97c7-1b2500c933be
+client_id       = n8n-pilot-test
+domain writes   = fake in-memory (não polui packages LIVE)
+event store     = LIVE api_domain_events
+
+============================================================
+3. TESTES LIVE (API handlers reais)
+============================================================
+[x] READ identify_resident
+    HTTP 200  core_executed=true  request_id=g7jwl-read-1786846721767
+
+[x] WRITE create_package (recipient=G7-J-W-LIVE-TEST)
+    HTTP 200  core_executed=true  request_id=req_86ede9cc-…
+    Idempotency-Key=g7jwl-pkg-1786846723784
+
+[x] IDEMPOTENCY replay (mesma key+body)
+    HTTP 200  core_executed=false  request_id=req_b33bbdb0-…
+
+[x] AUTHZ denied (n8n-pilot-readonly)
+    HTTP 403  FORBIDDEN  request_id=req_9e76aaef-…
+
+[x] TENANT invalid (condo B)
+    HTTP 403  TENANT_MISMATCH  request_id=req_2b1ec570-…
+    Persistência: SKIP fail-closed (tenant não confiável) — correto
+
+[x] SENSITIVE pickup → CONFIRMATION_REQUIRED
+    HTTP 409  request_id=req_4d4069eb-…
+    (sem pickup real / sem consume)
+
+============================================================
+4. EVENTOS PERSISTIDOS (LIVE, rows 0→8)
+============================================================
+operation.completed     identify_resident   core=true
+operation.completed     create_package      core=true
+idempotency.replay      create_package      core=false
+operation.completed     create_package      core=false (replay envelope)
+request.denied          create_package      FORBIDDEN
+operation.failed        create_package      FORBIDDEN
+confirmation.required   pickup_package      CONFIRMATION_REQUIRED
+operation.failed        pickup_package      CONFIRMATION_REQUIRED
+
+Todos com organization_id/condominium_id do tenant piloto.
+
+============================================================
+5. IDEMPOTENCY REPLAY
+============================================================
+[x] core_executed=false na 2ª chamada
+[x] idempotency.replay persistido
+[x] sem segundo create no Core (fake store: 1 package)
+
+============================================================
+6. REDACTION
+============================================================
+[x] redaction_leak_rows = 0 (scan attributes/external_ref)
+[x] sem colunas secret/hmac/token no schema
+[x] evidência sem secrets
+
+============================================================
+7. FAIL-SAFE
+============================================================
+Não provocado no LIVE (evita indisponibilizar DB).
+Coberto por g7jw.event-sink.test.ts E/F:
+  Core SUCCESS quando INSERT Event Store falha.
+
+============================================================
+8–9. TESTES / BUILD
+============================================================
+npm run test:run → 251 passed (18 files)
+npm run build    → PASS
+
+============================================================
+10–13. FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0 (somente INSERTs de auditoria no Event Store)
+MIGRATIONS EXECUTED = 0
+LIVE WRITE domínio  = 0 (packages/reservations não tocados no LIVE)
+N8N                 = 0 produção
+WHATSAPP            = 0
+
+============================================================
+14. INTEGRIDADE
+============================================================
+M1–M4     = INTACTOS
+G6-1/G6-2 = INTACTOS
+G7-C      = INTACTO
+G7-J cols = 21 (alinhado 008)
+
+============================================================
+15. LIMITAÇÕES
+============================================================
+- Domínio do piloto usou fake stores (Event Store = LIVE)
+- Persistência piloto via postgres owner (PGPASSWORD sessão);
+  runtime produção usa service-role via createProductionApiDeps
+- TENANT_MISMATCH não grava rejected (fail-closed) — esperado
+- Sem DELETE/purge dos 8 eventos de teste (permanecem como evidência)
+
+============================================================
+16. STOP
+============================================================
+G7-J-W-LIVE = PASS
+
+NÃO iniciar events.view / WhatsApp / n8n prod / purge.
+Próximo gate: API admin events.view (AuthZ) OU WhatsApp — só com autorização.

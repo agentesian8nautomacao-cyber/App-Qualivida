@@ -25,14 +25,45 @@ function openBrowserPlugin(): import('vite').Plugin {
   };
 }
 
+function looksLikeMissingPublicSupabase(url: string, key: string): boolean {
+  const u = (url || '').trim();
+  const k = (key || '').trim();
+  if (!u || !k) return true;
+  if (k.length < 30) return true;
+  if (/xxxx\.supabase\.co/i.test(u) || /seu-projeto\.supabase\.co/i.test(u)) return true;
+  return false;
+}
+
 export default defineConfig(({ mode }) => {
   // Carregar variáveis de ambiente
-  // loadEnv: .env, .env.local (local). process.env: Vercel e variáveis do sistema.
+  // loadEnv: .env, .env.local, .env.[mode]. process.env: Vercel e variáveis do sistema.
   // Usar process.env só quando o valor for não vazio, senão manter loadEnv.
   const loaded = loadEnv(mode, process.cwd(), '');
   const env: Record<string, string | undefined> = { ...loaded };
   for (const [k, v] of Object.entries(process.env)) {
     if (v != null && String(v).trim() !== '') env[k] = v;
+  }
+
+  // npm run dev → mode=development NÃO carrega .env.localnet.
+  // Se .env.local estiver ausente, reutilizar VITE_* públicos do modo localnet.
+  // Nunca injeta SUPABASE_SERVICE_ROLE_KEY (prefixo VITE_ apenas).
+  const clientEnvDefine: Record<string, string> = {};
+  if (
+    mode === 'development' &&
+    looksLikeMissingPublicSupabase(env.VITE_SUPABASE_URL || '', env.VITE_SUPABASE_ANON_KEY || '')
+  ) {
+    const localnet = loadEnv('localnet', process.cwd(), 'VITE_');
+    const url = (localnet.VITE_SUPABASE_URL || '').trim();
+    const key = (localnet.VITE_SUPABASE_ANON_KEY || '').trim();
+    if (!looksLikeMissingPublicSupabase(url, key)) {
+      env.VITE_SUPABASE_URL = url;
+      env.VITE_SUPABASE_ANON_KEY = key;
+      clientEnvDefine['import.meta.env.VITE_SUPABASE_URL'] = JSON.stringify(url);
+      clientEnvDefine['import.meta.env.VITE_SUPABASE_ANON_KEY'] = JSON.stringify(key);
+      console.warn(
+        '[vite] VITE_SUPABASE_* ausentes em .env.local (modo development). Fallback: .env.localnet. Arquivo local recomendado: .env.local'
+      );
+    }
   }
 
   // Base da API para desenvolvimento:
@@ -48,6 +79,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/',
     ssr: false,
+    define: clientEnvDefine,
     build: {
       outDir: 'dist',
       emptyOutDir: true,

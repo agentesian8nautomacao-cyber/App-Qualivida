@@ -1,0 +1,177 @@
+SENTINELA AUT — ETAPA 2 — PAINEL OPERACIONAL
+Data: 2026-08-14
+Status: CONCLUÍDA (código UI + docs; sem banco)
+
+============================================================
+1. OBJETIVO
+============================================================
+Transformar a interface existente (sem SPA paralela) em
+CENTRAL OPERACIONAL DA PORTARIA: alertas, encomendas,
+ocorrências, visitantes, reservas, atividade do Core e
+status local da automação.
+
+============================================================
+2. MAPA DE NAVEGAÇÃO (antes de ocultar itens)
+============================================================
+
+ESSENCIAIS PARA OPERAÇÃO (portaria / síndico):
+- Operação (ex-Dashboard) — painel principal
+- Encomendas — fluxo principal (manual/voz/foto/QR + pickup)
+- Visitantes — controle de acesso
+- Ocorrências — abertas / recentes
+- Reservas — agenda do dia
+- Sentinela AI — voz/chat (entrada de intenção)
+
+ADMINISTRATIVAS / GESTÃO:
+- Funcionários (staff)
+- Configurações
+- Meu Perfil (staff)
+- SindicoDashboardView (ADMIN / ADMINISTRADORA / CABO_TURMA / ADMINISTRADOR)
+  → visão de gestão preservada; NÃO removida
+
+PERTENCEM AO MORADOR (web ainda ativo — NÃO removido):
+- MoradorDashboardView
+- Meu Perfil (MORADOR)
+- Acesso a mural / financeiro / reservas conforme RBAC
+
+PODEM SAIR DA NAVEGAÇÃO PRINCIPAL (futuro — NÃO removidas agora):
+- Financeiro / boletos (atendimento; WhatsApp futuro)
+- Cadastro profundo de moradores (consulta operacional permanece)
+- Staff/settings (já no grupo Administração no menu)
+
+CONTINUAM DISPONÍVEIS:
+- Todos os itens de menu anteriores (reordenados + relabel)
+- Modais: NewPackage, CameraScan, Occurrence, Reservation, pickup
+- Realtime + offline (ConnectivityContext)
+- RBAC (hasPermission) — sem if (role === "PORTEIRO") novo
+
+ALTERAÇÃO DE MENU NESTA ETAPA:
+- Labels: Dashboard → Operação; Mural de Avisos → Mural
+- Ordem: operação primeiro; financeiro/admin abaixo
+- Separadores visuais por grupo (ops / base / admin)
+- Subtítulo sidebar: "Sentinela Aut." (sem nova paleta/logo)
+
+============================================================
+3. ARQUITETURA DA INTERFACE
+============================================================
+
+Painel (DashboardView)
+  ↓ props derivadas do App.tsx (dados já carregados)
+  ↓ ações → modais/views existentes
+  ↓ eventos Core (memória) via subscribeDomainEvents
+  ↓ ConnectivityContext → status Banco/Realtime locais
+  ↓ realtime Supabase existente (sem polling novo)
+
+Operational Core (Etapa 1) continua sendo o executor;
+o painel apenas ACOMPANHA e dispara UI existente.
+
+============================================================
+4. COMPONENTES REUTILIZADOS
+============================================================
+- DashboardView (evoluído, não substituído)
+- RecentEventsBar
+- NewPackageModal / CameraScanModal / ImportPackagesModal
+- NewOccurrenceModal / fluxos de reserva
+- PackagesView / OccurrencesView / VisitorsView / ReservationsView
+- dataService (via Core + App)
+- ConnectivityContext (online/sync)
+- AuthContext / hasPermission (RBAC)
+- SindicoDashboardView / MoradorDashboardView (preservados)
+
+============================================================
+5. COMPONENTES MODIFICADOS
+============================================================
+- components/views/DashboardView.tsx — painel operacional
+- App.tsx — props/contagens; SINDICO + PORTEIRO → DashboardView
+- components/Layout.tsx — ordem/labels/grupos; subtítulo
+
+============================================================
+6. FUNCIONALIDADES PRESERVADAS
+============================================================
+[x] Encomendas (manual / voz / foto / QR)
+[x] pickup_package via Core
+[x] Ocorrências / Reservas / Visitantes
+[x] Realtime existente
+[x] Offline / outbox
+[x] RBAC
+[x] Login web do morador (não removido)
+[x] 17 testes do Core
+
+============================================================
+7. DECISÕES DE UX
+============================================================
+- Hierarquia: status → KPIs → ações rápidas → busca →
+  RecentEventsBar → CTA encomenda → pendências + atividade Core
+- Desktop-first (1366 / 1440 / 1920)
+- Boletos fora do foco do painel de portaria
+- WhatsApp / n8n: chips "Não configurado" (não simulados)
+- Sem identidade visual definitiva (sem novas cores de marca)
+- Prioridade de ocorrência: NÃO inventada (melhoria futura)
+
+============================================================
+8. RISCOS / LIMITAÇÕES
+============================================================
+RISCOS:
+- Offline + realtime: possível inconsistência visual até sync
+  (camada única preservada; documentado, não reimplementado)
+- Eventos Core só nesta sessão (memória; sem Event Store)
+- Tenant context ainda opcional no Core (warning TENANT_CONTEXT_ABSENT)
+
+LIMITAÇÕES:
+- Conflito de reserva permanece na lógica atual do Core/App
+- Prioridade de ocorrência inexistente no domínio atual
+- Síndico operacional unificado no DashboardView; visão
+  financeira detalhada permanece no SindicoDashboard (admins)
+- Morador ainda acessa web (retirada = decisão futura)
+
+DECISION REQUIRED (não implementado nesta etapa):
+- Remover login web do morador
+- WhatsApp Cloud API / n8n
+- Alterar RBAC / RLS / autenticação / tenant boundary
+- Event Store persistente
+- Identidade visual oficial SENTINELA AUT.
+
+============================================================
+9. PREPARAÇÃO n8n / WhatsApp
+============================================================
+Status chips no painel deixam explícito o gap.
+Canais futuros devem chamar o mesmo Core; painel só observa.
+Nenhuma API pública / webhook criado.
+
+============================================================
+10. BANCO / MIGRATIONS
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+M1, M2, M3, M4 = intocados (CLOSED/PASS)
+CREATE/ALTER/DROP/INSERT/UPDATE/DELETE/RLS = NÃO
+
+============================================================
+11. TESTES
+============================================================
+Executado em 2026-08-14 (local):
+
+npm run test:run
+  ✓ utils/unitFormatter.test.ts (3)
+  ✓ utils/geminiHelpers.test.ts (5)
+  ✓ sentinela/core/core.test.ts (14)
+  Total: 22 passed (inclui os 17 da Etapa 1: 14 Core + 3 unitFormatter)
+
+npm run build
+  ✓ vite build OK (~2m37s)
+
+Migrations executadas nesta etapa: 0
+DATABASE CHANGES = 0
+
+============================================================
+12. ACEITAÇÃO
+============================================================
+[x] Painel operacional derivado da UI existente
+[x] Nenhuma SPA paralela
+[x] Nenhum módulo duplicado
+[x] Core utilizado (eventos + operações existentes)
+[x] Encomendas / voz / foto / QR / pickup preservados
+[x] Ocorrências / reservas / visitantes preservados
+[x] Realtime / offline / RBAC preservados
+[x] Banco intacto / migrations = 0
+[x] n8n / WhatsApp / identidade definitiva NÃO implementados

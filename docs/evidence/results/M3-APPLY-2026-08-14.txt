@@ -1,0 +1,121 @@
+# M3 APPLY — EVIDÊNCIA PRODUÇÃO
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260814170000_003_tenant_memberships.sql
+Nome lógico:         003_tenant_memberships
+Método:              psql -f (arquivo íntegro, sem SQL improvisado)
+Executor:            agente
+Início UTC:          2026-08-14T11:15:16Z
+Fim UTC:             2026-08-14T11:15:20Z
+psql apply_exit:     0
+
+================================================================================
+PRÉ-APPLY (read-only, imediato antes do APPLY)
+================================================================================
+tenant_memberships_regclass = NULL
+tenant_memberships_absent   = true
+deps presentes: organizations, condominiums, roles, residents, staff, units
+m3_apply_safe               = true
+Pré-condições:              PASS
+
+================================================================================
+APPLY
+================================================================================
+Saída psql:
+  BEGIN
+  DO
+  CREATE TABLE
+  CREATE INDEX
+  COMMENT x9
+  COMMIT
+
+Tabela criada: public.tenant_memberships
+Rows: 0
+
+NÃO executado:
+  M4 / M5+
+  seed / backfill
+  INSERT / UPDATE / DELETE
+  ALTER em tabelas legadas
+  RLS/policies intencionais
+  Storage / triggers / functions
+  rollback
+
+================================================================================
+PÓS-APPLY — VALIDAÇÃO READ-ONLY
+================================================================================
+
+1) tenant_memberships existe: SIM (to_regclass = tenant_memberships)
+2) rows: 0
+3) campos: 11
+   id, auth_user_id, organization_id, condominium_id, role_id,
+   resident_id, staff_profile_id, status, is_default, created_at, updated_at
+
+4) PK: tenant_memberships_pkey PRIMARY KEY (id) uuid
+
+5) FKs (todas ON DELETE RESTRICT):
+   tenant_memberships_auth_user_id_fkey
+     → auth.users(id) ON DELETE RESTRICT
+   tenant_memberships_organization_id_fkey
+     → organizations(id) ON DELETE RESTRICT
+   tenant_memberships_condominium_id_fkey
+     → condominiums(id) ON DELETE RESTRICT
+   tenant_memberships_role_id_fkey
+     → roles(id) ON DELETE RESTRICT
+   tenant_memberships_resident_id_fkey
+     → residents(id) ON DELETE RESTRICT
+   tenant_memberships_staff_profile_id_fkey
+     → staff(id) ON DELETE RESTRICT
+
+6) ON DELETE: RESTRICT em todas as 6 FKs
+
+7) UNIQUE: tenant_memberships_auth_user_id_condominium_id_key
+   UNIQUE (auth_user_id, condominium_id)
+
+8) INDEX:
+   idx_tenant_memberships_condominium_id ON (condominium_id)
+   (+ índices implícitos de PK e UNIQUE)
+
+9) Defaults:
+   id → gen_random_uuid()
+   status → 'active'::text
+   is_default → false
+   created_at → now()
+   updated_at → now()
+
+10) resident_id: nullable (YES)
+11) staff_profile_id: nullable (YES)
+
+12) DML: 0 (rows=0; migration sem INSERT/UPDATE/DELETE)
+
+13) legado alterado: NÃO
+    Tabelas operacionais legadas (users, packages, boletos, roles, residents, staff)
+    e M1/M2 (organizations, condominiums, units) não receberam ALTER nesta execução.
+    Apenas CREATE TABLE + INDEX + COMMENT em tenant_memberships.
+
+14) outras migrations: NÃO
+    Somente 20260814170000_003_tenant_memberships.sql via psql -f
+
+15) seed/backfill: NÃO
+
+16) RLS/policies:
+    relrowsecurity tenant_memberships = true (flag ON — padrão Supabase, como M1/M2)
+    pg_policies tenant_memberships = 0
+    Arquivo SQL sem ENABLE RLS / CREATE POLICY intencional
+
+================================================================================
+GIT (sem commit / push / tag / reset / clean)
+================================================================================
+git status --short: worktree DIRTY (evidências/migrations untracked + M modified plan)
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta; não movida)
+
+================================================================================
+RESULTADO
+================================================================================
+M3 APPLY = PASS
+
+Confirmações:
+- Nenhuma migration além de M3 foi executada.
+- Nenhuma tabela operacional legada foi alterada.

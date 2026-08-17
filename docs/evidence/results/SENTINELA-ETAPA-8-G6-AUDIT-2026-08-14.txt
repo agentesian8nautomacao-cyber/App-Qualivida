@@ -1,0 +1,183 @@
+SENTINELA AUT — ETAPA 8 / G6 — AUDITORIA FUNDAÇÃO DE PRODUÇÃO
+Data: 2026-08-14
+Status: G6 = AUDIT / READY FOR IMPLEMENTATION
+
+Tipo: DOCUMENTAÇÃO APENAS
+Código alterado = 0
+Migrations criadas = 0
+Migrations executadas = 0
+n8n = 0
+WhatsApp = 0
+
+Doc principal: docs/SENTINELA-AUT-G6-PRODUCAO.md
+Pré-requisitos: G1–G5 CLOSED/PASS · evidência G5 SENTINELA-ETAPA-7-G5-CORE-EXECUTION-2026-08-14.txt
+
+============================================================
+VALIDAÇÃO OBRIGATÓRIA DESTA FASE
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+N8N = 0
+WHATSAPP = 0
+M1–M4 = INTACTOS
+
+============================================================
+1. ESTADO ATUAL (SÍNTESE)
+============================================================
+- Core: sentinela/core/ com ops identify/package/occurrence/reservation/boleto/notify
+- Adapter default: dataService → Dexie/outbox (BROWSER) — inadequado para Vercel
+- API /api/v1: HMAC + tenant + AuthZ + classification + confirmation gate + Core (G5)
+- Idempotency: port existe; prod = unavailable; memory = TEST_ONLY
+- Confirmation: port existe; prod = unavailable; memory = TEST_ONLY
+- WRITE prod: IDEMPOTENCY_STORE_UNAVAILABLE
+- SENSITIVE prod: CONFIRMATION_STORE_UNAVAILABLE; core_executed=false
+- Eventos: memória in-process (não auditoria)
+- Reservas: RESERVATION_CONFLICT_CLIENT_ONLY (API passa existingSlots=[])
+- M1–M4: org/condo/units/memberships/seed piloto — CLOSED/PASS
+- Domínio legado: packages/occurrences/reservations/boletos/residents SEM condominium_id
+- RBAC legado reutilizado (G3); sem bypass SINDICO/PORTEIRO na API
+- Composition root de produção: AUSENTE (handlers default sem persistence/stores)
+
+============================================================
+2. LACUNAS PARA PRODUÇÃO
+============================================================
+L1 Idempotency Store persistente (Postgres)
+L2 Confirmation Store persistente (Postgres)
+L3 Server CorePersistence + ResidentsProvider (service-role, sem Dexie)
+L4 Event Store append-only (auditoria/obs)
+L5 Reservation conflict server-side (adapter e/ou exclusion DB)
+L6 Isolamento domínio M5+ (antes de WhatsApp multi-tenant)
+L7 Composition root createProductionApiDeps()
+L8 Observabilidade painel baseada em eventos persistidos
+L9 Contrato n8n documentado (rotas já existem — não duplicar endpoints)
+
+============================================================
+3. ARQUITETURA PROPOSTA (ALVO)
+============================================================
+n8n/WA → API → HMAC → Tenant → AuthZ
+  → Idempotency Store (persistent)
+  → Confirmation Store (SENSITIVE)
+  → Operational Core
+  → Server Adapter (Supabase service-role)
+  → Postgres
+  → Event Store
+  → Painel
+
+Tabelas propostas (NÃO CRIADAS):
+  - api_idempotency_keys   (NECESSÁRIA p/ WRITE)
+  - api_confirmations      (NECESSÁRIA p/ SENSITIVE)
+  - api_domain_events      (OPCIONAL/ALTA — observabilidade)
+
+============================================================
+4. MIGRATIONS — NECESSÁRIA vs OPCIONAL
+============================================================
+NECESSÁRIA (após autorização):
+  M-G6-1  api_idempotency_keys
+  M-G6-2  api_confirmations
+  (+ código) server adapter + composition root
+
+OPCIONAL / PARALELA:
+  api_domain_events
+  reservation exclusion constraint
+  M5–M8 condominium_id no domínio (Fase 1 — antes WA multi-site)
+  api_integration_credentials
+  seed units
+
+PROIBIDO:
+  Alterar/reabrir M1–M4
+  Duplicar tabelas de domínio
+  Memory stores em produção
+  n8n → banco direto
+
+============================================================
+5. RISCOS
+============================================================
+- WRITE sem idempotency → duplicação por retry
+- service-role sem tenant filter → vazamento cross-condo
+- WA antes de M5+ → multi-tenant inseguro
+- Event Store virar segundo domínio
+- Trocar dataService do painel cedo demais
+
+============================================================
+6. DEPENDÊNCIAS / ORDEM
+============================================================
+1) Autorização explícita
+2) Migrations stores
+3) Adapters persistent + server CorePersistence
+4) Liberar WRITE
+5) Liberar SENSITIVE + Core pickup/cancel
+6) Event Store + painel
+7) Conflito reserva server-side
+8) SÓ ENTÃO n8n / WhatsApp
+
+============================================================
+7. PLANO DE IMPLEMENTAÇÃO (FUTURO)
+============================================================
+G6.1 Migrations (com approve)
+G6.2 Adapters + composition root
+G6.3 Liberação WRITE/SENSITIVE + evidência
+G6.4 Observabilidade
+G6.5 Reserva conflict
+STOP: sem n8n/WA automático
+
+============================================================
+8. TESTES NECESSÁRIOS (QUANDO IMPLEMENTAR)
+============================================================
+Idempotency replay/conflict/unavailable
+Confirmation single-use/expiry/unavailable
+Adapter grava domínio sem Dexie
+Eventos persistidos com request_id + tenant
+Conflito reserva
+Regressão G1–G5 + Core UI
+M1–M4 intactos · secrets fora do frontend
+
+============================================================
+9. CRITÉRIOS DE ACEITE (IMPLEMENTAÇÃO FUTURA)
+============================================================
+Stores persistentes reais
+Server adapter sem Dexie
+WRITE/SENSITIVE protegidos e testados
+Event Store se aprovado no escopo
+M1–M4 intactos · n8n=0 · WA=0 até gate seguinte
+
+ACEITE DESTA FASE (AUDIT):
+  Documentação completa
+  Zero DDL / zero código
+  Decisões listadas para o humano
+
+============================================================
+10. DECISÃO REQUERIDA (AGUARDAR)
+============================================================
+1. Autorizar migrations api_idempotency_keys + api_confirmations?
+2. Incluir api_domain_events na mesma leva?
+3. Conflito reserva: Opção A (adapter) vs B (exclusion DB)?
+4. M5+ isolamento: paralelo agora ou após piloto single-site?
+5. TTL idempotency (sugestão 48h) / confirmation (300s)?
+6. Credentials permanecem em env?
+7. Confirmar proibição absoluta de memory stores em production?
+
+============================================================
+CONTRATO N8N (RESUMO) — SEM NOVOS ENDPOINTS
+============================================================
+Usar rotas /api/v1 já existentes (identify, boletos, packages, occurrences, reservations, pickup, cancel).
+Headers HMAC + tenant + Idempotency-Key.
+SENSITIVE: confirmation_id + confirmation_token.
+n8n NÃO usa SQL/service_role.
+
+============================================================
+OBSERVABILIDADE ALVO
+============================================================
+Responder: quem / quando / condomínio / morador / operação / resultado /
+automático? / WhatsApp? / painel? / request_id / event_id
+via Event Store + envelope API (não memória de processo).
+
+============================================================
+RESULTADO
+============================================================
+G6 = AUDIT / READY FOR IMPLEMENTATION
+
+PARAR E AGUARDAR AUTORIZAÇÃO EXPLÍCITA
+antes de criar migrations ou alterar código.
+
+Próximo passo sugerido (humano):
+  aprovar escopo M-G6-1/2 (+/− events) e ordem vs M5+.

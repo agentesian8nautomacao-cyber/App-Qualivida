@@ -1,0 +1,188 @@
+SENTINELA AUT — G6-1 — CLOSEOUT LIVE (READ-ONLY)
+Data/hora UTC:       2026-08-14T18:30:44Z → 2026-08-14T18:30:46Z
+Projeto:             zaemlxjwhzrfmowbckmk
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+APPLY evidência:     docs/evidence/results/SENTINELA-G6-1-APPLY-2026-08-14.txt
+  APPLY:             PASS (2026-08-14T18:18:51Z)
+Migration:           20260814190000_005_api_idempotency_keys.sql
+Nome lógico:         005_api_idempotency_keys
+
+Método:              psql READ-ONLY (SELECT / information_schema / pg_*)
+Modo:                CLOSEOUT / PÓS-APPLY READ-ONLY
+WRITE OPERATIONS THIS STEP = 0
+MIGRATIONS EXECUTED THIS STEP = 0
+DATABASE CHANGES THIS STEP = 0
+Rollback:            NÃO EXECUTADO
+Wiring / G6-2 / n8n / WhatsApp / Event Store: NÃO
+Secrets no relatório: NENHUM
+psql_exit:           0
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+
+============================================================
+2–3. TABELA / ROWS
+============================================================
+api_idempotency_keys EXISTS = PASS (regclass = api_idempotency_keys)
+ROW COUNT = 0 = PASS
+Nenhuma row criada pelo APPLY = PASS
+
+============================================================
+4. COLUNAS (13 EXATAS)
+============================================================
+column_count = 13 = PASS
+
+#  name              type         null   default
+1  id                uuid         NO     gen_random_uuid()
+2  organization_id   uuid         NO     —
+3  condominium_id    uuid         NO     —
+4  idempotency_key   text         NO     —
+5  fingerprint       text         NO     —
+6  operation         text         NO     —
+7  request_id        text         NO     —
+8  status            text         NO     —
+9  response_status   integer      YES    —
+10 response_body     jsonb        YES    —
+11 created_at        timestamptz  NO     now()
+12 expires_at        timestamptz  NO     —
+13 completed_at      timestamptz  YES    —
+
+============================================================
+5–8. PK / FKs / ON DELETE / UNIQUE
+============================================================
+PK id (api_idempotency_keys_pkey) = PASS
+
+FK organization_id → public.organizations(id)
+  delete_rule = RESTRICT = PASS
+FK condominium_id → public.condominiums(id)
+  delete_rule = RESTRICT = PASS
+
+UNIQUE (organization_id, condominium_id, idempotency_key)
+  constraint = api_idempotency_keys_org_condo_key_key = PASS
+
+============================================================
+9. ÍNDICES (4 — conforme migration)
+============================================================
+PASS
+  api_idempotency_keys_pkey
+  api_idempotency_keys_org_condo_key_key  (UNIQUE btree org,condo,key)
+  idx_api_idempotency_keys_expires_at
+  idx_api_idempotency_keys_tenant
+
+============================================================
+10–11. expires_at / DEFAULTS
+============================================================
+expires_at: timestamptz NOT NULL = PASS
+CHECK expires_at > created_at presente = PASS
+defaults: id=gen_random_uuid(), created_at=now() = PASS
+
+============================================================
+12–13. CHECKs completed / failed
+============================================================
+PASS
+api_idempotency_keys_completed_coherence_check:
+  completed → response_body + response_status + completed_at NOT NULL
+api_idempotency_keys_failed_coherence_check:
+  failed → response_status + completed_at NOT NULL
+
+============================================================
+14. RLS (SEM ALTERAÇÃO NESTA ETAPA)
+============================================================
+relrowsecurity (RLS habilitado) = t
+relforcerowsecurity             = f
+pg_policies count               = 0
+policy_names                    = (vazio)
+
+DIFERENCIAÇÃO OBRIGATÓRIA:
+  RLS HABILITADO  = SIM (relrowsecurity=t)
+  POLICIES        = 0 (nenhuma CREATE POLICY)
+
+Interpretação closeout:
+  A migration SQL não emitiu ENABLE ROW LEVEL SECURITY nem CREATE POLICY.
+  Estado LIVE: RLS on + 0 policies → fail-closed para roles sem BYPASSRLS;
+  service_role permanece o caminho esperado da API.
+  NÃO é falha de closeout; observação registrada (igual APPLY).
+  RLS NÃO foi alterado neste closeout.
+
+============================================================
+15–16. DML / OUTRAS MIGRATIONS
+============================================================
+DML THIS STEP = 0 = PASS
+row_count permanece 0 = PASS
+OTHER MIGRATIONS THIS STEP = 0 = PASS
+api_confirmations ABSENT = t
+api_domain_events ABSENT = t
+
+============================================================
+17. M1–M4 INTACTOS
+============================================================
+PASS
+organizations EXISTS rows=1 pilot(qualivida-admin)=1
+condominiums  EXISTS rows=1 pilot(qualivida-club-residence)=1
+units         EXISTS rows=0 (schema M2 intacto; seed units não era M4)
+tenant_memberships EXISTS rows=0 (schema M3 intacto; backfill não era M4)
+
+============================================================
+18–19. LEGADO / DML
+============================================================
+LEGACY ALTERATIONS THIS STEP = 0
+Tabelas operacionais (packages/occurrences/reservations/boletos/residents):
+  NÃO alteradas neste closeout
+WRITE OPERATIONS THIS STEP = 0
+
+============================================================
+20. GIT / WORKTREE
+============================================================
+HEAD short: 31731e7
+Working tree: DIRTY (~79 short-status lines)
+Commit automático: NÃO
+Tag/push: NÃO
+Arquivos G6-1 relevantes ainda untracked/no working tree:
+  supabase/migrations/20260814190000_005_api_idempotency_keys.sql
+  supabase/migrations/20260814190000_005_api_idempotency_keys.rollback.sql
+  docs/evidence/results/SENTINELA-G6-1-APPLY-2026-08-14.txt
+  docs/evidence/results/SENTINELA-G6-1-PRECHECK-LIVE-2026-08-14.txt
+  (+ este CLOSEOUT)
+
+============================================================
+CHECKLIST 1–20
+============================================================
+1  Auth OK                         PASS
+2  Table EXISTS                    PASS
+3  rows=0                          PASS
+4  13 columns                      PASS
+5  PK id                           PASS
+6  FKs                             PASS
+7  ON DELETE RESTRICT              PASS
+8  UNIQUE tenant-scoped            PASS
+9  Indexes                         PASS
+10 expires_at                      PASS
+11 defaults                        PASS
+12 CHECK completed                 PASS
+13 CHECK failed                    PASS
+14 RLS recorded (on + 0 policies)  PASS (observação; sem alteração)
+15 no APPLY rows                   PASS
+16 no other migrations             PASS
+17 M1–M4 intact                    PASS
+18 no legacy alter                 PASS
+19 no DML this step                PASS
+20 Git dirty, no auto-commit       PASS
+
+============================================================
+RESULTADO FINAL
+============================================================
+G6-1 = CLOSED / PASS
+
+DATABASE CHANGES THIS STEP = 0
+MIGRATIONS EXECUTED THIS STEP = 0
+WRITE OPERATIONS THIS STEP = 0
+M1–M4 = INTACTOS
+
+G6-2 = NÃO INICIADO (aguardando decisão explícita)
+Wiring API idempotency = NÃO
+n8n = NÃO
+WhatsApp = NÃO

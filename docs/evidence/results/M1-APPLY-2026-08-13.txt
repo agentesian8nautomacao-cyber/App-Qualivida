@@ -1,0 +1,159 @@
+# M1 APPLY — EVIDÊNCIA PRODUÇÃO
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260813150000_001_platform_org_condo.sql
+Nome lógico:         001_platform_org_condo
+Método:              psql -f (arquivo íntegro, sem SQL improvisado)
+Executor:            agente
+Início UTC:          2026-08-13T18:40:43Z
+Fim UTC:             2026-08-13T18:40:48Z
+psql apply_exit:     0
+
+================================================================================
+PRÉ-APPLY (read-only, imediato antes do APPLY)
+================================================================================
+organizations_regclass = NULL
+condominiums_regclass  = NULL
+organizations_absent   = true
+condominiums_absent    = true
+m1_create_safe         = true
+Pré-check:             PASS
+
+================================================================================
+APPLY
+================================================================================
+Saída psql:
+  BEGIN
+  DO
+  CREATE TABLE          (organizations)
+  CREATE INDEX          (idx_organizations_status)
+  COMMENT x3
+  CREATE TABLE          (condominiums)
+  CREATE INDEX          (idx_condominiums_organization_id)
+  CREATE INDEX          (idx_condominiums_status)
+  COMMENT x5
+  COMMIT
+
+organizations: CREATED
+condominiums:  CREATED
+
+================================================================================
+PÓS-APPLY — VALIDAÇÃO READ-ONLY
+================================================================================
+
+1) Existência:
+  to_regclass('public.organizations') = organizations
+  to_regclass('public.condominiums')  = condominiums
+
+2) Colunas (information_schema):
+  organizations:
+    id uuid NOT NULL DEFAULT gen_random_uuid()
+    name text NOT NULL
+    slug text NOT NULL
+    status text NOT NULL DEFAULT 'active'
+    created_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now()
+  condominiums:
+    id uuid NOT NULL DEFAULT gen_random_uuid()
+    organization_id uuid NOT NULL
+    name text NOT NULL
+    vertical text NOT NULL DEFAULT 'condominium'
+    slug text NOT NULL
+    status text NOT NULL DEFAULT 'active'
+    created_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now()
+
+3) PKs:
+  organizations_pkey PRIMARY KEY (id)
+  condominiums_pkey PRIMARY KEY (id)
+
+4) FK:
+  condominiums_organization_id_fkey
+  FOREIGN KEY (organization_id) REFERENCES organizations(id)
+
+5) ON DELETE:
+  RESTRICT  (confirmado em pg_get_constraintdef)
+
+6) UNIQUE:
+  organizations_slug_key UNIQUE (slug)
+  condominiums_organization_id_slug_key UNIQUE (organization_id, slug)
+
+7) CHECK:
+  condominiums_vertical_check CHECK ((vertical = 'condominium'::text))
+
+8) Índices:
+  idx_organizations_status (status)
+  idx_condominiums_organization_id (organization_id)
+  idx_condominiums_status (status)
+  (+ índices das PK/UNIQUE)
+
+9) Rows:
+  organizations = 0
+  condominiums  = 0
+
+10) Legacy smoke (pg_class, read-only):
+  Presentes: users, staff, residents, packages, boletos,
+             roles, permissions, role_permissions, staff_invites
+  + organizations, condominiums
+
+================================================================================
+ESCOPO / SEGURANÇA
+================================================================================
+
+DML:                      NENHUM
+Seed/backfill:            NÃO
+RLS policies criadas:     NENHUMA (pg_policies = 0 linhas nas novas tabelas)
+ENABLE RLS no arquivo SQL: NÃO (arquivo sem ENABLE ROW LEVEL SECURITY / CREATE POLICY)
+Observação plataforma:
+  Após CREATE TABLE, pg_class.relrowsecurity = true em organizations e
+  condominiums (flag RLS ON, zero policies). Não veio de statement explícito
+  na migration M1; comportamento típico/auto do ambiente Supabase em public.
+  Isolamento efetivo = M12–M14 (policies). Sem impacto no legado nesta etapa.
+
+Legacy tables altered:    NÃO (smoke: tabelas operacionais presentes)
+M2/M3/M4:                 NÃO EXECUTADOS
+Outras migrations:        NÃO EXECUTADAS
+Rollback:                 NÃO EXECUTADO
+SQL migration alterado:   NÃO
+
+================================================================================
+GIT (pós-APPLY, sem commit)
+================================================================================
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta)
+Worktree dirty (esperado). Arquivos M1 relacionados:
+  M  docs/FASE-1-MIGRATION-PLAN.md
+  ?? supabase/migrations/20260813150000_001_platform_org_condo.sql
+  ?? supabase/migrations/20260813150000_001_platform_org_condo.rollback.sql
+  ?? docs/evidence/M1-PRECHECK-LIVE.sql
+  ?? docs/evidence/results/M1-*.txt (incl. este APPLY)
+
+Sem git add / commit / push / tag / PR nesta tarefa.
+
+================================================================================
+RESULTADO
+================================================================================
+
+M1 APPLY = PASS
+
+Critérios:
+  [x] migration sem erro (exit 0, COMMIT)
+  [x] organizations existe
+  [x] condominiums existe
+  [x] ambas vazias (0 rows)
+  [x] FK correta + ON DELETE RESTRICT
+  [x] UNIQUE organizations(slug)
+  [x] UNIQUE condominiums(organization_id, slug)
+  [x] CHECK vertical
+  [x] índices esperados
+  [x] legado não alterado pelo DDL M1
+  [x] sem DML
+  [x] sem policies
+  [x] sem M2/M3/M4
+  [x] rollback não executado
+
+O APPLY executou somente a migration 001_platform_org_condo.
+Nenhuma outra migration foi executada.
+Nenhuma tabela operacional legada foi alterada.
+================================================================================

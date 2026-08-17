@@ -1,0 +1,156 @@
+SENTINELA AUT — ETAPA 4 / G2 — AUTHENTICATION + TENANT GATE
+Data: 2026-08-14
+Status: CLOSED / PASS
+
+Pré-requisito: G1 CLOSED / PASS
+  docs/evidence/results/SENTINELA-ETAPA-4-G1-FOUNDATION-2026-08-14.txt
+
+G3 = NOT STARTED (não avançado automaticamente)
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+BUSINESS OPS = 501 GATE_PENDING (após auth)
+M1–M4 = INTACTOS
+Operational Core regras de negócio = NÃO alteradas
+UI = NÃO alterada
+
+============================================================
+ARQUIVOS CRIADOS
+============================================================
+api/v1/_lib/auth/credentials.ts
+api/v1/_lib/auth/hmac.ts
+api/v1/_lib/auth/timestamp.ts
+api/v1/_lib/auth/tenant.ts
+api/v1/_lib/auth/protect.ts
+api/v1/_lib/auth/testFixtures.ts
+api/v1/_lib/auth/g2.auth.test.ts
+api/v1/_lib/protectedHandler.ts
+api/v1/protected-probe.ts
+vitest.config.ts
+
+============================================================
+ARQUIVOS MODIFICADOS
+============================================================
+api/v1/_lib/errors.ts          (+ UNAUTHENTICATED, INVALID_SIGNATURE, TIMESTAMP_EXPIRED)
+api/v1/_lib/gates.ts           (g2_authn_hmac / tenant = true; g3 = false)
+api/v1/_lib/handler.ts
+api/v1/_lib/foundation.test.ts
+api/v1/health.ts
+api/v1/operations/packages/index.ts
+api/v1/operations/packages/pickup.ts
+api/v1/operations/occurrences.ts
+api/v1/operations/reservations.ts
+api/v1/residents/identify.ts
+api/v1/units/identify.ts
+api/v1/boletos.ts
+docs/SENTINELA-AUT-API-ARCHITECTURE.md (§7A protocolo)
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+.env.example
+
+============================================================
+PROTOCOLO HMAC
+============================================================
+Canonical (LF):
+  v1
+  {timestamp}
+  {METHOD}
+  {path_with_query}
+  {body_sha256_hex}
+  {organization_id}
+  {condominium_id}
+  {idempotency_key_or_empty}
+
+Signature = hex(HMAC-SHA256(secret, canonical))
+Compare = timingSafeEqual
+
+Headers:
+  X-Sentinela-Client-Id
+  X-Sentinela-Timestamp
+  X-Sentinela-Signature
+  X-Organization-Id
+  X-Condominium-Id
+  Idempotency-Key (opcional no G2)
+
+Credentials: env SENTINELA_API_CREDENTIALS (server-only)
+Tenant catalog: SENTINELA_TENANT_CATALOG e/ou Supabase READ (M1/M4)
+Window: SENTINELA_API_TIMESTAMP_WINDOW_SECONDS (default 300)
+
+============================================================
+TENANT ENFORCEMENT
+============================================================
+FAIL-CLOSED:
+  - tenant ausente → TENANT_REQUIRED
+  - org/condo inexistente → TENANT_NOT_FOUND
+  - condo de outra org → TENANT_MISMATCH
+  - credential scoped ≠ headers → TENANT_MISMATCH
+  - sem fallback global / sem pilot defaults na API
+
+============================================================
+ANTI-REPLAY
+============================================================
+Implementado: janela de timestamp (±300s default)
+NÃO implementado (FUTURE MIGRATION / G3+):
+  - store de Idempotency-Key
+  - nonce persistente
+  - tabela api_integration_credentials
+
+============================================================
+ENDPOINTS
+============================================================
+GET  /api/v1/health            — público OK
+GET  /api/v1/protected-probe   — exige HMAC+tenant; sem DB write
+ops negócio                    — exige HMAC+tenant → 501 GATE_PENDING
+
+============================================================
+TESTES (npm run test:run)
+============================================================
+✓ utils/geminiHelpers.test.ts (5)
+✓ utils/unitFormatter.test.ts (3)
+✓ sentinela/core/core.test.ts (14)
+✓ api/v1/_lib/foundation.test.ts (11)
+✓ api/v1/_lib/auth/g2.auth.test.ts (18)
+
+Total: 51 passed
+
+Cobertura G2 obrigatória:
+  1 missing client_id BLOCK
+  2 invalid client_id BLOCK
+  3 missing signature BLOCK
+  4 invalid signature BLOCK
+  5 missing timestamp BLOCK
+  6 expired timestamp BLOCK
+  7 future timestamp BLOCK
+  8 tenant absent BLOCK
+  9 org missing BLOCK
+ 10 condo missing BLOCK
+ 11 condo other org BLOCK
+ 12 valid HMAC+tenant PASS
+ 13 health sem auth PASS
+ 14 business 501 GATE_PENDING
+ 14b business sem auth BLOCK
+ 16 cross-tenant credential BLOCK
+  TENANT A + CONDO B REJECT
+  sem INSERT/UPDATE/DELETE nos testes (catalog memory)
+
+============================================================
+GATES
+============================================================
+G1 = CLOSED / PASS
+G2 = CLOSED / PASS
+G3 = NOT STARTED
+
+============================================================
+RISCOS RESIDUAIS / LIMITAÇÕES
+============================================================
+- Replay além da janela de timestamp exige store (FUTURE MIGRATION)
+- Credentials em env JSON (não tabela) — rotação manual; FUTURE MIGRATION opcional
+- Authz/RBAC profile ainda não enforce (permission_keys=[]) — G3
+- Tenant catalog env em piloto; produção deve preferir SELECT live
+- Service role só no server para directory Supabase (nunca n8n)
+
+FIM — PARAR AQUI (não iniciar G3)

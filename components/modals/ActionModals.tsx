@@ -1,19 +1,16 @@
-
+﻿
 import React from 'react';
 import { X, Search, ChevronDown, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, Plus, Check, Minus, Edit2, MessageCircle, Bell, Settings2, Clock, Save, Briefcase, User, Phone, Mail, Loader2, AlertCircle, Lock, Copy, Link2, Upload, FileText, Camera, Image as ImageIcon } from 'lucide-react';
 import { Resident, PackageItem, Staff } from '../../types';
-import { createStaffInvite, createResidentInvite, createResidentInvitesBulk, type StaffInviteRole } from '../../services/dataService';
+import { createStaffInvite, type StaffInviteRole } from '../../services/dataService';
 import { useToast } from '../../contexts/ToastContext';
 
 // --- MODAL NOVA RESERVA ---
 export const NewReservationModal = ({
   isOpen, onClose, data, setData, areasStatus, searchQuery, setSearchQuery, 
   showSuggestions, setShowSuggestions, filteredResidents, hasConflict, onConfirm,
-  currentRole, currentResident
 }: any) => {
   if (!isOpen) return null;
-  const isMorador = String(currentRole || '').toUpperCase() === 'MORADOR';
-  const isResidentLocked = isMorador;
   return (
     <div className="fixed inset-0 z-600 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-2xl" onClick={onClose} />
@@ -21,14 +18,14 @@ export const NewReservationModal = ({
          <header className="flex justify-between items-center mb-10">
             <div>
                <h4 className="text-3xl font-black uppercase tracking-tight text-white">Nova Reserva</h4>
-               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Agendamento de Espaço</p>
+               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-1">Agendamento de EspaÃ§o</p>
             </div>
             <button onClick={onClose} className="p-4 bg-white/5 rounded-3xl hover:bg-white/10 transition-colors border border-white/5"><X className="w-5 h-5"/></button>
          </header>
          
          <div className="space-y-6">
             <div className="space-y-2">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-2">Área Comum</label>
+               <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-2">Ãrea Comum</label>
                <div className="relative">
                   <select 
                     value={data.area}
@@ -38,7 +35,7 @@ export const NewReservationModal = ({
                     }}
                     className="w-full p-5 bg-white/5 rounded-2xl outline-none font-bold text-sm border-none focus:ring-1 focus:ring-white/30 appearance-none text-white transition-all shadow-inner"
                   >
-                     <option value="" className="bg-zinc-900 text-white">Selecione a área</option>
+                     <option value="" className="bg-zinc-900 text-white">Selecione a Ã¡rea</option>
                      {areasStatus.map((area: any) => (
                         <option key={area.id} value={area.name} className="bg-zinc-900 text-white">{area.name}</option>
                      ))}
@@ -50,20 +47,7 @@ export const NewReservationModal = ({
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-2 relative">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-2">Morador</label>
-                  {isResidentLocked ? (
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                      <input
-                        type="text"
-                        readOnly
-                        value={data.resident || currentResident?.name || ''}
-                        className="w-full pl-12 pr-4 p-5 bg-black/20 rounded-2xl outline-none font-black text-sm border border-transparent text-white/70 cursor-not-allowed shadow-inner"
-                        placeholder={currentResident?.id ? 'Seu usuário' : 'Carregando...'}
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="relative group">
+                  <div className="relative group">
                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-white transition-colors" />
                          <input 
                            type="text" 
@@ -97,8 +81,6 @@ export const NewReservationModal = ({
                             ))}
                          </div>
                       )}
-                    </>
-                  )}
                </div>
                <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-2">Unidade</label>
@@ -127,7 +109,7 @@ export const NewReservationModal = ({
 
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-2">
-                  <label className={`text-[10px] font-bold uppercase tracking-widest ml-2 transition-colors ${hasConflict ? 'text-red-500' : 'text-zinc-500'}`}>Início</label>
+                  <label className={`text-[10px] font-bold uppercase tracking-widest ml-2 transition-colors ${hasConflict ? 'text-red-500' : 'text-zinc-500'}`}>InÃ­cio</label>
                   <input 
                     type="time"
                     value={data.startTime}
@@ -149,7 +131,7 @@ export const NewReservationModal = ({
             {hasConflict && (
                <div className="flex items-center gap-2 text-red-400 bg-red-500/10 p-3 rounded-xl animate-pulse">
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-[10px] font-black uppercase tracking-wide">Horário Indisponível (Conflito)</span>
+                  <span className="text-[10px] font-black uppercase tracking-wide">HorÃ¡rio IndisponÃ­vel (Conflito)</span>
                </div>
             )}
 
@@ -158,7 +140,7 @@ export const NewReservationModal = ({
               disabled={!data.residentId || !data.date || hasConflict}
               className="w-full py-6 bg-white text-black rounded-[24px] font-black uppercase text-[11px] tracking-[0.2em] hover:bg-zinc-200 hover:scale-[1.02] active:scale-95 transition-all mt-6 shadow-xl disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-               {hasConflict ? 'Verifique o Horário' : 'Confirmar Agendamento'}
+               {hasConflict ? 'Verifique o HorÃ¡rio' : 'Confirmar Agendamento'}
             </button>
          </div>
       </div>
@@ -222,7 +204,7 @@ export const NewVisitorModal = ({
                 onClick={() => setStep(2)} disabled={!data.unit}
                 className="w-full py-6 bg-black text-white rounded-[32px] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Próximo <ArrowRight className="w-4 h-4 inline ml-2" />
+                PrÃ³ximo <ArrowRight className="w-4 h-4 inline ml-2" />
               </button>
            </div>
          )}
@@ -256,7 +238,7 @@ export const NewVisitorModal = ({
               </div>
               <div className="flex gap-4 mt-4">
                  <button onClick={() => setStep(1)} className="p-6 bg-zinc-50 rounded-[32px] hover:bg-zinc-100"><ChevronLeft className="w-6 h-6"/></button>
-                 <button onClick={() => setStep(3)} disabled={!data.name} className="flex-1 py-6 bg-black text-white rounded-[32px] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">Próximo</button>
+                 <button onClick={() => setStep(3)} disabled={!data.name} className="flex-1 py-6 bg-black text-white rounded-[32px] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">PrÃ³ximo</button>
               </div>
            </div>
          )}
@@ -304,7 +286,7 @@ export const NewVisitorModal = ({
               </div>
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Veículo</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">VeÃ­culo</label>
                     <input type="text" placeholder="Modelo/Cor" value={data.vehicle} onChange={e => setData({ ...data, vehicle: e.target.value })} className="w-full p-4 bg-zinc-50 rounded-[24px] font-bold text-sm outline-none border-transparent focus:border-black/5" />
                  </div>
                  <div>
@@ -323,69 +305,10 @@ export const NewVisitorModal = ({
   );
 };
 
-// --- MODAL NOVO VISITANTE (MORADOR - PRÉ-CADASTRO) ---
-export const NewExpectedVisitorModal = ({
-  isOpen,
-  onClose,
-  data,
-  setData,
-  onConfirm
-}: any) => {
-  if (!isOpen) return null;
-  const canConfirm = !!(data?.visitorName || '').trim() && !!(data?.observation || '').trim();
-  return (
-    <div className="fixed inset-0 z-600 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white text-black rounded-[32px] sm:rounded-[48px] shadow-2xl p-6 sm:p-8 md:p-10 animate-in zoom-in duration-300">
-        <header className="flex justify-between items-start gap-3 mb-6">
-          <div>
-            <h4 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Cadastrar visitante</h4>
-            <p className="text-[10px] font-bold uppercase tracking-widest opacity-40 mt-1">Pré-cadastro para portaria confirmar</p>
-          </div>
-          <button onClick={onClose} className="p-3 bg-zinc-50 rounded-2xl hover:bg-zinc-100 transition-all">
-            <X className="w-5 h-5" />
-          </button>
-        </header>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-1">Nome do visitante</label>
-            <input
-              type="text"
-              value={data?.visitorName || ''}
-              onChange={(e) => setData({ ...data, visitorName: e.target.value })}
-              className="w-full px-5 py-4 bg-zinc-50 rounded-[20px] font-bold outline-none border-2 border-transparent focus:border-black/10 placeholder:opacity-30"
-              placeholder="Ex.: João Silva"
-              autoFocus
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-1">Observação (motivo/detalhes)</label>
-            <textarea
-              value={data?.observation || ''}
-              onChange={(e) => setData({ ...data, observation: e.target.value })}
-              className="w-full px-5 py-4 bg-zinc-50 rounded-[20px] font-bold outline-none border-2 border-transparent focus:border-black/10 placeholder:opacity-30 min-h-[110px] resize-none"
-              placeholder="Ex.: Visita familiar • Chega às 19:30 • Aguardar na portaria"
-            />
-          </div>
-
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            className="w-full py-4 bg-black text-white rounded-[22px] font-black uppercase text-[10px] tracking-widest shadow-xl hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
-          >
-            Enviar para a portaria
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 
 // --- MODAL NOVO PACOTE (WIZARD) ---
-const stepTitles = ['Quem recebe?', 'O que chegou?', 'Notificação'] as const;
-const stepLabels = ['Passo 01: Identificação', 'Passo 02: Detalhamento', 'Passo 03: Notificação'] as const;
+const stepTitles = ['Quem recebe?', 'O que chegou?', 'NotificaÃ§Ã£o'] as const;
+const stepLabels = ['Passo 01: IdentificaÃ§Ã£o', 'Passo 02: Detalhamento', 'Passo 03: NotificaÃ§Ã£o'] as const;
 
 export const NewPackageModal = ({
   isOpen, onClose, step, setStep, searchResident, setSearchResident, selectedResident, setSelectedResident,
@@ -411,7 +334,7 @@ export const NewPackageModal = ({
         className="relative w-full max-w-full sm:max-w-2xl max-h-[95vh] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col border border-(--border-color)"
         style={{ backgroundColor: 'var(--sidebar-bg)', color: 'var(--text-primary)' }}
       >
-        {/* Stepper + close — sempre visível */}
+        {/* Stepper + close â€” sempre visÃ­vel */}
         <header className="shrink-0 flex items-center justify-between gap-4 p-4 sm:p-5 border-b border-(--border-color)">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {([1, 2, 3] as const).map((s) => (
@@ -457,7 +380,7 @@ export const NewPackageModal = ({
 
                 {(typeof onOpenCameraScan === 'function' || typeof onOpenGalleryPick === 'function') && (
                   <section className={cardBase}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-2" style={{ color: 'var(--text-secondary)' }}>Registrar por câmera ou foto</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-2" style={{ color: 'var(--text-secondary)' }}>Registrar por cÃ¢mera ou foto</p>
                     <div className="flex flex-wrap gap-2">
                       {typeof onOpenCameraScan === 'function' && (
                         <button
@@ -466,7 +389,7 @@ export const NewPackageModal = ({
                           className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-(--border-color) bg-(--glass-bg) hover:bg-(--border-color)/40 transition-all text-xs font-semibold uppercase tracking-wider focus:ring-2 focus:ring-(--text-primary)/20"
                           style={{ color: 'var(--text-primary)' }}
                         >
-                          <Camera className="w-4 h-4" /> Câmera
+                          <Camera className="w-4 h-4" /> CÃ¢mera
                         </button>
                       )}
                       {typeof onOpenGalleryPick === 'function' && (
@@ -481,14 +404,14 @@ export const NewPackageModal = ({
                       )}
                     </div>
                     {typeof onOpenCameraScan === 'function' && (
-                      <p className="text-[10px] font-medium opacity-60 mt-2" style={{ color: 'var(--text-secondary)' }}>No computador, use a webcam, ou faça o registro manual.</p>
+                      <p className="text-[10px] font-medium opacity-60 mt-2" style={{ color: 'var(--text-secondary)' }}>No computador, use a webcam, ou faÃ§a o registro manual.</p>
                     )}
                   </section>
                 )}
 
                 {pendingImage && (
                   <div className={cardBase + ' overflow-hidden'}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-2" style={{ color: 'var(--text-secondary)' }}>Foto da encomenda — relate ao morador</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-2" style={{ color: 'var(--text-secondary)' }}>Foto da encomenda â€” relate ao morador</p>
                     <img src={pendingImage} alt="Encomenda" className="w-full h-auto max-h-40 object-contain rounded-xl" />
                   </div>
                 )}
@@ -516,7 +439,7 @@ export const NewPackageModal = ({
                 {!selectedResident && residentsLoading && (
                   <section className={cardBase + ' flex flex-col items-center justify-center py-10 gap-3'}>
                     <Loader2 className="w-8 h-8 animate-spin opacity-60" style={{ color: 'var(--text-secondary)' }} />
-                    <p className="text-xs font-medium opacity-70" style={{ color: 'var(--text-secondary)' }}>Carregando moradores…</p>
+                    <p className="text-xs font-medium opacity-70" style={{ color: 'var(--text-secondary)' }}>Carregando moradoresâ€¦</p>
                   </section>
                 )}
 
@@ -581,7 +504,7 @@ export const NewPackageModal = ({
                 className="flex-1 py-3.5 sm:py-4 rounded-xl font-semibold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed focus:ring-2 focus:ring-(--text-primary)/20 focus:border-(--text-primary)/50"
                 style={selectedResident && !packageSaving ? { backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' } : { backgroundColor: 'var(--glass-bg)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' }}
               >
-                Próximo: Inventário <ArrowRight className="w-4 h-4" />
+                PrÃ³ximo: InventÃ¡rio <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -638,7 +561,7 @@ export const NewPackageModal = ({
 
                 <section className={cardBase}>
                   <div className="flex justify-between items-center mb-3">
-                    <label className="text-xs font-semibold uppercase tracking-wider opacity-80" style={{ color: 'var(--text-secondary)' }}>Inventário</label>
+                    <label className="text-xs font-semibold uppercase tracking-wider opacity-80" style={{ color: 'var(--text-secondary)' }}>InventÃ¡rio</label>
                     <div className="flex items-center gap-1 rounded-lg border border-(--border-color) p-1">
                       <button onClick={() => { if (numItems > 1) handleRemoveItemRow(packageItems[packageItems.length - 1].id); }} className="p-2 rounded-md hover:bg-(--border-color)/50 transition-all disabled:opacity-40" disabled={numItems <= 1} style={{ color: 'var(--text-primary)' }}><Minus className="w-4 h-4" /></button>
                       <span className="w-8 text-center text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{numItems}</span>
@@ -655,7 +578,7 @@ export const NewPackageModal = ({
                           className={inputBase}
                         />
                         <textarea
-                          placeholder="Observações"
+                          placeholder="ObservaÃ§Ãµes"
                           value={item.description}
                           onChange={e => updateItem(item.id, 'description', e.target.value)}
                           className={inputBase + ' resize-none h-20'}
@@ -681,7 +604,7 @@ export const NewPackageModal = ({
                 className="flex-1 py-3.5 sm:py-4 rounded-xl font-semibold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-(--text-primary)/20"
                 style={{ backgroundColor: 'var(--text-primary)', color: 'var(--bg-color)' }}
               >
-                Próximo: Notificação <ArrowRight className="w-4 h-4" />
+                PrÃ³ximo: NotificaÃ§Ã£o <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -711,7 +634,7 @@ export const NewPackageModal = ({
                       className="text-sm font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity focus:ring-2 focus:ring-(--text-primary)/20 rounded-lg px-2 py-1 disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      {packageSaving ? 'Salvando…' : 'Salvar sem notificar'}
+                      {packageSaving ? 'Salvandoâ€¦' : 'Salvar sem notificar'}
                     </button>
                   </div>
                 </div>
@@ -725,7 +648,7 @@ export const NewPackageModal = ({
                   <textarea
                     value={packageMessage}
                     onChange={e => setPackageMessage(e.target.value)}
-                    placeholder="Edite a mensagem de notificação..."
+                    placeholder="Edite a mensagem de notificaÃ§Ã£o..."
                     disabled={packageSaving}
                     className={inputBase + ' resize-none min-h-[180px] disabled:opacity-60 disabled:cursor-not-allowed'}
                   />
@@ -734,7 +657,7 @@ export const NewPackageModal = ({
                 <div className={cardBase + ' flex items-start gap-3'} style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)' }}>
                   <Bell className="w-5 h-5 opacity-50 shrink-0 mt-0.5" style={{ color: 'var(--text-secondary)' }} />
                   <p className="text-xs font-medium leading-relaxed opacity-80" style={{ color: 'var(--text-secondary)' }}>
-                    O registro será salvo permanentemente. O morador pode ser alertado por WhatsApp.
+                    O registro serÃ¡ salvo permanentemente. O morador pode ser alertado por WhatsApp.
                   </p>
                 </div>
               </div>
@@ -749,7 +672,7 @@ export const NewPackageModal = ({
                 {packageSaving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                    Salvando…
+                    Salvandoâ€¦
                   </>
                 ) : (
                   'Salvar'
@@ -763,8 +686,8 @@ export const NewPackageModal = ({
                 {packageSaving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="hidden sm:inline">Salvando…</span>
-                    <span className="sm:hidden">Salvando…</span>
+                    <span className="hidden sm:inline">Salvandoâ€¦</span>
+                    <span className="sm:hidden">Salvandoâ€¦</span>
                   </>
                 ) : (
                   <>
@@ -782,9 +705,9 @@ export const NewPackageModal = ({
   );
 };
 
-// --- MODAL STAFF (FUNCIONÁRIOS) ---
+// --- MODAL STAFF (FUNCIONÃRIOS) ---
 export type StaffFormData = Partial<Staff> & { passwordPlain?: string; passwordConfirm?: string };
-// Modal para criar usuários administrativos (Porteiro/Síndico)
+// Modal para criar usuÃ¡rios administrativos (Porteiro/SÃ­ndico)
 export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, currentRole }: {
   isOpen: boolean,
   onClose: () => void,
@@ -796,9 +719,9 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
   if (!isOpen) return null;
 
   const currentRoleUpper = String(currentRole || '').toUpperCase();
-  const canCreateAdminUsers = ['SINDICO', 'SÍNDICO', 'ADMIN', 'ADMINISTRADOR'].includes(currentRoleUpper);
+  const canCreateAdminUsers = ['SINDICO', 'SÃNDICO', 'ADMIN', 'ADMINISTRADOR'].includes(currentRoleUpper);
 
-  // Apenas síndico/admin pode criar outros usuários administrativos
+  // Apenas sÃ­ndico/admin pode criar outros usuÃ¡rios administrativos
   if (!canCreateAdminUsers) {
     return null;
   }
@@ -811,8 +734,8 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
       <div className="relative w-full max-w-lg bg-white text-black rounded-[32px] sm:rounded-[48px] shadow-2xl p-4 sm:p-6 md:p-8 lg:p-10 animate-in duration-300">
         <header className="flex justify-between items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div>
-            <h4 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Novo Usuário Administrativo</h4>
-            <p className="text-[9px] sm:text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">Criação de Administrador</p>
+            <h4 className="text-xl sm:text-2xl font-black uppercase tracking-tight">Novo UsuÃ¡rio Administrativo</h4>
+            <p className="text-[9px] sm:text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">CriaÃ§Ã£o de Administrador</p>
           </div>
           <button onClick={onClose} className="p-2 sm:p-3 bg-zinc-100 rounded-xl sm:rounded-2xl hover:bg-zinc-200 transition-all shrink-0">
             <X className="w-4 h-4 sm:w-5 sm:h-5"/>
@@ -832,7 +755,7 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
           </div>
 
           <div>
-            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">E-mail (Obrigatório)</label>
+            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">E-mail (ObrigatÃ³rio)</label>
             <input
               type="email"
               value={data.email}
@@ -843,22 +766,22 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
           </div>
 
           <div>
-            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Função</label>
+            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">FunÃ§Ã£o</label>
             <select
               value={data.role}
               onChange={e => setData({...data, role: e.target.value})}
               className="w-full p-3 sm:p-4 bg-zinc-50 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm outline-none border focus:border-black/10"
             >
-              <option value="">Selecione a função</option>
+              <option value="">Selecione a funÃ§Ã£o</option>
               <option value="PORTEIRO">Porteiro</option>
-              <option value="SINDICO">Síndico</option>
+              <option value="SINDICO">SÃ­ndico</option>
               <option value="ADMINISTRADORA">Administradora</option>
               <option value="CABO_TURMA">Cabo de Turma</option>
             </select>
           </div>
 
           <div>
-            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Senha (Mínimo 6 caracteres)</label>
+            <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-1 block">Senha (MÃ­nimo 6 caracteres)</label>
             <input
               type="password"
               value={data.password}
@@ -878,7 +801,7 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
               placeholder="Confirme a senha"
             />
             {data.password && data.confirmPassword && data.password !== data.confirmPassword && (
-              <p className="text-red-500 text-xs mt-1">Senhas não coincidem</p>
+              <p className="text-red-500 text-xs mt-1">Senhas nÃ£o coincidem</p>
             )}
           </div>
 
@@ -887,7 +810,7 @@ export const AdminUserModal = ({ isOpen, onClose, data, setData, onSave, current
             disabled={!isValid}
             className="w-full py-3 sm:py-4 bg-black text-white rounded-xl sm:rounded-2xl font-black uppercase text-[9px] sm:text-[10px] shadow-xl mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Criar Usuário Administrativo
+            Criar UsuÃ¡rio Administrativo
           </button>
         </div>
       </div>
@@ -909,7 +832,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
          <header className="flex justify-between items-center mb-6 sm:mb-10 shrink-0">
             <div>
                <h4 className="text-3xl font-black uppercase tracking-tight">{data.id ? 'Editar Cadastro' : 'Novo Colaborador'}</h4>
-               <p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">Gestão de Recursos Humanos</p>
+               <p className="text-[10px] font-bold opacity-30 uppercase tracking-[0.2em]">GestÃ£o de Recursos Humanos</p>
             </div>
             <button onClick={onClose} className="p-3 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-all"><X className="w-5 h-5"/></button>
          </header>
@@ -924,7 +847,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                     value={data.name || ''} 
                     onChange={e => setData({...data, name: e.target.value})} 
                     className="w-full pl-12 pr-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10" 
-                    placeholder="Nome do Funcionário" 
+                    placeholder="Nome do FuncionÃ¡rio" 
                  />
                </div>
             </div>
@@ -943,8 +866,8 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                         <option value="Porteiro">Porteiro</option>
                         <option value="Zelador">Zelador</option>
                         <option value="Faxineira">Faxineira</option>
-                        <option value="Segurança">Segurança</option>
-                        <option value="Manutenção">Manutenção</option>
+                        <option value="SeguranÃ§a">SeguranÃ§a</option>
+                        <option value="ManutenÃ§Ã£o">ManutenÃ§Ã£o</option>
                         <option value="Jardineiro">Jardineiro</option>
                         <option value="Rondista">Rondista</option>
                         <option value="Cabo de Turma">Cabo de Turma</option>
@@ -960,7 +883,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                      className="w-full px-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10 appearance-none"
                   >
                      <option value="Comercial">Comercial</option>
-                     <option value="Manhã">Manhã</option>
+                     <option value="ManhÃ£">ManhÃ£</option>
                      <option value="Tarde">Tarde</option>
                      <option value="Noite">Noite</option>
                      <option value="Madrugada">Madrugada</option>
@@ -973,11 +896,11 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
             <div className="space-y-2">
                <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">Status Operacional</label>
                <div className="flex gap-2">
-                  {['Ativo', 'Férias', 'Licença'].map(status => (
+                  {['Ativo', 'FÃ©rias', 'LicenÃ§a'].map(status => (
                      <button 
                         key={status}
                         onClick={() => setData({...data, status: status as any})}
-                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${data.status === status ? (status === 'Ativo' ? 'bg-green-500 text-white border-green-500' : status === 'Férias' ? 'bg-amber-500 text-white border-amber-500' : 'bg-red-500 text-white border-red-500') : 'bg-zinc-50 border-transparent text-zinc-400 hover:bg-zinc-100'}`}
+                        className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${data.status === status ? (status === 'Ativo' ? 'bg-green-500 text-white border-green-500' : status === 'FÃ©rias' ? 'bg-amber-500 text-white border-amber-500' : 'bg-red-500 text-white border-red-500') : 'bg-zinc-50 border-transparent text-zinc-400 hover:bg-zinc-100'}`}
                      >
                         {status}
                      </button>
@@ -988,7 +911,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
             {isPorteiro && (
               <div className="pt-4 border-t border-zinc-100 space-y-4">
                 <p className="text-[10px] font-black uppercase tracking-widest opacity-60 ml-2">
-                  {isNewStaff ? 'Porteiros acessam o sistema com login próprio — defina uma senha pessoal.' : 'Senha de acesso do porteiro (o síndico pode ver e alterar). Padrão: 123456 até o primeiro acesso.'}
+                  {isNewStaff ? 'Porteiros acessam o sistema com login prÃ³prio â€” defina uma senha pessoal.' : 'Senha de acesso do porteiro (o sÃ­ndico pode ver e alterar). PadrÃ£o: 123456 atÃ© o primeiro acesso.'}
                 </p>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">
@@ -1001,7 +924,7 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                       value={data.passwordPlain || ''}
                       onChange={e => setData({ ...data, passwordPlain: e.target.value })}
                       className="w-full pl-12 pr-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10"
-                      placeholder={isNewStaff ? 'Mín. 6 caracteres' : '123456 ou a senha já definida'}
+                      placeholder={isNewStaff ? 'MÃ­n. 6 caracteres' : '123456 ou a senha jÃ¡ definida'}
                       autoComplete={isNewStaff ? 'new-password' : 'off'}
                     />
                   </div>
@@ -1021,10 +944,10 @@ export const StaffFormModal = ({ isOpen, onClose, data, setData, onSave }: { isO
                   </div>
                 </div>
                 {data.passwordConfirm && !passwordMatch && (
-                  <p className="text-xs text-red-600 font-medium ml-2">As senhas não coincidem.</p>
+                  <p className="text-xs text-red-600 font-medium ml-2">As senhas nÃ£o coincidem.</p>
                 )}
                 {data.passwordPlain && data.passwordPlain.length > 0 && data.passwordPlain.length < 6 && (
-                  <p className="text-xs text-amber-600 font-medium ml-2">A senha deve ter no mínimo 6 caracteres.</p>
+                  <p className="text-xs text-amber-600 font-medium ml-2">A senha deve ter no mÃ­nimo 6 caracteres.</p>
                 )}
               </div>
             )}
@@ -1094,7 +1017,7 @@ export const StaffInviteModal = ({
     e.preventDefault();
     const emailTrim = email.trim().toLowerCase();
     if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      setError('Informe um e-mail válido.');
+      setError('Informe um e-mail vÃ¡lido.');
       return;
     }
     setError(null);
@@ -1127,17 +1050,17 @@ export const StaffInviteModal = ({
             const msg =
               serverError ||
               (res.status === 503
-                ? 'Envio de e-mail não configurado no servidor (RESEND_API_KEY).'
+                ? 'Envio de e-mail nÃ£o configurado no servidor (RESEND_API_KEY).'
                 : res.status === 404
-                  ? 'Rota de e-mail não encontrada. Faça o deploy com a pasta api/ na Vercel.'
-                  : 'E-mail não enviado. Copie o link abaixo e envie ao convidado.');
+                  ? 'Rota de e-mail nÃ£o encontrada. FaÃ§a o deploy com a pasta api/ na Vercel.'
+                  : 'E-mail nÃ£o enviado. Copie o link abaixo e envie ao convidado.');
             toast.error(msg);
           }
         })
         .catch(() => {
           setEmailSent(false);
-          setEmailSendError('Não foi possível contactar o servidor. Verifique a conexão ou, em desenvolvimento, configure VITE_API_BASE_URL ou rode npm run dev:api.');
-          toast.error('Falha ao enviar e-mail. Verifique a conexão.');
+          setEmailSendError('NÃ£o foi possÃ­vel contactar o servidor. Verifique a conexÃ£o ou, em desenvolvimento, configure VITE_API_BASE_URL ou rode npm run dev:api.');
+          toast.error('Falha ao enviar e-mail. Verifique a conexÃ£o.');
         });
     } else {
       setError(result.error || 'Erro ao gerar convite.');
@@ -1149,7 +1072,7 @@ export const StaffInviteModal = ({
     navigator.clipboard.writeText(inviteLink).then(() => {
       toast.success('Link copiado!');
     }).catch(() => {
-      toast.error('Não foi possível copiar.');
+      toast.error('NÃ£o foi possÃ­vel copiar.');
     });
   };
 
@@ -1161,7 +1084,7 @@ export const StaffInviteModal = ({
         <header className="flex justify-between items-center mb-6 shrink-0">
           <div>
             <h4 className="text-2xl font-black uppercase tracking-tight">Convidar por link</h4>
-            <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">Portaria ou ADM — link único por e-mail</p>
+            <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">Portaria ou ADM â€” link Ãºnico por e-mail</p>
           </div>
           <button onClick={handleClose} className="p-3 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-all"><X className="w-5 h-5"/></button>
         </header>
@@ -1188,10 +1111,10 @@ export const StaffInviteModal = ({
                 onChange={e => setRole(e.target.value as StaffInviteRole)}
                 className="w-full px-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10"
               >
-                <option value="PORTEIRO">Perfil A — Portaria</option>
-                <option value="SINDICO">Perfil B — ADM</option>
-                <option value="CABO_TURMA">Perfil C — Cabo de Turma</option>
-                <option value="RONDISTA">Perfil D — Rondista</option>
+                <option value="PORTEIRO">Perfil A â€” Portaria</option>
+                <option value="SINDICO">Perfil B â€” ADM</option>
+                <option value="CABO_TURMA">Perfil C â€” Cabo de Turma</option>
+                <option value="RONDISTA">Perfil D â€” Rondista</option>
               </select>
             </div>
             {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
@@ -1207,11 +1130,11 @@ export const StaffInviteModal = ({
         ) : (
           <div className="space-y-4">
             {emailSent === true && (
-              <p className="text-sm font-medium text-green-600">E-mail enviado para <strong>{email}</strong>. O convidado receberá o link por e-mail.</p>
+              <p className="text-sm font-medium text-green-600">E-mail enviado para <strong>{email}</strong>. O convidado receberÃ¡ o link por e-mail.</p>
             )}
             {emailSent === false && (
               <div className="space-y-1">
-                <p className="text-xs text-amber-600">O link foi gerado, mas o e-mail não pôde ser enviado. Copie o link abaixo e envie por e-mail ou WhatsApp ao convidado.</p>
+                <p className="text-xs text-amber-600">O link foi gerado, mas o e-mail nÃ£o pÃ´de ser enviado. Copie o link abaixo e envie por e-mail ou WhatsApp ao convidado.</p>
                 {emailSendError && (
                   <p className="text-xs text-red-600 font-medium mt-1" title="Erro retornado pelo servidor">
                     Erro: {emailSendError}
@@ -1222,7 +1145,7 @@ export const StaffInviteModal = ({
             {emailSent === null && (
               <p className="text-xs text-zinc-500">Enviando e-mail...</p>
             )}
-            <p className="text-xs text-zinc-600">O convite expira em 7 dias. O convidado definirá a senha ao acessar o link.</p>
+            <p className="text-xs text-zinc-600">O convite expira em 7 dias. O convidado definirÃ¡ a senha ao acessar o link.</p>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -1252,297 +1175,3 @@ export const StaffInviteModal = ({
   );
 };
 
-// --- MODAL CONVITE MORADOR POR LINK (um e-mail ou envio em massa) ---
-export const ResidentInviteModal = ({
-  isOpen,
-  onClose,
-  createdByName,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  createdByName?: string | null;
-}) => {
-  const toast = useToast();
-  const [mode, setMode] = React.useState<'single' | 'bulk'>('single');
-  const [email, setEmail] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [inviteLink, setInviteLink] = React.useState<string | null>(null);
-  const [emailSent, setEmailSent] = React.useState<boolean | null>(null);
-  const [emailSendError, setEmailSendError] = React.useState<string | null>(null);
-  // Bulk
-  const [bulkInput, setBulkInput] = React.useState('');
-  const [bulkFile, setBulkFile] = React.useState<File | null>(null);
-  const [bulkLoading, setBulkLoading] = React.useState(false);
-  const [bulkResult, setBulkResult] = React.useState<{ sent: number; failed: number; errors: string[] } | null>(null);
-
-  const apiBase = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) || (typeof window !== 'undefined' ? window.location.origin : '');
-  const sendEmailUrl = `${String(apiBase).replace(/\/$/, '')}/api/send-invite-email`;
-
-  const reset = () => {
-    setEmail('');
-    setError(null);
-    setInviteLink(null);
-    setEmailSent(null);
-    setEmailSendError(null);
-    setBulkInput('');
-    setBulkFile(null);
-    setBulkResult(null);
-  };
-
-  const handleClose = () => {
-    reset();
-    onClose();
-  };
-
-  const sendOneEmail = async (to: string, link: string) => {
-    const res = await fetch(sendEmailUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: to, inviteLink: link, role: 'MORADOR' }),
-    });
-    const data = await res.json().catch(() => ({}));
-    return data.sent === true;
-  };
-
-  const handleGenerateSingle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const emailTrim = email.trim().toLowerCase();
-    if (!emailTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      setError('Informe um e-mail válido.');
-      return;
-    }
-    setError(null);
-    setEmailSent(null);
-    setEmailSendError(null);
-    setLoading(true);
-    const result = await createResidentInvite(emailTrim, createdByName ?? undefined);
-    setLoading(false);
-    if (result.success && result.inviteLink) {
-      setInviteLink(result.inviteLink);
-      fetch(sendEmailUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailTrim, inviteLink: result.inviteLink, role: 'MORADOR' }),
-      })
-        .then(async (res) => {
-          const data = await res.json().catch(() => ({}));
-          if (data.sent === true) {
-            setEmailSent(true);
-            setEmailSendError(null);
-            toast.success(`E-mail enviado para ${emailTrim}`);
-          } else {
-            setEmailSent(false);
-            setEmailSendError(typeof data.error === 'string' ? data.error : 'E-mail não enviado.');
-            toast.error('Falha ao enviar e-mail. Copie o link e envie manualmente.');
-          }
-        })
-        .catch(() => {
-          setEmailSent(false);
-          setEmailSendError('Erro de conexão.');
-          toast.error('Falha ao enviar e-mail.');
-        });
-    } else {
-      setError(result.error || 'Erro ao gerar convite.');
-    }
-  };
-
-  const parseEmailsFromBulk = (): string[] => {
-    const lines = bulkInput.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
-    const emails: string[] = [];
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    for (const line of lines) {
-      if (re.test(line)) {
-        emails.push(line.toLowerCase());
-      } else {
-        const parts = line.split(/[\t,;]/).map(p => p.trim());
-        for (const p of parts) {
-          if (re.test(p)) emails.push(p.toLowerCase());
-        }
-      }
-    }
-    return [...new Set(emails)];
-  };
-
-  const parseFileForEmails = (text: string): string[] => {
-    const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
-    const emails: string[] = [];
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const first = lines[0] || '';
-    const hasHeader = first.toLowerCase().includes('email') || first.toLowerCase().includes('e-mail');
-    const start = hasHeader ? 1 : 0;
-    for (let i = start; i < lines.length; i++) {
-      const line = lines[i];
-      if (re.test(line)) {
-        emails.push(line.toLowerCase());
-      } else {
-        const parts = line.split(/[\t,;,]/).map(p => p.trim());
-        for (const p of parts) {
-          if (re.test(p)) emails.push(p.toLowerCase());
-        }
-      }
-    }
-    return [...new Set(emails)];
-  };
-
-  const handleBulkSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    let emails: string[] = [];
-    if (bulkFile) {
-      try {
-        const text = await bulkFile.text();
-        emails = parseFileForEmails(text);
-      } catch {
-        setError('Não foi possível ler o arquivo.');
-        return;
-      }
-    } else {
-      emails = parseEmailsFromBulk();
-    }
-    if (emails.length === 0) {
-      setError('Nenhum e-mail válido encontrado. Use um e-mail por linha ou CSV com coluna de e-mail.');
-      return;
-    }
-    setError(null);
-    setBulkResult(null);
-    setBulkLoading(true);
-    const result = await createResidentInvitesBulk(emails, createdByName ?? undefined);
-    setBulkLoading(false);
-    if (!result.success && !result.invites?.length) {
-      setError(result.errors?.[0]?.error || 'Erro ao criar convites.');
-      return;
-    }
-    const invites = result.invites || [];
-    let sent = 0;
-    const errs: string[] = [];
-    for (const inv of invites) {
-      const ok = await sendOneEmail(inv.email, inv.inviteLink);
-      if (ok) sent++;
-      else errs.push(inv.email);
-    }
-    setBulkResult({ sent, failed: invites.length - sent, errors: errs });
-    if (sent > 0) toast.success(`${sent} convite(s) enviado(s) por e-mail.`);
-    if (errs.length > 0) toast.error(`${errs.length} e-mail(s) não enviado(s).`);
-  };
-
-  const copyLink = () => {
-    if (!inviteLink) return;
-    navigator.clipboard.writeText(inviteLink).then(() => toast.success('Link copiado!')).catch(() => toast.error('Não foi possível copiar.'));
-  };
-
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-500 flex items-center justify-center p-3 sm:p-4 overflow-y-auto min-h-full">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-xl min-h-full" onClick={handleClose} />
-      <div className="relative w-full max-w-lg max-h-[min(90vh,640px)] my-auto flex flex-col bg-white text-black rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8 animate-in zoom-in duration-300 overflow-y-auto">
-        <header className="flex justify-between items-center mb-6 shrink-0">
-          <div>
-            <h4 className="text-2xl font-black uppercase tracking-tight">Convidar morador por link</h4>
-            <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest mt-1">Um e-mail ou envio em massa</p>
-          </div>
-          <button onClick={handleClose} className="p-3 bg-zinc-100 rounded-2xl hover:bg-zinc-200 transition-all"><X className="w-5 h-5"/></button>
-        </header>
-
-        <div className="flex gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => { setMode('single'); setError(null); setBulkResult(null); }}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${mode === 'single' ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-          >
-            <Mail className="w-4 h-4 inline mr-2" /> Um e-mail
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode('bulk'); setError(null); setInviteLink(null); setEmailSent(null); }}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${mode === 'bulk' ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-          >
-            <Upload className="w-4 h-4 inline mr-2" /> Envio em massa
-          </button>
-        </div>
-
-        {mode === 'single' ? (
-          !inviteLink ? (
-            <form onSubmit={handleGenerateSingle} className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2">E-mail do convidado</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => { setEmail(e.target.value); setError(null); }}
-                    className="w-full pl-12 pr-4 py-4 bg-zinc-50 rounded-2xl font-bold text-sm outline-none border focus:border-black/10"
-                    placeholder="exemplo@email.com"
-                  />
-                </div>
-              </div>
-              {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-[11px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-                {loading ? 'Gerando link...' : 'Gerar link e enviar e-mail'}
-              </button>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              {emailSent === true && <p className="text-sm font-medium text-green-600">E-mail enviado. O convidado receberá o link por e-mail.</p>}
-              {emailSent === false && (
-                <div className="space-y-1">
-                  <p className="text-xs text-amber-600">Copie o link abaixo e envie ao convidado.</p>
-                  {emailSendError && <p className="text-xs text-red-600">Erro: {emailSendError}</p>}
-                </div>
-              )}
-              {emailSent === null && <p className="text-xs text-zinc-500">Enviando e-mail...</p>}
-              <p className="text-xs text-zinc-600">O convite expira em 7 dias. O morador definirá a senha e a unidade ao acessar o link.</p>
-              <div className="flex gap-2">
-                <input type="text" readOnly value={inviteLink} className="flex-1 px-4 py-3 bg-zinc-100 rounded-xl text-sm font-mono truncate" />
-                <button type="button" onClick={copyLink} className="p-3 bg-zinc-800 text-white rounded-xl hover:bg-zinc-900 shrink-0"><Copy className="w-4 h-4" /> Copiar</button>
-              </div>
-              <button type="button" onClick={() => { setInviteLink(null); setEmail(''); }} className="w-full py-3 border border-zinc-200 rounded-xl text-sm font-bold uppercase text-zinc-600 hover:bg-zinc-50">Gerar outro link</button>
-            </div>
-          )
-        ) : (
-          <form onSubmit={handleBulkSubmit} className="space-y-4">
-            <p className="text-xs text-zinc-600">Envie um arquivo CSV ou TXT com um e-mail por linha, ou cole a lista de e-mails abaixo. O sistema criará um convite por e-mail e enviará o link.</p>
-            <div>
-              <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 block mb-2">Arquivo (CSV/TXT)</label>
-              <input
-                type="file"
-                onChange={e => { setBulkFile(e.target.files?.[0] || null); setBulkInput(''); }}
-                className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-zinc-100 file:font-bold"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 block mb-2">Ou cole os e-mails (um por linha)</label>
-              <textarea
-                value={bulkInput}
-                onChange={e => { setBulkInput(e.target.value); setBulkFile(null); }}
-                placeholder={'email1@exemplo.com\nemail2@exemplo.com'}
-                rows={6}
-                className="w-full px-4 py-3 bg-zinc-50 rounded-2xl text-sm font-mono outline-none border focus:border-black/10 resize-y"
-              />
-            </div>
-            {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
-            {bulkResult && (
-              <div className="p-3 bg-zinc-50 rounded-xl text-sm">
-                <p className="font-bold">Enviados: {bulkResult.sent} | Falhas: {bulkResult.failed}</p>
-                {bulkResult.errors.length > 0 && <p className="text-xs text-red-600 mt-1">Não enviados: {bulkResult.errors.slice(0, 5).join(', ')}{bulkResult.errors.length > 5 ? '...' : ''}</p>}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={bulkLoading}
-              className="w-full py-4 bg-black text-white rounded-2xl font-black uppercase text-[11px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {bulkLoading ? 'Criando convites e enviando...' : 'Criar convites e enviar e-mails'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-};

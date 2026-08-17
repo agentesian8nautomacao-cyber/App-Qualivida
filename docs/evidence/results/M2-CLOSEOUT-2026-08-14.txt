@@ -1,0 +1,212 @@
+# M2 CLOSEOUT — FECHAMENTO FORMAL (RETOMADA LIVE PASS)
+
+Projeto:             zaemlxjwhzrfmowbckmk
+Migration:           supabase/migrations/20260813160000_002_units.sql
+Nome lógico:         002_units
+APPLY evidência:     docs/evidence/results/M2-APPLY-2026-08-13.txt
+APPLY timestamp:     2026-08-13T21:00:01Z → 2026-08-13T21:00:05Z
+APPLY resultado:     PASS
+
+Modo desta tarefa:   CLOSEOUT / PÓS-APPLY READ-ONLY (RETOMADA)
+Escrita no banco:    NENHUMA
+Migrations nesta tarefa: NENHUMA (M2 NÃO reaplicada)
+Rollback:            NÃO EXECUTADO
+
+================================================================================
+HISTÓRICO DE FALHAS / RETOMADAS (preservado)
+================================================================================
+1) 2026-08-14T09:11:09Z — falha LIVE: password authentication failed
+2) 2026-08-14T09:54:35Z — retomada: AUTHENTICATION_FAILED (credencial ausente no processo do agente)
+3) 2026-08-14T10:10:28Z → 10:10:32Z — RETOMADA LIVE: AUTH_OK + verificação schema PASS
+
+Esta execução é RETOMADA após falhas de autenticação (não de schema).
+
+================================================================================
+1. M2 STATUS
+================================================================================
+M2 APPLY = PASS (histórico)
+M2 CLOSEOUT LIVE = PASS (esta retomada)
+
+================================================================================
+2. MIGRATION
+================================================================================
+20260813160000_002_units.sql — APPLIED (não reexecutada nesta tarefa)
+
+================================================================================
+3. APPLY TIMESTAMP
+================================================================================
+2026-08-13T21:00:01Z → 2026-08-13T21:00:05Z (M2-APPLY-2026-08-13.txt)
+
+================================================================================
+4. PÓS-APPLY VERIFICATION (LIVE 2026-08-14T10:10:28Z)
+================================================================================
+current_database = postgres
+current_user     = postgres
+AUTH_OK          = YES
+
+organizations EXISTS = TRUE
+condominiums EXISTS  = TRUE
+units EXISTS         = TRUE
+
+================================================================================
+5. ROWS
+================================================================================
+units rows = 0
+
+================================================================================
+6. CAMPOS (10)
+================================================================================
+id | uuid | NO | gen_random_uuid()
+condominium_id | uuid | NO |
+code | text | NO |
+block | text | YES |
+number | text | YES |
+label | text | YES |
+status | text | NO | 'active'::text
+metadata | jsonb | YES |
+created_at | timestamptz | NO | now()
+updated_at | timestamptz | NO | now()
+column_count = 10
+
+================================================================================
+7. PK
+================================================================================
+units_pkey PRIMARY KEY (id) — PASS
+
+================================================================================
+8. FK
+================================================================================
+units_condominium_id_fkey
+FOREIGN KEY (condominium_id) REFERENCES condominiums(id) — PASS
+
+================================================================================
+9. ON DELETE
+================================================================================
+RESTRICT — PASS
+
+================================================================================
+10. UNIQUE
+================================================================================
+units_condominium_id_code_key UNIQUE (condominium_id, code) — PASS
+UNIQUE(code) global: AUSENTE — PASS
+
+================================================================================
+11. ÍNDICES
+================================================================================
+units_pkey
+units_condominium_id_code_key
+Índices adicionais M2: NENHUM — PASS
+
+================================================================================
+12. NULLABILITY
+================================================================================
+NOT NULL: id, condominium_id, code, status, created_at, updated_at — PASS
+NULL: block, number, label, metadata — PASS
+
+================================================================================
+13. DEFAULTS
+================================================================================
+id → gen_random_uuid() — PASS
+status → 'active' — PASS
+created_at → now() — PASS
+updated_at → now() — PASS
+metadata → sem default — PASS
+
+================================================================================
+14. RLS / POLICIES OBSERVADO
+================================================================================
+units policies = 0 — PASS (esperado)
+relrowsecurity units = true — OBSERVAÇÃO (flag ON; sem policies)
+relrowsecurity organizations = true — observação
+relrowsecurity condominiums = true — observação
+RLS NÃO alterado nesta tarefa.
+
+================================================================================
+15. LEGADO
+================================================================================
+organizations EXISTS — intacta no escopo M2
+condominiums EXISTS — intacta no escopo M2
+Smoke presentes: users, staff, residents, packages, boletos,
+  roles, permissions, role_permissions, staff_invites
+  + organizations, condominiums, units
+tenant_memberships: AUSENTE (M3 não aplicada)
+Nenhuma tabela operacional alterada nesta tarefa.
+
+================================================================================
+16. DML
+================================================================================
+DML M2 = 0
+units rows = 0
+
+================================================================================
+17. SEED
+================================================================================
+NÃO
+
+================================================================================
+18. BACKFILL
+================================================================================
+NÃO
+
+================================================================================
+19. ROLLBACK
+================================================================================
+Arquivo: supabase/migrations/20260813160000_002_units.rollback.sql
+Status: NOT EXECUTED
+
+================================================================================
+20. BACKUP
+================================================================================
+Referência: docs/evidence/results/BACKUP-PRE-M1-2026-08-13.txt
+.dump não regenerado / não commitado
+
+================================================================================
+21. GIT
+================================================================================
+HEAD: 31731e7 docs: finalize gate 3 checkpoint evidence
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta)
+Worktree: DIRTY (artefatos M1/M2; sem commit/push/tag/reset/clean)
+Secrets: não gravados na evidência; PGPASSWORD limpo após consultas
+
+================================================================================
+22. EVIDÊNCIAS
+================================================================================
+M2-APPLY-2026-08-13.txt
+M2-PRECHECK-LIVE-2026-08-13.txt
+M2-CLOSEOUT-2026-08-14.txt (este arquivo — retomada LIVE PASS)
+(falhas de auth anteriores preservadas no histórico acima)
+
+================================================================================
+23. M3 / M4 STATUS
+================================================================================
+M3: NOT EXECUTED
+M4: NOT EXECUTED
+M5+: NOT EXECUTED
+(comprovado: tenant_memberships ausente; nenhuma migration rodada nesta tarefa)
+
+================================================================================
+24. RESULTADO FINAL
+================================================================================
+
+M2 = CLOSED / PASS
+
+Critérios:
+  [x] autenticação LIVE OK
+  [x] units EXISTS
+  [x] rows = 0
+  [x] 10 campos
+  [x] nullability
+  [x] defaults
+  [x] PK / FK RESTRICT / UNIQUE scoped
+  [x] índices somente PK+UNIQUE
+  [x] 0 policies
+  [x] legado intacto (read-only)
+  [x] sem DML/seed/backfill
+  [x] rollback não executado
+  [x] M3/M4 não executados
+  [x] M2 não reaplicada
+
+Nenhuma alteração de banco foi executada nesta retomada.
+Nenhuma migration foi executada nesta retomada.
+A migration M2 NÃO foi reaplicada.
+================================================================================

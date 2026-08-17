@@ -15,26 +15,26 @@ export interface ThemeConfig {
 
 export const themes: Record<ThemeVariant, ThemeConfig> = {
   default: {
-    name: 'Default',
-    description: 'Paleta verde (marca QualiVida)',
+    name: 'Sentinela Dark',
+    description: 'Navy operacional com azul elétrico e ciano',
     path: './themes/default',
     colors: {
-      primary: '#0b7a4b',
-      secondary: '#1e9f63',
-      accent: '#7fcf6b',
-      background: '#0c1a13',
-      surface: 'rgba(12, 26, 19, 0.6)'
+      primary: '#2563eb',
+      secondary: '#0f3b82',
+      accent: '#22d3ee',
+      background: '#06101f',
+      surface: 'rgba(11, 25, 48, 0.72)'
     }
   },
   alternative: {
-    name: 'Alternative',
-    description: 'Paleta verde clara',
+    name: 'Sentinela Light',
+    description: 'Superfícies claras com contraste azul operacional',
     path: './themes/alternative',
     colors: {
-      primary: '#0b7a4b',
-      secondary: '#3c5f4a',
-      accent: '#1e9f63',
-      background: '#f8f9fa',
+      primary: '#2563eb',
+      secondary: '#1d4ed8',
+      accent: '#0891b2',
+      background: '#f2f7fc',
       surface: 'rgba(255, 255, 255, 0.9)'
     }
   }

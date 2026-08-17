@@ -1,0 +1,138 @@
+SENTINELA AUT — G7-C — APPLY LIVE
+Data/hora UTC (pre-reconfirm): 2026-08-15T21:33:41Z
+Backup UTC:                    2026-08-15T21:34:37Z → 2026-08-15T21:36:01Z
+APPLY UTC:                     2026-08-15T21:36:26Z → 2026-08-15T21:36:29Z
+Validação UTC:                 2026-08-15T21:36:57Z → 2026-08-15T21:36:59Z
+Projeto:                       zaemlxjwhzrfmowbckmk
+Host DB:                       db.zaemlxjwhzrfmowbckmk.supabase.co
+Autorização:                   EXPLÍCITA (APPLY G7-C 007 somente)
+
+Migration aplicada:
+  supabase/migrations/20260814210000_007_reservations_no_overlap.sql
+Nome lógico:                   007_reservations_no_overlap
+Gate:                          G7-C
+
+Pré-condições:
+  G7-C DEEP REVIEW = APPROVED FOR LIVE PRE-CHECK
+  G7-C PRE-CHECK LIVE = PASS
+  Evidência pré-check: SENTINELA-G7-C-PRECHECK-LIVE-2026-08-14.txt
+
+Método:                        psql -f (arquivo íntegro, ON_ERROR_STOP=1)
+psql apply_exit:               0
+psql validation_exit:          0
+
+Saída APPLY (resumo):
+  BEGIN
+  DO
+  DO
+  ALTER TABLE
+  COMMIT
+
+RESULTADO: G7-C APPLY = PASS
+
+============================================================
+PRE-APPLY RECONFIRM
+============================================================
+reservations EXISTS              = t
+areas EXISTS                     = t
+btree_gist EXISTS                = t
+reservations_area_date_slot_excl = ABSENT (f)
+reservations_total               = 0
+overlapping_active_pairs         = 0
+Alvo confirmado: 007_reservations_no_overlap (somente este arquivo)
+Outras migrations nesta tarefa: 0
+
+============================================================
+BACKUP PRÉ-APPLY
+============================================================
+Tipo:     pg_dump -Fc --no-owner --no-acl
+Arquivo:  docs/evidence/backups/backup-pre-g7c-007-2026-08-15-213436.dump
+pg_dump_exit: 0
+SIZE_BYTES:   534083
+SHA-256:      19ea0428ba6167aa4f78e74722e230bd0436ad02cc6b374866934a508a420933
+
+============================================================
+POST-APPLY VALIDATION (READ-ONLY)
+============================================================
+1. constraint EXISTS:
+   reservations_area_date_slot_excl = PRESENT
+
+2. Tipo:
+   contype = x (EXCLUDE)
+
+3–5. Definição efetiva:
+   EXCLUDE USING gist (
+     area_id WITH =,
+     date WITH =,
+     tsrange(
+       ((date)::timestamp without time zone + (start_time)::interval),
+       ((date)::timestamp without time zone + (end_time)::interval),
+       '[)'::text
+     ) WITH &&
+   )
+   WHERE (status IN ('scheduled','active'))
+
+   Índice GiST associado (mesmo nome):
+     reservations_area_date_slot_excl
+
+6. Objetos NÃO criados / NÃO adicionados pela 007:
+   condominium_id              = ainda ABSENT (f)
+   reservas column_count       = 11 (inalterado)
+   novas colunas não previstas = 0
+   triggers novos pela 007     = 0
+     (triggers pré-existentes listados abaixo — não criados nesta migration)
+   functions novas             = 0
+   policies novas              = 0
+     (policy pré-existente "Allow all operations on reservations" — não criada pela 007)
+
+7. Integridade:
+   reservations_ok = t
+   areas_ok        = t
+   btree_gist_ok   = t
+
+8. Contagens:
+   reservations_total before = 0 / after = 0
+   overlapping pairs before  = 0 / after = 0
+
+9–11. Plataforma:
+   M1 organizations/condominiums = EXISTS (intactos)
+   M2 units                      = EXISTS (intacto)
+   M3 tenant_memberships         = EXISTS (intacto)
+   G6-1 api_idempotency_keys     = EXISTS (intacto)
+   G6-2 api_confirmations        = EXISTS (intacto)
+
+12. Escopo DDL:
+   Único objeto novo: CONSTRAINT/INDEX exclusions reservations_area_date_slot_excl
+   em public.reservations. Demais tabelas operacionais não alteradas pela 007.
+
+13. exit code APPLY = 0
+
+Constraints em reservations após APPLY:
+  reservations_area_date_slot_excl (EXCLUDE)  ← CRIADA
+  reservations_area_id_fkey (FK)
+  reservations_pkey (PK)
+  reservations_resident_id_fkey (FK)
+  reservations_status_check (CHECK)
+
+Triggers pré-existentes (não criados pela 007):
+  trigger_enforce_reservation_resident_from_auth
+  trigger_update_reservation_resident_cache
+  update_reservations_updated_at
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 1 (ADD CONSTRAINT EXCLUDE em public.reservations)
+MIGRATIONS EXECUTED = 1 (somente 007)
+LEGACY ALTERATIONS  = 0 (sem ADD COLUMN / seed / backfill / UPDATE/DELETE de dados)
+WRITE OPERATIONS    = DDL da migration apenas (sem DML de negócio)
+ROLLBACK            = NÃO EXECUTADO
+CLOSEOUT            = NÃO EXECUTADO
+G7-D / Event Store / n8n / WhatsApp = NÃO
+
+============================================================
+STOP
+============================================================
+G7-C APPLY = PASS
+CLOSEOUT = NÃO
+G7-D = NÃO INICIADO

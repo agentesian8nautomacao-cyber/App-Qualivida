@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Mail, Lock, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { getOrRestoreRecoverySession, clearRecoveryHashFromUrl, getEmailForReset, requestPasswordReset } from '../services/userAuth';
+import { BRANDING } from '../config/branding';
 
 interface ForgotPasswordProps {
   onBack: () => void;
@@ -156,11 +157,7 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
 
   return (
     <div className="relative z-10 w-full max-w-md p-4">
-      <div className={`backdrop-blur-3xl border rounded-[48px] p-8 md:p-12 shadow-2xl relative overflow-hidden transition-all duration-500 ${
-        theme === 'light' 
-          ? 'bg-white border-gray-200/50' 
-          : 'bg-white/[0.03] border-white/10'
-      }`}>
+      <div className="sentinela-card backdrop-blur-3xl border rounded-[36px] p-8 md:p-12 relative overflow-hidden transition-all duration-500">
         {/* Botão voltar */}
         <button
           onClick={onBack}
@@ -174,6 +171,10 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack, theme = 'dark',
         </button>
 
         <div className="mt-12">
+          <p className="text-xs font-black tracking-wide">{BRANDING.name}</p>
+          <p className="text-[8px] uppercase tracking-[0.18em] text-[var(--sentinela-text-muted)] mb-5">
+            {BRANDING.tagline}
+          </p>
           <h2 className={`text-2xl font-black tracking-tighter mb-2 ${
             theme === 'light' ? 'text-gray-900' : 'text-white'
           }`}>

@@ -1,0 +1,163 @@
+{
+  "base": "http://127.0.0.1:3099",
+  "client_id": "n8n-pilot-test",
+  "organization_id": "0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928",
+  "condominium_id": "3f383313-5ec0-4d21-97c7-1b2500c933be",
+  "first_write_request_id": "g7hb-create_package_first-91b60e90",
+  "results": [
+    {
+      "scenario": "health",
+      "http": 200,
+      "request_id": "g7hb-health-7e20c1e0",
+      "success": true,
+      "error_code": null,
+      "core_executed": null,
+      "stage": "ETAPA_G7_H_B_N8N_PILOT",
+      "operation": "health",
+      "notes": ""
+    },
+    {
+      "scenario": "protected-probe",
+      "http": 200,
+      "request_id": "g7hb-protected-probe-09c76136",
+      "success": true,
+      "error_code": null,
+      "core_executed": null,
+      "stage": "ETAPA_4_G2_AUTH_TENANT",
+      "operation": "protected_probe",
+      "notes": ""
+    },
+    {
+      "scenario": "identify_resident",
+      "http": 200,
+      "request_id": "g7hb-identify_resident-5ade9b5e",
+      "success": true,
+      "error_code": null,
+      "core_executed": true,
+      "stage": null,
+      "operation": "identify_resident",
+      "notes": ""
+    },
+    {
+      "scenario": "create_package_first",
+      "http": 200,
+      "request_id": "g7hb-create_package_first-91b60e90",
+      "success": true,
+      "error_code": null,
+      "core_executed": true,
+      "stage": null,
+      "operation": "create_package",
+      "notes": ""
+    },
+    {
+      "scenario": "create_package_replay",
+      "http": 200,
+      "request_id": "g7hb-create_package_replay-635d3850",
+      "success": true,
+      "error_code": null,
+      "core_executed": false,
+      "stage": null,
+      "operation": "create_package",
+      "notes": ""
+    },
+    {
+      "scenario": "hmac_invalid",
+      "http": 401,
+      "request_id": "g7hb-hmac_invalid-e2fb9367",
+      "success": false,
+      "error_code": "INVALID_SIGNATURE",
+      "core_executed": null,
+      "stage": null,
+      "operation": null,
+      "notes": ""
+    },
+    {
+      "scenario": "timestamp_expired",
+      "http": 401,
+      "request_id": "g7hb-timestamp_expired-c775ff9b",
+      "success": false,
+      "error_code": "TIMESTAMP_EXPIRED",
+      "core_executed": null,
+      "stage": null,
+      "operation": null,
+      "notes": ""
+    },
+    {
+      "scenario": "tenant_invalid",
+      "http": 403,
+      "request_id": "g7hb-tenant_invalid-3fabebdb",
+      "success": false,
+      "error_code": "TENANT_MISMATCH",
+      "core_executed": null,
+      "stage": null,
+      "operation": null,
+      "notes": ""
+    },
+    {
+      "scenario": "fingerprint_mismatch",
+      "http": 409,
+      "request_id": "g7hb-fingerprint_mismatch-3b779739",
+      "success": false,
+      "error_code": "IDEMPOTENCY_FINGERPRINT_MISMATCH",
+      "core_executed": false,
+      "stage": null,
+      "operation": "create_package",
+      "notes": ""
+    },
+    {
+      "scenario": "payload_invalid",
+      "http": 400,
+      "request_id": "g7hb-payload_invalid-db64c5d5",
+      "success": false,
+      "error_code": "INVALID_REQUEST",
+      "core_executed": false,
+      "stage": null,
+      "operation": "create_package",
+      "notes": ""
+    },
+    {
+      "scenario": "authz_denied",
+      "http": 403,
+      "request_id": "g7hb-authz_denied-073432e1",
+      "success": false,
+      "error_code": "FORBIDDEN",
+      "core_executed": null,
+      "stage": null,
+      "operation": "create_package",
+      "notes": ""
+    },
+    {
+      "scenario": "create_reservation_1",
+      "http": 200,
+      "request_id": "g7hb-create_reservation_1-cb95edf6",
+      "success": true,
+      "error_code": null,
+      "core_executed": true,
+      "stage": null,
+      "operation": "create_reservation",
+      "notes": ""
+    },
+    {
+      "scenario": "create_reservation_conflict",
+      "http": 409,
+      "request_id": "g7hb-create_reservation_conflict-2ac7ed25",
+      "success": false,
+      "error_code": "CONFLICT",
+      "core_executed": true,
+      "stage": null,
+      "operation": "create_reservation",
+      "notes": ""
+    },
+    {
+      "scenario": "pickup_confirmation_required",
+      "http": 409,
+      "request_id": "g7hb-pickup_confirmation_required-0bccfd9a",
+      "success": false,
+      "error_code": "CONFIRMATION_REQUIRED",
+      "core_executed": null,
+      "stage": null,
+      "operation": "pickup_package",
+      "notes": ""
+    }
+  ]
+}

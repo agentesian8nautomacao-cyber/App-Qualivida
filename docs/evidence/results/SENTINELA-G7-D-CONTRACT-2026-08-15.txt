@@ -1,0 +1,106 @@
+SENTINELA AUT — G7-D — OPERATIONAL CONTRACT HARDENING
+Data: 2026-08-15
+Status: G7-D = PASS
+
+Pré-requisito: G7-C = CLOSED / PASS
+  (SENTINELA-G7-C-CLOSEOUT-2026-08-15.txt)
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES   = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE         = 0
+n8n workflow       = 0
+WhatsApp           = 0
+Event Store        = 0
+M1–M4              = INTACTOS
+G6-1 / G6-2        = INTACTOS
+G7-C constraint 007 = INTACTA (não alterada)
+
+============================================================
+CORREÇÕES / CONTRATO
+============================================================
+1. 23P01 / exclusion → CONFLICT
+   - supabasePersistence.saveReservation detecta 23P01
+   - Core createReservation mapeia → CONFLICT + details públicos
+     (areaId, date, start/end, reason, retry_hint)
+   - Sem SQL/stack ao consumidor
+
+2. INVALID_TIME_RANGE
+   - start==end e end<start rejeitados no payload API e no Core
+   - Core não recebe intervalo vazio/invertido (fail early)
+
+3. Status oficial: canceled
+   - Filtros listReservationSlots / Core usam canceled + aliases
+     legados (cancelled/cancelada/cancelado) só para leitura
+   - Sem UPDATE histórico no banco
+
+4. Envelope
+   - jsonError sanitiza details (sanitizePublicDetails)
+   - success, operation, request_id, code, message, details
+
+5. Idempotency
+   - fingerprint mismatch → IDEMPOTENCY_FINGERPRINT_MISMATCH
+   - store unavailable preservado
+   - R1 reclaim intacto
+
+6. Confirmation
+   - CONFIRMATION_ALREADY_CONSUMED (padrão)
+   - ALREADY_USED permanece como alias deprecated
+   - Core não executa sem confirmation válida (inalterado)
+
+7. Tenant / AuthZ / identify / boletos
+   - fail-closed preservado
+   - NOT_FOUND / NEEDS_CONFIRMATION (telefone)
+   - boleto sem paths internos (G7-C)
+
+============================================================
+ARQUIVOS
+============================================================
+CRIADOS:
+  sentinela/core/domain/reservationTime.ts
+  api/v1/_lib/execution/g7d.contract.test.ts
+  docs/SENTINELA-AUT-G7-D-CONTRACT.md
+  docs/evidence/results/SENTINELA-G7-D-CONTRACT-2026-08-15.txt
+
+MODIFICADOS (principais):
+  sentinela/core/types.ts
+  sentinela/core/operations/createReservation.ts
+  sentinela/core/adapters/persistence.ts
+  sentinela/core/index.ts
+  api/v1/_lib/errors.ts
+  api/v1/_lib/response.ts
+  api/v1/_lib/execution/payload.ts
+  api/v1/_lib/execution/executeCore.ts
+  api/v1/_lib/execution/supabasePersistence.ts
+  api/v1/_lib/execution/memoryPersistence.ts
+  api/v1/_lib/confirmations/service.ts
+  api/v1/_lib/confirmations/types.ts
+  api/v1/health.ts (stage ETAPA_G7_D_CONTRACT)
+  testes g4/g7b/g7c/foundation alinhados a novos códigos
+
+============================================================
+TESTES / BUILD
+============================================================
+npx vitest run
+  Test Files  13 passed (13)
+  Tests       174 passed (174)
+
+npm run build → PASS
+
+============================================================
+NÃO IMPLEMENTADO (intencional)
+============================================================
+n8n workflows
+WhatsApp
+Event Store
+credenciais externas
+webhook WhatsApp
+mudança auth moradores
+
+============================================================
+STOP
+============================================================
+G7-D = PASS
+Próximo gate (humano): pilot n8n / Event Store — NÃO iniciado automaticamente.

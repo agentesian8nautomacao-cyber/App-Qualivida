@@ -1,0 +1,100 @@
+# M3 APPLY READINESS — AWAITING EXPLICIT AUTHORIZATION
+
+Data/hora UTC:       2026-08-14T11:12:27Z
+Projeto:             zaemlxjwhzrfmowbckmk
+Modo:                PREPARAÇÃO / VERIFICAÇÃO FINAL (SEM APPLY)
+
+================================================================================
+GATES
+================================================================================
+M1: CLOSED / PASS
+M2: CLOSED / PASS
+M3 SQL DEEP REVIEW: APPROVED FOR LIVE PRE-CHECK
+M3 PRE-CHECK: PASS
+  evidência: docs/evidence/results/M3-PRECHECK-LIVE-2026-08-14.txt
+  (PASS + reconfirmação LIVE)
+
+================================================================================
+ARTIFACTS
+================================================================================
+Migration alvo:
+  supabase/migrations/20260814170000_003_tenant_memberships.sql
+  EXISTS = YES (arquivo aprovado; inalterado nesta tarefa)
+
+Rollback:
+  supabase/migrations/20260814170000_003_tenant_memberships.rollback.sql
+  EXISTS = YES
+  DROP TABLE IF EXISTS public.tenant_memberships
+  CASCADE (executável) = NÃO
+
+================================================================================
+LIVE (READ-ONLY — pré-APPLY)
+================================================================================
+organizations_exists = true
+condominiums_exists  = true
+roles_exists         = true
+residents_exists     = true
+staff_exists         = true
+units_exists         = true
+tenant_memberships_absent = true
+tenant_memberships_regclass = NULL
+
+Migration M3 aplicada: NÃO
+Operações de escrita nesta tarefa: 0
+
+================================================================================
+ESCOPO CONFIRMADO (arquivo migration)
+================================================================================
+Tabela: public.tenant_memberships somente
+
+Campos:
+  id, auth_user_id, organization_id, condominium_id, role_id,
+  resident_id (NULL), staff_profile_id (NULL),
+  status, is_default, created_at, updated_at
+
+UNIQUE (auth_user_id, condominium_id) = YES
+INDEX idx_tenant_memberships_condominium_id = YES
+
+FKs ON DELETE RESTRICT (6):
+  auth_user_id → auth.users(id)
+  organization_id → organizations(id)
+  condominium_id → condominiums(id)
+  role_id → roles(id)
+  resident_id → residents(id)
+  staff_profile_id → staff(id)
+
+DML = 0
+seed = 0
+backfill = 0
+RLS/policies = 0
+ALTER legado = 0
+M4+ DDL nesta migration = 0
+  (menções M4/M11 apenas em comentários de documentação)
+
+DR7 residual: documentado; FK composta NÃO incluída
+
+================================================================================
+GIT
+================================================================================
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 (intacta)
+Worktree: DIRTY (artefatos M1/M2/M3; sem commit/push/tag/reset/clean)
+Sem credenciais nesta evidência.
+
+================================================================================
+AUTORIZAÇÃO
+================================================================================
+Estado: AWAITING EXPLICIT AUTHORIZATION
+
+Esta tarefa NÃO autoriza APPLY.
+Próximo passo: autorização explícita separada para executar
+  20260814170000_003_tenant_memberships.sql
+
+================================================================================
+RESULTADO
+================================================================================
+
+M3 APPLY = READY / AWAITING EXPLICIT AUTHORIZATION
+
+Nenhuma alteração de banco foi executada.
+Nenhuma migration M3 foi aplicada.
+================================================================================

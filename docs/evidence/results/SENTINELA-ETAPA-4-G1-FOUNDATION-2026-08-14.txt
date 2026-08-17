@@ -1,0 +1,90 @@
+SENTINELA AUT — ETAPA 4 / G1 — FUNDAÇÃO DA API
+Data: 2026-08-14
+Status: CLOSED / PASS (fundação somente)
+
+Escopo autorizado:
+  - Implementar fundação Sentinela API em /api/v1
+  - Sem migration
+  - Sem n8n
+  - Sem WhatsApp
+  - Sem alterar banco
+  - Sem avançar automaticamente para G2 (HMAC/tenant)
+
+Preservado:
+  M1–M4 CLOSED/PASS
+  Operational Core Etapa 1
+  Central da Portaria Etapa 2
+  Etapa 3 Decision Review
+
+============================================================
+O QUE FOI ENTREGUE
+============================================================
+
+Estrutura:
+  api/v1/_lib/
+    errors.ts          — códigos DR13 + GATE_PENDING / WRITES_DISABLED
+    gates.ts           — flags G1 (writes/authn/n8n/wa = false)
+    cors.ts            — sem Access-Control-Allow-Origin: *
+    requestIds.ts      — request_id / correlation_id
+    response.ts        — envelope success/error
+    handler.ts         — OPTIONS + method guard + gatePendingResponse
+    coreProbe.ts       — probe puro do Operational Core (sem DB)
+    foundation.test.ts — testes da fundação
+
+Rotas:
+  GET  /api/v1/health                         — status + core probe + gates
+  POST /api/v1/operations/packages            — 501 GATE_PENDING
+  POST /api/v1/operations/packages/pickup     — 501 GATE_PENDING
+  POST /api/v1/operations/occurrences         — 501 GATE_PENDING
+  POST /api/v1/operations/reservations        — 501 GATE_PENDING
+  GET  /api/v1/residents/identify             — 501 GATE_PENDING
+  GET  /api/v1/units/identify                 — 501 GATE_PENDING
+  GET  /api/v1/boletos                        — 501 GATE_PENDING
+
+Comportamento G1:
+  - Nenhuma mutação no Core via API
+  - Nenhum HMAC / credential
+  - Nenhum tenant enforce em ops (ops não executam)
+  - Health prova que Core é importável (identify_resident/unit puros)
+  - public_operations = false
+
+============================================================
+NÃO ENTREGUE (proposital — G2+ / gates)
+============================================================
+[ ] G2 HMAC + tenant fail-closed
+[ ] Idempotency store (FUTURE MIGRATION)
+[ ] Writes enable
+[ ] n8n / WhatsApp
+[ ] Adapter server de persistência completo
+[ ] Alteração RBAC / RLS / auth / login morador
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+PUBLIC OPERATIONS = 0
+G2 = NOT STARTED (não avançado automaticamente)
+
+============================================================
+TESTES
+============================================================
+npm run test:run
+  ✓ utils/geminiHelpers.test.ts (5)
+  ✓ utils/unitFormatter.test.ts (3)
+  ✓ sentinela/core/core.test.ts (14)   — Core preservado
+  ✓ api/v1/_lib/foundation.test.ts (11)
+  Total: 33 passed
+
+npm run build
+  ✓ vite build OK
+
+============================================================
+VEREDITO
+============================================================
+ETAPA 4 / G1 = CLOSED / PASS (fundação)
+G2 = NOT STARTED (não avançado automaticamente)
+
+FIM

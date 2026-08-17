@@ -1,0 +1,160 @@
+SENTINELA AUT — G7-F — N8N READINESS AUDIT (somente leitura)
+Data: 2026-08-15
+Status: AUDIT COMPLETE (sem modificações de código nesta etapa F)
+
+Pré-requisitos: G7-E = PASS · G7-D = PASS · G7-C CLOSED · G6-1/G6-2 CLOSED · M1–M4 CLOSED
+
+============================================================
+ESCOPO
+============================================================
+Auditoria read-only dos itens A–Y solicitados.
+Nenhuma alteração de código, migration, banco, n8n ou WhatsApp neste arquivo.
+
+Fonte de verdade cruzada:
+  docs/SENTINELA-AUT-API-CONTRACT.md
+  docs/openapi/sentinela-api-v1.yaml
+  api/v1/** handlers + _lib
+
+============================================================
+A–C — ENDPOINTS / MÉTODOS / HEADERS
+============================================================
+READ:
+  GET  /api/v1/residents/identify     → identify_resident
+  GET  /api/v1/units/identify         → identify_unit
+  GET  /api/v1/boletos                → get_boleto
+
+WRITE:
+  POST  /api/v1/operations/packages              → create_package
+  POST  /api/v1/operations/occurrences           → create_occurrence
+  PATCH /api/v1/operations/occurrences/update    → update_occurrence
+  POST  /api/v1/operations/reservations          → create_reservation
+
+SENSITIVE:
+  POST /api/v1/operations/packages/pickup        → pickup_package
+  POST /api/v1/operations/reservations/cancel    → cancel_reservation
+
+PÚBLICO:
+  GET /api/v1/health (sem HMAC)
+
+Probes (dev/gate, não operação de negócio):
+  protected-probe, authz-probe, confirmation-probe
+
+Headers obrigatórios (rotas protegidas):
+  X-Sentinela-Client-Id
+  X-Sentinela-Timestamp          (unix seconds)
+  X-Sentinela-Signature
+  X-Organization-Id
+  X-Condominium-Id
+  Idempotency-Key               (WRITE)
+  Content-Type: application/json (POST/PATCH)
+
+Opcionais:
+  X-Request-Id (regex seguro 8–128)
+  X-Correlation-Id
+  X-Confirmation-Id / X-Confirmation-Token (SENSITIVE 2ª chamada)
+
+============================================================
+D — CANONICAL HMAC
+============================================================
+v1
+timestamp
+METHOD
+path_with_query
+body_sha256
+organization_id
+condominium_id
+idempotency_key_or_empty
+
+Implementação: api/v1/_lib/auth/hmac.ts
+Janela timestamp: 300s default (SENTINELA_API_TIMESTAMP_WINDOW_SECONDS)
+Secrets: SENTINELA_API_CREDENTIALS (server-only; nunca VITE_*)
+
+============================================================
+E–H — IDEMPOTENCY / TENANT / AUTH / AUTHZ
+============================================================
+E) WRITE → Idempotency-Key obrigatória
+   retry mesma fingerprint → 200 replay
+   fingerprint diferente → IDEMPOTENCY_FINGERPRINT_MISMATCH (409)
+   store unavailable → 501 + core_executed:false
+   reclaim R1 em key expirada
+
+F) Tenant fail-closed: org+condo headers; credential scoped;
+   mismatch → TENANT_MISMATCH / TENANT_NOT_FOUND; sem fallback global
+
+G) Autenticação: HMAC + client_id + timestamp
+
+H) Autorização: OPERATION_PERMISSION_MAP → RBAC keys
+   notify_resident = decision_required (sempre deny)
+
+============================================================
+I–L — PAYLOADS / RESPOSTAS / REQUEST_ID / ERROS
+============================================================
+I) Validação central: api/v1/_lib/execution/payload.ts
+   Tenant no body divergente → TENANT_MISMATCH
+J) Envelope: success/ok, request_id, operation, api_version, data|error
+K) request_id: aceito se seguro senão req_{uuid}; ecoado em X-Request-Id
+L) Códigos: ApiErrorCodes + httpStatusForCode (centralizado)
+   sanitizePublicDetails remove SQL/stack/secrets
+
+============================================================
+M — RETRY_HINT
+============================================================
+Presente em CONFLICT de reserva (details.retry_hint = try_another_time_slot).
+Não presente em todos os erros — n8n deve usar tabela de retry do contrato.
+
+============================================================
+N–P — CLASSIFICAÇÃO
+============================================================
+READ: identify_resident, identify_unit, get_boleto
+WRITE: create_package, create_occurrence, update_occurrence, create_reservation
+SENSITIVE: pickup_package, cancel_reservation (confirmation single-use)
+
+============================================================
+Q–T — CONTRATOS OPERACIONAIS CRÍTICOS
+============================================================
+Q) 23P01 / exclusion → CONFLICT (adapter + Core; sem SQL ao cliente)
+R) INVALID_TIME_RANGE → 400 (start=end / end<start) API+Core
+S) CONFIRMATION_ALREADY_CONSUMED → 409 (padrão; ALREADY_USED deprecated)
+T) IDEMPOTENCY_FINGERPRINT_MISMATCH → 409
+
+============================================================
+U–Y — LIMITES / MULTIMÍDIA / QR / BARCODE
+============================================================
+U) Body ≤ 256 KiB; strings ≤ 2000; description ≤ 8000; metadata ≤ 4096
+V) input_type ∈ text|voice|photo|qrcode|barcode (create_package)
+W) Sem binários; n8n normaliza STT/OCR/vision antes da API
+X/Y) QR e barcode → campos qr_code_data/barcode_data/code/text
+     mesma operação create_package (sem endpoint/tabela novos)
+
+============================================================
+GAPS PARA N8N (não bloqueiam G7-F doc; decisões futuras)
+============================================================
+1. Intenções STATUS (PACKAGE_STATUS, OCCURRENCE_STATUS,
+   RESERVATION_STATUS, NOTIFICATION_QUERY) NÃO têm endpoint
+   dedicado na API v1 atual → mapear como FUTURE GATE /
+   DECISION REQUIRED (não inventar Core paralelo).
+
+2. notify_resident bloqueado (AuthZ decision_required).
+
+3. cancel_reservation Core ainda pode deletar vs soft-status
+   canceled (G7-D documentou spelling; comportamento persistência
+   a monitorar em gates posteriores).
+
+4. retry_hint não é universal em todos os error codes.
+
+5. Dev API local (scripts/dev-api-staff-invite.mjs) precisa
+   carregar rotas v1 — validar harness aponta handlers vitest,
+   não depende de WhatsApp/n8n real.
+
+============================================================
+FRONTEIRAS CONFIRMADAS (AUDIT)
+============================================================
+DATABASE CHANGES    = 0 (esta etapa F)
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+N8N REAL            = 0
+WHATSAPP REAL       = 0
+CÓDIGO MODIFICADO   = 0 (somente leitura)
+
+AUDIT RESULT: COMPLETE
+Próximo: F2+ (docs, harness, testes) sem workflow n8n real.

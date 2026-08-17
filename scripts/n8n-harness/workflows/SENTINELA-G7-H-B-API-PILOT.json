@@ -1,0 +1,216 @@
+{
+  "name": "SENTINELA AUT — G7-H-B — API PILOT",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const scenario = $env.SENTINELA_PILOT_SCENARIO || $json.scenario || 'health';\nconst base = {\n  health: { method: 'GET', path: '/api/v1/health', auth: false },\n  probe: { method: 'GET', path: '/api/v1/protected-probe' },\n  identify: { method: 'GET', path: '/api/v1/residents/identify?name=Maria%20Pilot&unit=101' },\n  package: {\n    method: 'POST',\n    path: '/api/v1/operations/packages',\n    body: {\n      recipient: 'G7-H-B-N8N-TEST',\n      unit: '101',\n      type: 'caixa',\n      input_type: 'text',\n      text: 'pilot package G7-H-B-N8N-TEST',\n      metadata: { source: 'n8n-pilot', gate: 'G7-H-B' }\n    },\n    idempotencyKey: `n8n-g7hb-${Date.now()}`\n  },\n  pickup: {\n    method: 'POST',\n    path: '/api/v1/operations/packages/pickup',\n    body: { resource_id: 'pkg-missing-pilot' }\n  }\n};\nconst cfg = base[scenario] || base.health;\nreturn [{ json: { scenario, ...cfg, baseUrl: $env.SENTINELA_PILOT_BASE || 'http://127.0.0.1:3099' } }];"
+      },
+      "id": "build-request",
+      "name": "Build Test Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const method = String($json.method || 'GET').toUpperCase();\nconst pathWithQuery = String($json.path || '/api/v1/health');\nconst bodyObj = $json.body;\nconst body =\n  bodyObj === undefined || bodyObj === null\n    ? ''\n    : typeof bodyObj === 'string'\n      ? bodyObj\n      : JSON.stringify(bodyObj);\nconst idempotencyKey = String($json.idempotencyKey || '');\nconst baseUrl = String($json.baseUrl || $env.SENTINELA_PILOT_BASE || 'http://127.0.0.1:3099');\nconst requestId = String($json.requestId || `n8n-${Date.now()}`);\n\nif ($json.auth === false) {\n  return [\n    {\n      json: {\n        ...$json,\n        method,\n        path: pathWithQuery,\n        body,\n        url: `${baseUrl}${pathWithQuery}`,\n        headers: { 'X-Request-Id': requestId },\n        meta: { canonical_version: 'v1', auth: false }\n      }\n    }\n  ];\n}\n\nconst nodeCrypto = require('crypto');\nconst secret = $env.SENTINELA_N8N_SECRET || $env.SENTINELA_HARNESS_SECRET;\nconst clientId = $env.SENTINELA_N8N_CLIENT_ID || $env.SENTINELA_HARNESS_CLIENT_ID;\nconst org = $env.SENTINELA_N8N_ORGANIZATION_ID || $env.SENTINELA_HARNESS_ORG;\nconst condo = $env.SENTINELA_N8N_CONDOMINIUM_ID || $env.SENTINELA_HARNESS_CONDO;\n\nif (!secret || !clientId || !org || !condo) {\n  throw new Error('Missing Sentinela n8n credential env vars');\n}\n\nconst timestamp = String(Math.floor(Date.now() / 1000));\nconst bodySha = nodeCrypto.createHash('sha256').update(body).digest('hex');\nconst canonical = ['v1', timestamp, method, pathWithQuery, bodySha, org, condo, idempotencyKey].join('\\n');\nconst signature = nodeCrypto.createHmac('sha256', secret).update(canonical, 'utf8').digest('hex');\n\nreturn [\n  {\n    json: {\n      ...$json,\n      method,\n      path: pathWithQuery,\n      body,\n      url: `${baseUrl}${pathWithQuery}`,\n      headers: {\n        'X-Sentinela-Client-Id': clientId,\n        'X-Sentinela-Timestamp': timestamp,\n        'X-Sentinela-Signature': signature,\n        'X-Organization-Id': org,\n        'X-Condominium-Id': condo,\n        'X-Request-Id': requestId,\n        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),\n        ...(body ? { 'Content-Type': 'application/json' } : {})\n      },\n      meta: { canonical_version: 'v1', body_sha256: bodySha }\n    }\n  }\n];"
+      },
+      "id": "generate-hmac",
+      "name": "Generate HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Sentinela-Client-Id",
+              "value": "={{ $json.headers['X-Sentinela-Client-Id'] }}"
+            },
+            {
+              "name": "X-Sentinela-Timestamp",
+              "value": "={{ $json.headers['X-Sentinela-Timestamp'] }}"
+            },
+            {
+              "name": "X-Sentinela-Signature",
+              "value": "={{ $json.headers['X-Sentinela-Signature'] }}"
+            },
+            {
+              "name": "X-Organization-Id",
+              "value": "={{ $json.headers['X-Organization-Id'] }}"
+            },
+            {
+              "name": "X-Condominium-Id",
+              "value": "={{ $json.headers['X-Condominium-Id'] }}"
+            },
+            {
+              "name": "X-Request-Id",
+              "value": "={{ $json.headers['X-Request-Id'] }}"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "={{ $json.headers['Idempotency-Key'] }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body ? JSON.parse($json.body) : {} }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "http-request",
+      "name": "HTTP Request → Sentinela API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        300
+      ],
+      "notes": "No PostgreSQL node. API only. Credentials via env — never hardcode secrets."
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\nconst requestId = body.request_id || null;\nconst success = body.success === true;\nconst errorCode = body.error && body.error.code ? body.error.code : null;\nconst core = body.data && body.data.core_executed;\nconst sanitized = JSON.stringify(body);\nif (/service_role|BEGIN |password=|confirmation_token/i.test(sanitized) && errorCode !== 'CONFIRMATION_REQUIRED') {\n  // CONFIRMATION_REQUIRED may include one-shot token in details by contract — flag only secrets\n}\nreturn [{ json: {\n  ok: success || !!errorCode,\n  request_id: requestId,\n  success,\n  error_code: errorCode,\n  core_executed: core ?? null,\n  operation: body.operation || (body.data && body.data.operation) || null,\n  note: 'Validate envelope only — do not log headers/signature/secret'\n}}];"
+      },
+      "id": "validate-response",
+      "name": "Validate Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { pilot: 'G7-H-B', result: $json, whatsapp: 0, postgres_node: 0 } }];"
+      },
+      "id": "structured-result",
+      "name": "Structured Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Test Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Test Request": {
+      "main": [
+        [
+          {
+            "node": "Generate HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HMAC": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request → Sentinela API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request → Sentinela API": {
+      "main": [
+        [
+          {
+            "node": "Validate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Response": {
+      "main": [
+        [
+          {
+            "node": "Structured Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "sentinela-g7hb-pilot"
+  },
+  "pinData": {
+    "Manual Trigger": [
+      {
+        "json": {
+          "scenario": "health"
+        }
+      }
+    ]
+  },
+  "tags": [
+    {
+      "name": "sentinela"
+    },
+    {
+      "name": "g7-h-b"
+    },
+    {
+      "name": "pilot"
+    }
+  ],
+  "id": "dVQ1BLazEiBKlDDO"
+}

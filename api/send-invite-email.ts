@@ -91,11 +91,8 @@ export default {
         return json({ error: 'Link de convite inválido', code: 'BAD_REQUEST', sent: false }, 400);
       }
 
-      const isResident = (role || '').toString().toUpperCase() === 'MORADOR';
-      const roleLabel = isResident ? 'Morador' : role === 'SINDICO' ? 'ADM' : 'Portaria';
-      const introText = isResident
-        ? 'Você foi convidado(a) a acessar o sistema de gestão do condomínio como <strong>Morador</strong>.'
-        : `Você foi convidado(a) a acessar o sistema de gestão do condomínio como <strong>${roleLabel}</strong>.`;
+      const roleLabel = role === 'SINDICO' ? 'ADM' : 'Portaria';
+      const introText = `Você foi convidado(a) a acessar o sistema de gestão do condomínio como <strong>${roleLabel}</strong>.`;
       const html = `
 <!DOCTYPE html>
 <html>

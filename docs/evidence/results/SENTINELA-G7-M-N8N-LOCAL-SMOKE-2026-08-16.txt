@@ -1,0 +1,96 @@
+SENTINELA AUT — G7-M — N8N LOCAL SMOKE TEST
+Data: 2026-08-16
+Reexecução: ~2026-08-16T18:19Z (UTC-3 local ~15:19)
+
+=============================================================================
+STATUS
+=============================================================================
+G7-M = NEEDS REVISION
+
+BLOCKER: N8N_LOCAL_UNAVAILABLE
+
+=============================================================================
+FASE 1 — N8N LOCAL
+=============================================================================
+Probe: http://127.0.0.1:5678/healthz  → FAIL (Impossível conectar-se ao servidor remoto)
+Probe: http://127.0.0.1:5678/         → FAIL
+Probe: http://localhost:5678/healthz → FAIL
+netstat :5678 → sem listener
+docker ps → FAIL (Docker Desktop daemon indisponível: npipe dockerDesktopLinuxEngine)
+Processo n8n → ausente
+
+Regra do gate: NÃO instalar n8n automaticamente.
+Regra do gate: NÃO alterar Docker/infra sem autorização.
+Ação: STOP após evidência.
+
+=============================================================================
+FASE 2 — WORKFLOW IMPORT
+=============================================================================
+WORKFLOW IMPORT = NÃO EXECUTADO (blocker)
+WORKFLOW ID     = N/A
+WORKFLOW ACTIVE = false (arquivo G7-L; não importado)
+
+Arquivo alvo (validado offline na tentativa anterior / baseline G7-L):
+  scripts/n8n-harness/workflows/SENTINELA-G7-L-FIRST-REAL-WORKFLOW.json
+  JSON válido / 6 nodes / findings=0 / active=false / sem SQL / sem Supabase / sem secrets
+
+=============================================================================
+FASES 3–9 — NÃO EXECUTADAS
+=============================================================================
+READ              = NÃO EXECUTADO
+WRITE             = NÃO EXECUTADO
+REPLAY            = NÃO EXECUTADO
+HMAC FAILURE      = NÃO EXECUTADO
+SENSITIVE         = NÃO EXECUTADO
+EVENT STORE       = NÃO EXECUTADO
+X-REQUEST-ID      = N/A
+IDEMPOTENCY       = N/A
+CORE DUPLICATION  = N/A
+SQL ACCESS FROM N8N = 0 (nenhuma execução)
+
+=============================================================================
+FASE 9 — INTEGRIDADE
+=============================================================================
+DATABASE CHANGES = 0
+MIGRATIONS       = 0
+DDL / schema     = 0
+RBAC alterado    = 0
+LIVE WRITE       = 0
+WHATSAPP         = 0
+N8N PRODUÇÃO     = 0
+Novos endpoints  = 0
+Novas permissions = 0
+SQL pelo n8n     = 0
+Acesso direto Event Store = 0
+
+M1–M4 / G6-1 / G6-2 / G7-C / G7-J / G7-J-W / G7-K: não alterados neste gate
+
+TESTES (suite)   = não reexecutados neste STOP (baseline: 304 PASS)
+BUILD            = não reexecutado neste STOP (baseline PASS)
+
+=============================================================================
+BLOCKERS
+=============================================================================
+N8N_LOCAL_UNAVAILABLE
+  - Instância n8n em http://localhost:5678 não responde
+  - Docker Desktop não está em execução nesta máquina
+  - Import / execute / smoke bloqueados
+
+Para desbloquear G7-M (ação do operador, fora deste gate automático):
+  1) Subir Docker Desktop (se usar container) e/ou n8n local na porta 5678
+  2) Confirmar http://localhost:5678 acessível
+  3) Reautorizar G7-M
+  4) Importar SENTINELA-G7-L-FIRST-REAL-WORKFLOW.json (active=false)
+  5) Rodar smoke READ → Event Store → WRITE → replay → HMAC fail → SENSITIVE
+
+=============================================================================
+PRÓXIMO GATE
+=============================================================================
+Reexecutar G7-M após n8n local disponível.
+NÃO avançar para WhatsApp.
+NÃO ativar workflow em produção.
+NÃO criar migration.
+NÃO criar endpoint / permission.
+NÃO alterar contrato da API.
+
+STOP.

@@ -1,11 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import MasterApp from './components/master/MasterApp';
 import { AppConfigProvider } from './contexts/AppConfigContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as Sentry from '@sentry/react';
+import { BRANDING } from './config/branding';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -38,23 +40,31 @@ try {
     tracesSampleRate: 0,
   });
   if (dsn) {
-    Sentry.setTag('app', 'gestao-qualivida-residence');
+    Sentry.setTag('app', BRANDING.name.toLowerCase());
   }
 } catch {
   // best-effort: não impedir bootstrap do app
 }
 
 const root = ReactDOM.createRoot(rootElement);
+const pathname =
+  typeof window !== 'undefined' ? window.location.pathname.replace(/\/$/, '') || '/' : '/';
+const isMasterRoute = pathname === '/master' || pathname.startsWith('/master/');
+
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <AppConfigProvider>
-        <AuthProvider>
-          <ToastProvider>
-            <App />
-          </ToastProvider>
-        </AuthProvider>
-      </AppConfigProvider>
+      {isMasterRoute ? (
+        <MasterApp />
+      ) : (
+        <AppConfigProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </AuthProvider>
+        </AppConfigProvider>
+      )}
     </ErrorBoundary>
   </React.StrictMode>
 );

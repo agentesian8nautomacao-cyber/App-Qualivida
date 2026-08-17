@@ -1,0 +1,63 @@
+SENTINELA AUT — G7-J — EVENT STORE — CLOSEOUT
+Data/hora UTC:         2026-08-16T01:59:30Z → 2026-08-16T01:59:31Z
+Projeto:               zaemlxjwhzrfmowbckmk
+Host DB:               db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:             supabase/migrations/20260815220000_008_api_domain_events.sql
+Nome lógico:           008_api_domain_events
+APPLY evidência:       SENTINELA-G7-J-EVENT-STORE-APPLY-2026-08-15.txt
+  APPLY UTC:           2026-08-16T01:58:53Z → 2026-08-16T01:58:58Z
+  APPLY resultado:     PASS
+
+Modo:                  CLOSEOUT / PÓS-APPLY READ-ONLY
+Escrita no banco:      NENHUMA nesta etapa
+Migrations novas:      NENHUMA
+Rollback:              NÃO EXECUTADO
+Wiring:                NÃO
+WhatsApp / n8n prod:   NÃO
+
+RESULTADO: G7-J = CLOSED / PASS
+
+============================================================
+ALINHAMENTO migration ↔ LIVE
+============================================================
+[x] api_domain_events EXISTS
+[x] rows = 0
+[x] PK event_id
+[x] FKs org + condo RESTRICT
+[x] event_type CHECK (8 tipos G7-I)
+[x] índices tenant_occurred / request_id / tenant_type_occurred
+[x] RLS ON + 0 policies (fail-closed cliente)
+[x] 0 triggers
+[x] sem colunas secret/hmac/token/mídia/sql
+[x] source default api.v1
+[x] core_executed boolean NOT NULL default false
+
+============================================================
+INTACTOS
+============================================================
+[x] M1 organizations / condominiums
+[x] G6-1 api_idempotency_keys
+[x] G6-2 api_confirmations
+[x] G7-C reservations exclusion constraint
+[x] DOMAIN DATA CHANGES = 0
+
+============================================================
+FRONTEIRAS FINAIS
+============================================================
+DATABASE CHANGES    = somente CREATE api_domain_events (008)
+MIGRATIONS EXECUTED = 1
+LIVE WRITE          = 0 (auditoria vazia)
+N8N                 = piloto intacto / sem prod workflow
+WHATSAPP            = 0
+WIRING              = 0 (próximo gate autorizado: G7-J-W)
+
+============================================================
+STOP
+============================================================
+G7-J = CLOSED / PASS
+
+NÃO iniciar WhatsApp.
+NÃO iniciar G7-J-W sem autorização explícita.
+NÃO criar endpoint de consulta.
+NÃO implementar retenção/purge.
+NÃO alterar workflow n8n de produção.

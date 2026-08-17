@@ -1,0 +1,142 @@
+# M3 PRE-CHECK LIVE — EVIDÊNCIA
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Porta:               5432
+Database:            postgres
+User:                postgres
+sslmode:             require
+Data/hora UTC:       2026-08-14T11:03:20Z (início) / 2026-08-14T11:03:27Z (fim)
+
+Arquivo executado:   docs/evidence/M3-PRECHECK-LIVE.sql
+Arquivo alterado?    NÃO
+Migration alvo:      supabase/migrations/20260814170000_003_tenant_memberships.sql
+Método:              psql -f (READ-ONLY SELECT / to_regclass / information_schema)
+Executor:            agente
+psql_exit:           0
+
+Identidade (read-only):
+  current_database = postgres
+  current_user     = postgres
+  AUTH_OK          = YES
+
+Senha / connection string / token: NÃO registrados neste arquivo.
+
+================================================================================
+RESULTADOS
+================================================================================
+
+organizations:
+  regclass = organizations
+  verdict  = EXISTS — OK (M1)
+  exists   = true
+
+condominiums:
+  regclass = condominiums
+  verdict  = EXISTS — OK (M1)
+  exists   = true
+
+roles:
+  regclass = roles
+  verdict  = EXISTS — OK (RBAC)
+  exists   = true
+
+residents:
+  regclass = residents
+  verdict  = EXISTS — OK
+  exists   = true
+
+staff:
+  regclass = staff
+  verdict  = EXISTS — OK
+  exists   = true
+
+units:
+  regclass = units
+  exists   = true (confirmação complementar M2)
+
+auth.users:
+  regclass = auth.users
+  verdict  = EXISTS — OK
+  exists   = true
+
+tenant_memberships:
+  regclass = NULL
+  verdict  = ABSENT — OK for M3 CREATE
+  absent   = true
+
+m3_create_safe = true (t)
+
+================================================================================
+PK / TIPOS (read-only)
+================================================================================
+organizations.id = uuid PK
+condominiums.id  = uuid PK
+roles.id         = uuid PK
+residents.id     = uuid PK
+staff.id         = uuid PK
+units.id         = uuid PK
+
+Compatível com FKs M3 (uuid).
+
+================================================================================
+SEGURANÇA
+================================================================================
+
+Operações de escrita:     0 / NENHUMA
+CREATE/ALTER/DROP/DML:    NÃO
+Migration M3 aplicada:    NÃO
+Rollback executado:       NÃO
+RLS/policies alterados:   NÃO
+pre-m1-checkpoint:        aec1f5f2150633519b8a6136b9ddbff61bfed513 (não movida)
+
+Significado deste PASS:
+  Pré-condição estrutural satisfeita (deps presentes; tenant_memberships ausente).
+  NÃO autoriza APPLY da migration M3.
+
+================================================================================
+GIT (somente status)
+================================================================================
+Worktree DIRTY (artefatos M1/M2/M3; sem commit nesta tarefa).
+
+================================================================================
+STATUS FINAL
+================================================================================
+
+M3 PRE-CHECK = PASS
+
+M3 APPLY permanece BLOCKED até autorização explícita separada.
+
+Nenhuma alteração de banco foi executada.
+Nenhuma migration M3 foi aplicada.
+================================================================================
+
+# RECONFIRMAÇÃO LIVE (mesma evidência; run anterior preservado acima)
+
+UTC: 2026-08-14T11:10:29Z → 2026-08-14T11:10:35Z
+Arquivo: docs/evidence/M3-PRECHECK-LIVE.sql (inalterado)
+AUTH_OK: YES
+psql_exit: 0
+
+organizations = EXISTS (organizations)
+condominiums  = EXISTS (condominiums)
+roles         = EXISTS (roles)
+residents     = EXISTS (residents)
+staff         = EXISTS (staff)
+units         = EXISTS (units)
+auth.users    = EXISTS (auth.users)
+tenant_memberships_regclass = NULL
+tenant_memberships = ABSENT
+m3_create_safe = true
+
+PKs uuid:
+  organizations.id, condominiums.id, roles.id,
+  residents.id, staff.id, units.id
+
+Operações de escrita: 0
+Migration M3 aplicada: NÃO
+
+M3 PRE-CHECK = PASS (reconfirmado)
+M3 APPLY permanece BLOCKED.
+================================================================================

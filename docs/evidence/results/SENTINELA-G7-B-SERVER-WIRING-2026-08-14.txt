@@ -1,0 +1,131 @@
+SENTINELA AUT — G7-B — SERVER WIRING (STORES + COMPOSITION ROOT)
+Data: 2026-08-14
+Status: G7-B = PASS
+
+Pré-requisitos:
+  G7-A = PASS
+  G6-1 / G6-2 = CLOSED / PASS (LIVE tables)
+  M1–M4 = INTACTOS
+
+============================================================
+ESCOPO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+Event Store = NÃO
+M5+ = NÃO
+G7-C = NÃO INICIADO
+M1–M4 = INTACTOS
+
+============================================================
+COMPOSIÇÃO SERVER-SIDE
+============================================================
+api/v1/_lib/composition/productionDeps.ts
+  createProductionApiDeps(env)
+  - createServerSupabaseClient (service-role)
+  - createSupabaseIdempotencyStore
+  - createSupabaseConfirmationStore
+  - createPersistence(org, condo) → createSupabaseCorePersistence
+  Fail-closed se service-role ausente (stores unavailable, persistence null)
+
+============================================================
+IDEMPOTENCY STORE
+============================================================
+api/v1/_lib/idempotency/supabaseStore.ts
+  kind: persistent
+  claim() com R1 lazy reclaim (DELETE tenant-scoped + expires_at <= now)
+  complete() / fail()
+  unique_violation → re-SELECT
+  Sem cron / trigger / alteração migration 005
+
+Port estendido: api/v1/_lib/idempotency/store.ts (claim/complete/fail)
+
+============================================================
+CONFIRMATION STORE
+============================================================
+api/v1/_lib/confirmations/supabaseStore.ts
+  kind: persistent
+  create (token_hash only + operation_fingerprint)
+  get tenant-scoped
+  markUsed atômico: UPDATE pending→consumed WHERE org/condo/pending/consumed_at IS NULL/expires_at > now
+  Sem plaintext token
+
+api/v1/_lib/confirmations/fingerprint.ts — DR5 canônico
+service.ts — create/validate com fingerprint + consume tenant-scoped
+
+============================================================
+HANDLERS WIRED
+============================================================
+withCoreExecution → resolveExecuteDeps → production composition (se sem override)
+withConfirmedOperation → resolveHandlerConfirmationStore
+executeCoreOperation:
+  WRITE → claim/complete/fail
+  SENSITIVE → somente com sensitiveConfirmed após consume
+  pickup_package / cancel_reservation no switch Core
+  createPersistence por tenant
+
+pickup.ts / cancel.ts:
+  confirmation → Core (fail-closed se store unavailable)
+
+Gates: idempotency_store / confirmation_persistent_store / writes_enabled /
+       sensitive_execution_enabled = true (runtime ainda fail-closed sem credencial)
+
+Browser Dexie path (getDefaultPersistence) preservado no painel.
+
+============================================================
+ARQUIVOS CRIADOS
+============================================================
+api/v1/_lib/composition/productionDeps.ts
+api/v1/_lib/idempotency/supabaseStore.ts
+api/v1/_lib/idempotency/g7b.server-wiring.test.ts
+api/v1/_lib/confirmations/supabaseStore.ts
+api/v1/_lib/confirmations/fingerprint.ts
+
+============================================================
+ARQUIVOS MODIFICADOS (principais)
+============================================================
+api/v1/_lib/idempotency/store.ts
+api/v1/_lib/confirmations/types.ts / service.ts / memoryStore.ts
+api/v1/_lib/execution/executeCore.ts / payload.ts / fakePersistenceDb.ts
+api/v1/_lib/withCoreExecution.ts / protectedHandler.ts / gates.ts
+api/v1/operations/packages/pickup.ts
+api/v1/operations/reservations/cancel.ts
+api/v1/health.ts
+api/v1/_lib/foundation.test.ts / g4.confirmation.test.ts / g5.core-execution.test.ts
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+
+============================================================
+TESTES
+============================================================
+G7-B A–R: 18 passed (persistent fake DB; não memória como prod)
+Suíte completa:
+  Test Files  10 passed (10)
+  Tests       135 passed (135)
+  Exit        0
+
+Ausência Dexie/browser nos imports de stores/composition: coberto no teste R
+
+============================================================
+BUILD
+============================================================
+npm run build → PASS (exit 0)
+
+============================================================
+SEGURANÇA / ISOLAMENTO
+============================================================
+Tenant fail-closed (org+condo; mismatch rejeitado)
+Idempotency R1 + unique_violation tratado
+Confirmation consume atômico; plaintext nunca persistido
+Sem fallback memória de produção
+Sem Dexie no runtime API
+
+============================================================
+RESULTADO
+============================================================
+G7-B = PASS
+
+STOP OBRIGATÓRIO.
+Não iniciar G7-C / Event Store / n8n / WhatsApp / migration.

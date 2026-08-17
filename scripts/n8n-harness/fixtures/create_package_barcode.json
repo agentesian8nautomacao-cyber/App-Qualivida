@@ -1,0 +1,16 @@
+{
+  "source": "harness",
+  "input_type": "barcode",
+  "external_message_id": "harness-msg-bc-001",
+  "sender": { "phone": "5511999990005" },
+  "content": { "code": "7891000100103" },
+  "metadata": { "scenario": "create_package_barcode" },
+  "api_body": {
+    "input_type": "barcode",
+    "recipient": "Maria",
+    "unit": "101",
+    "barcode_data": "7891000100103",
+    "text": "7891000100103",
+    "metadata": { "source": "n8n", "decoder": "barcode" }
+  }
+}

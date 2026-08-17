@@ -1,0 +1,110 @@
+SENTINELA AUT — G7-H-A — PRODUCTION OBSERVABILITY WIRING
+Data: 2026-08-15
+Status: G7-H-A = PASS (STOP — não avançar para G7-H-B)
+
+Pré-requisito: G7-G = PASS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+N8N                 = 0
+WHATSAPP            = 0
+Event Store table   = 0
+M1–M4               = INTACTOS
+G6                  = INTACTO
+G7-A…G              = INTACTOS
+
+============================================================
+1. ARQUIVOS ALTERADOS / CRIADOS
+============================================================
+CRIADOS:
+  api/v1/_lib/observability/runtime.ts
+  api/v1/_lib/observability/pipeline.ts
+  api/v1/_lib/observability/g7ha.wiring.test.ts
+  docs/evidence/results/SENTINELA-G7-H-A-OBSERVABILITY-WIRING-2026-08-15.txt
+
+MODIFICADOS:
+  api/v1/_lib/observability/index.ts
+  api/v1/_lib/protectedHandler.ts     (received/rejected/authorized/denied/confirmation)
+  api/v1/_lib/execution/executeCore.ts (idempotency/core + core_executed semantics)
+  api/v1/_lib/withCoreExecution.ts    (operation completed/failed + correlationId)
+  api/v1/health.ts                    (ETAPA_G7_H_A_OBSERVABILITY_WIRING)
+  api/v1/_lib/foundation.test.ts
+  docs/SENTINELA-AUT-EVENT-OBSERVABILITY.md (seção G7-H-A)
+
+============================================================
+2. PONTOS DE WIRING
+============================================================
+withProtectedHandler  → request.received; reject → request.rejected
+withAuthorizedOperation → request.authorized | request.denied
+withConfirmedOperation  → confirmation.required | confirmation.consumed
+executeCoreOperation    → idempotency.replay|created; core.started|completed|failed
+withCoreExecution       → operation.completed | operation.failed
+
+Dedup safeEmitOnce(request_id, event_name) para re-entry SENSITIVE.
+
+============================================================
+3. EVENTOS EMITIDOS
+============================================================
+request.received / rejected / authorized / denied
+idempotency.replay / created
+confirmation.required / consumed
+core.started / completed / failed
+operation.completed / failed
+
+============================================================
+4. TESTES
+============================================================
+npm run test:run
+  Test Files  17 passed
+  Tests       237 passed
+  (10 testes G7-H-A wiring)
+
+============================================================
+5. BUILD
+============================================================
+npm run build → PASS
+
+============================================================
+6. REDACTION
+============================================================
+- Tenant não validado NÃO entra como organization_id/condominium_id confiáveis
+- confirmation_token nunca no sink
+- Idempotency-Key não logada em texto aberto (só flag replay/created)
+- Body/headers brutos não persistidos
+- assertNoSensitiveLeak no safeEmit
+
+============================================================
+7. RISCOS
+============================================================
+R1. Sink = console + ring 200 — sem retenção durável
+R2. Volume de logs em produção precisa amostragem futura
+R3. INVALID_TIME_RANGE no payload falha antes de core.started
+    (core_executed=false) — correto; conflito de domínio → core.failed
+R4. Replay agora reporta core_executed=false na resposta
+    (semântica alinhada: Core não reexecutou)
+
+============================================================
+8. DECISÕES PENDENTES
+============================================================
+D1. Event Store (migration) após piloto n8n?
+D2. Consulta no painel / role
+D3. Retenção / sampling de logs
+
+============================================================
+9. RECOMENDAÇÃO PILOTO N8N (G7-H-B)
+============================================================
+Próximo gate sugerido: G7-H-B — piloto n8n LOCAL
+  - credential tenant-scoped no vault n8n (não VITE_*)
+  - chamar /api/v1 com HMAC + Idempotency-Key
+  - correlacionar X-Request-Id / X-Correlation-Id
+  - SEM WhatsApp real
+  - SEM Event Store
+  - validar que logs [sentinela-obs] cobrem o fluxo ponta a ponta
+
+RESULTADO: G7-H-A = PASS
+
+STOP.

@@ -1,0 +1,156 @@
+# M2 SQL Creation Review
+
+Data/hora UTC: 2026-08-13T19:46:11Z
+Autorização: CRIAR SQL M2 somente (NÃO APPLY)
+Project alvo (documentado): zaemlxjwhzrfmowbckmk
+Decisões: DR1–DR7 CLOSED (M2-DECISIONS-2026-08-13.txt)
+
+---
+
+## Resultado
+
+SQL CREATED — AWAITING REVIEW
+
+M2 APPLY: BLOCKED
+Banco: NENHUMA alteração executada
+
+---
+
+## Arquivos criados
+
+| Tipo | Caminho |
+|------|---------|
+| Migration | supabase/migrations/20260813160000_002_units.sql |
+| Rollback | supabase/migrations/20260813160000_002_units.rollback.sql |
+| Pré-check READ-ONLY | docs/evidence/M2-PRECHECK-LIVE.sql |
+
+Nome lógico: 002_units
+
+---
+
+## Estrutura
+
+Tabela: public.units (única)
+
+| coluna | definição |
+|--------|-----------|
+| id | uuid PK DEFAULT gen_random_uuid() |
+| condominium_id | uuid NOT NULL |
+| code | text NOT NULL |
+| block | text NULL |
+| number | text NULL |
+| label | text NULL |
+| status | text NOT NULL DEFAULT 'active' |
+| metadata | jsonb NULL (sem DEFAULT) |
+| created_at | timestamptz NOT NULL DEFAULT now() |
+| updated_at | timestamptz NOT NULL DEFAULT now() |
+
+---
+
+## FK
+
+units_condominium_id_fkey
+  condominium_id → public.condominiums(id)
+  ON DELETE RESTRICT
+  CASCADE: NÃO
+  organization_id em units: NÃO
+
+---
+
+## UNIQUE scoped
+
+units_condominium_id_code_key UNIQUE (condominium_id, code)
+UNIQUE(code) global: AUSENTE
+CREATE INDEX duplicado (condominium_id, code): AUSENTE
+
+---
+
+## Índices
+
+Apenas o índice da UNIQUE (e PK).
+Sem idx separado condominium_id.
+Sem idx status.
+Sem GIN metadata.
+
+---
+
+## metadata / status / timestamps
+
+metadata jsonb NULL — OK
+status text NOT NULL DEFAULT 'active' — OK (sem ENUM/CHECK)
+timestamps — OK (sem trigger)
+
+---
+
+## Escopo negativo (confirmado no SQL)
+
+ALTER organizations/condominiums/legado: NÃO
+DML/seed/backfill: NÃO
+RLS/policies/Storage/functions/triggers: NÃO
+M3/M4: NÃO
+Guard DO $$ se units EXISTS: SIM
+CREATE TABLE IF NOT EXISTS: NÃO
+
+---
+
+## Rollback
+
+DROP TABLE IF EXISTS public.units;
+Sem CASCADE.
+Condição: antes de FKs M5+ / unit_id.
+Status: PREPARED — NÃO EXECUTADO
+
+---
+
+## Pré-check
+
+docs/evidence/M2-PRECHECK-LIVE.sql
+organizations EXISTS + condominiums EXISTS + units ABSENT → m2_create_safe
+NÃO EXECUTADO nesta tarefa
+
+---
+
+## Validação estática
+
+PASS:
+  [x] sintaxe / parênteses / BEGIN-COMMIT
+  [x] UNIQUE (condominium_id, code) presente; UNIQUE(code) ausente
+  [x] sem CREATE INDEX duplicado
+  [x] metadata jsonb NULL sem DEFAULT
+  [x] block/number/label NULL
+  [x] status DEFAULT 'active'
+  [x] FK ON DELETE RESTRICT
+  [x] sem CASCADE efetivo no DDL (comentários “NÃO usar CASCADE” OK)
+  [x] sem DML / RLS / ALTER legado
+  [x] única tabela criada: units
+  [x] COMMENT code: único dentro do condominium (não global)
+
+---
+
+## Teste conceitual (não executado)
+
+Condo A + code "101" → permitido
+Condo B + code "101" → permitido
+Condo A + segundo "101" → rejeitado UNIQUE(condominium_id, code)
+
+---
+
+## Divergências
+
+Nenhuma vs decisões DR1–DR7 / escopo autorizado.
+
+Nota: §4 arquitetura cita occupied/vacant/maintenance na prosa;
+  M2 usa DEFAULT 'active' conforme decisão aprovada DR5.
+
+---
+
+## Git
+
+Somente status (sem commit/push/tag).
+Worktree DIRTY (esperado) — inclui artefatos M1 + M2 novos.
+
+---
+
+Nenhuma alteração de banco foi executada.
+M2 APPLY permaneceu BLOCKED.
+================================================================================

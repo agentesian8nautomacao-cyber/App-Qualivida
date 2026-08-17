@@ -1,0 +1,117 @@
+SENTINELA AUT — G7-G — EVENT / OBSERVABILITY READINESS
+Data: 2026-08-15
+Status: G7-G = PASS (STOP — não avançar para G7-H)
+
+Pré-requisito: G7-F = PASS
+  (SENTINELA-G7-F-N8N-READINESS-2026-08-15.txt)
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+N8N REAL            = 0
+WHATSAPP            = 0
+Event Store table   = 0 (somente avaliação)
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+G7-A…F              = INTACTOS
+
+============================================================
+1. ALTERAÇÕES
+============================================================
+CRIADOS:
+  api/v1/_lib/observability/types.ts
+  api/v1/_lib/observability/redact.ts
+  api/v1/_lib/observability/retryPolicy.ts
+  api/v1/_lib/observability/statusMap.ts
+  api/v1/_lib/observability/emit.ts
+  api/v1/_lib/observability/index.ts
+  api/v1/_lib/observability/g7g.observability.test.ts
+  docs/SENTINELA-AUT-EVENT-OBSERVABILITY.md
+  docs/evidence/results/SENTINELA-G7-G-EVENT-OBSERVABILITY-2026-08-15.txt
+
+MODIFICADOS:
+  api/v1/health.ts → ETAPA_G7_G_EVENT_OBSERVABILITY
+  api/v1/_lib/foundation.test.ts → stage G7-G
+  docs/SENTINELA-AUT-OBSERVABILITY.md → link G7-G
+
+NÃO feito:
+  migration / tabela / SQL LIVE
+  wire de emit em todos os handlers (deixado para G7-H)
+  n8n / WhatsApp / webhook
+  nova tela de painel
+
+============================================================
+2. DOCUMENTOS
+============================================================
+docs/SENTINELA-AUT-EVENT-OBSERVABILITY.md
+  G1 fluxo auditado
+  G2 envelope
+  G3 eventos mínimos
+  G4 n8n ≠ Event Store
+  G5 status operacionais
+  G6 request_id correlation
+  G7 retry SAFE / CONTROLLED / NO / AFTER_CHANGE
+  G8 Event Store options A/B/C + recomendação
+  G9 mapa painel futuro
+  decisões pendentes
+
+============================================================
+3. TESTES
+============================================================
+npm run test:run
+  Test Files  16 passed
+  Tests       227 passed
+  (16 testes G7-G: received/rejected/authz/tenant/idempotency/
+   confirmation/core/conflict/invalid time/request_id/retry/
+   redaction/n8n correlation)
+
+============================================================
+4. BUILD
+============================================================
+npm run build → PASS
+
+============================================================
+5. RISCOS
+============================================================
+R1. Emit ainda não está wired nos handlers de produção —
+    contrato + helpers prontos; runtime emit = G7-H.
+
+R2. Sem tabela de eventos, retenção depende de logs do host
+    (limitado para painel tenant-scoped).
+
+R3. Volume futuro de eventos WRITE/SENSITIVE precisa retenção
+    e índices se opção B for autorizada.
+
+R4. Não duplicar domínio: Event Store futuro só envelope
+    redacted — não reimplementar packages/reservations.
+
+============================================================
+6. DECISÕES PENDENTES
+============================================================
+D1. Autorizar migration api_domain_events (opção B)?
+D2. Wire emit nos handlers agora (G7-H) vs piloto n8n?
+D3. Role/permissão para consultar eventos no painel.
+D4. Política formal de retenção / PII.
+
+============================================================
+7. RECOMENDAÇÃO PRÓXIMO GATE
+============================================================
+Opção preferida após revisão:
+
+  G7-H-A — Wire de emissão estruturada (console/log sink)
+           usando envelope G7-G, ainda SEM migration.
+
+  OU
+
+  G7-H-B — Piloto n8n local contra API (sem WhatsApp),
+           consumindo contrato G7-E/F + observabilidade G7-G.
+
+NÃO criar Event Store em produção sem autorização explícita
+de migration.
+
+RESULTADO: G7-G = PASS
+
+STOP.

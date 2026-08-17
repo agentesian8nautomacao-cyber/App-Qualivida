@@ -1,0 +1,77 @@
+SENTINELA AUT — G7-K-RBAC — CLOSEOUT
+Data/hora UTC:         2026-08-16T17:21:16Z → 2026-08-16T17:21:18Z
+Projeto:               zaemlxjwhzrfmowbckmk
+Host DB:               db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:             supabase/migrations/20260815230000_009_events_view_permission.sql
+Nome lógico:           009_events_view_permission
+APPLY evidência:       SENTINELA-G7-K-RBAC-APPLY-2026-08-16.txt
+  APPLY UTC:           2026-08-16T17:20:41Z → 2026-08-16T17:20:43Z
+  APPLY resultado:     PASS
+  Backup:              docs/evidence/backups/backup-pre-g7k-009-2026-08-16-141917.dump
+  Backup SHA-256:      0135a7ace51a8f5a3f639b0d81d08cf3bc0f1f08984d4b5aedcc412a163b76c9
+
+Modo:                  CLOSEOUT / PÓS-APPLY READ-ONLY
+Escrita no banco:      NENHUMA nesta etapa
+Migrations novas:      NENHUMA
+Rollback:              NÃO EXECUTADO
+Endpoint events:       NÃO
+WhatsApp / n8n prod:   NÃO
+
+RESULTADO: G7-K-RBAC = CLOSED / PASS
+
+============================================================
+ALINHAMENTO migration ↔ LIVE
+============================================================
+[x] permission events.view EXISTS
+[x] label = Eventos — visualizar auditoria (UTF-8 em-dash confirmado)
+[x] grant sindico = YES
+[x] grant administradora = YES
+[x] grant cabo_turma = NO
+[x] grant porteiro = NO
+[x] grant morador = NO
+[x] grants_total = 2 (somente previstos)
+[x] permissions_count = 51
+[x] sentinela.view intacta (não reutilizada)
+[x] nenhuma permission nova além de events.view
+
+============================================================
+INTACTOS
+============================================================
+[x] M1 organizations / condominiums
+[x] M2 units
+[x] M3 tenant_memberships
+[x] G6-1 api_idempotency_keys
+[x] G6-2 api_confirmations
+[x] G7-C reservations_area_date_slot_excl
+[x] G7-J api_domain_events (21 cols; schema inalterado)
+[x] G7-J-W wiring (não tocado neste gate)
+
+============================================================
+TESTES / BUILD (pós-APPLY)
+============================================================
+npm run test:run → 19 files / 260 tests PASS (incl. g7k.rbac.test.ts)
+npm run build    → PASS (vite ✓ built in 2m 4s)
+
+============================================================
+FRONTEIRAS FINAIS
+============================================================
+DATABASE CHANGES    = somente migration 009 (RBAC)
+MIGRATIONS EXECUTED = 1 (009)
+EVENT STORE SCHEMA  = INALTERADO
+N8N PRODUÇÃO        = 0
+WHATSAPP            = 0
+G7-K API            = NÃO INICIADO
+
+============================================================
+STOP
+============================================================
+G7-K-RBAC = CLOSED / PASS
+
+NÃO iniciar GET /api/v1/events.
+NÃO alterar OpenAPI.
+NÃO iniciar WhatsApp.
+NÃO iniciar n8n de produção.
+NÃO implementar purge/retenção.
+
+Próximo gate (somente com autorização explícita):
+  G7-K — API events.view

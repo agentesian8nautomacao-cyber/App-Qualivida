@@ -1,0 +1,167 @@
+SENTINELA AUT — G7-K — EVENTS VIEW API
+Data: 2026-08-16
+Projeto: zaemlxjwhzrfmowbckmk (schema intocado neste gate)
+
+=============================================================================
+1. STATUS
+=============================================================================
+G7-K = PASS
+
+Pré-requisito: G7-K-RBAC = CLOSED / PASS
+
+=============================================================================
+2. ENDPOINT
+=============================================================================
+GET /api/v1/events
+Handler: api/v1/events.ts
+Adapter: api/v1/_lib/observability/eventStoreQuery.ts
+Composition: productionDeps.eventStoreQuery (Supabase service-role)
+
+Fluxo:
+  HTTP → HMAC → Tenant → AuthZ(list_events/events.view) → Event Store query → sanitized response
+
+=============================================================================
+3. OPERATION
+=============================================================================
+list_events
+Classification: READ
+Core execution: NÃO (core_executed: false)
+Confirmation: NÃO
+Idempotency mutation: NÃO
+
+=============================================================================
+4. PERMISSION
+=============================================================================
+events.view (já no LIVE via G7-K-RBAC)
+NÃO reutiliza sentinela.view
+KNOWN_RBAC_PERMISSION_KEYS: inalterado neste gate (já continha events.view)
+
+=============================================================================
+5. HMAC
+=============================================================================
+G2 integral:
+  X-Sentinela-Client-Id
+  X-Sentinela-Timestamp
+  X-Sentinela-Signature
+  X-Organization-Id
+  X-Condominium-Id
+Sem Bearer-only. Sem exceção.
+
+=============================================================================
+6. TENANT ISOLATION
+=============================================================================
+Tenant = contexto autenticado somente.
+Query organization_id / condominium_id: IGNORADOS (nunca override).
+Fail-closed. Cross-tenant request_id → vazio no tenant autenticado.
+
+=============================================================================
+7. AUTHZ
+=============================================================================
+authorizeOperation('list_events') → OPERATION_PERMISSION_MAP.list_events → events.view
+Sem if role === sindico/administradora no handler.
+Sem grant → 403 FORBIDDEN
+
+=============================================================================
+8. FILTERS
+=============================================================================
+Schema real (21 cols) — filtros suportados:
+  event_type, operation, status, request_id, from, to
+Sem resource_type / resource_id (não existem no schema; sem migration).
+from/to: ISO-8601 com timezone explícito; inclusivos em occurred_at; máx. 93 dias.
+
+=============================================================================
+9. PAGINATION
+=============================================================================
+Keyset: occurred_at DESC, event_id DESC
+cursor = base64url({occurred_at, event_id})
+Default limit: 50
+Max limit: 100
+limit/cursor inválidos → 400 INVALID_REQUEST
+
+=============================================================================
+10. REDACTION
+=============================================================================
+Resposta sanitizada (sem attributes).
+assertNoSensitiveLeak na payload HTTP.
+Teste: redaction_leak_rows = 0 (secret/token/hmac/body/SQL/stack ausentes).
+
+=============================================================================
+11. READ-ONLY
+=============================================================================
+Sem INSERT/UPDATE/DELETE no Event Store pela consulta.
+Sem confirmation consume.
+Sem idempotency mutation.
+Sem Core execution.
+Observabilidade: emit in-process; sem persistência de api_domain_events para consulta OK
+  (request.received / request.authorized não são persistíveis).
+
+=============================================================================
+12. TESTES
+=============================================================================
+npm run test:run
+  Test Files  20 passed
+  Tests       290 passed  (baseline 260 + 30 G7-K events-view)
+
+Arquivo: api/v1/_lib/observability/g7k.events-view.test.ts
+Cobertura: Auth / Tenant / AuthZ / Roles / Filters / Pagination / Redaction / Read-only / Regression markers
+
+=============================================================================
+13. BUILD
+=============================================================================
+npm run build → PASS (vite ✓)
+
+=============================================================================
+14. DATABASE CHANGES
+=============================================================================
+0
+
+=============================================================================
+15. MIGRATIONS
+=============================================================================
+0
+
+=============================================================================
+16. N8N
+=============================================================================
+0 produção
+
+=============================================================================
+17. WHATSAPP
+=============================================================================
+0
+
+=============================================================================
+18–22. INTEGRIDADE
+=============================================================================
+M1–M4   intactos
+G6-1    intacto
+G6-2    intacto
+G7-C    intacto
+G7-J    intacto (schema Event Store inalterado)
+G7-J-W  intacto (sink não alterado semanticamente; composition só expõe query port)
+G7-K-RBAC intacto
+
+Dexie na API = 0
+Server Adapter = PASS
+
+=============================================================================
+23. LIMITAÇÕES
+=============================================================================
+- Sem painel UI neste gate
+- Sem LIVE smoke administrativo arbitrário
+- Sem purge / retenção
+- Sem resource_type/resource_id (schema)
+- Consulta OK não gera row persistente em api_domain_events (por design deste gate)
+
+=============================================================================
+24. PRÓXIMO GATE
+=============================================================================
+Aguardar decisão explícita.
+NÃO iniciar WhatsApp / n8n produção / purge / painel / novas migrations.
+
+Artefatos:
+  api/v1/events.ts
+  api/v1/_lib/observability/eventStoreQuery.ts
+  api/v1/_lib/observability/g7k.events-view.test.ts
+  docs/openapi/sentinela-api-v1.yaml (+ /events)
+  docs/SENTINELA-AUT-API-CONTRACT.md (+ list_events / events.view)

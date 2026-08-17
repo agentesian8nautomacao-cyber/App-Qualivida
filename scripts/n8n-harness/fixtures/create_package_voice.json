@@ -1,0 +1,18 @@
+{
+  "source": "harness",
+  "input_type": "voice",
+  "external_message_id": "harness-msg-voice-001",
+  "sender": { "phone": "5511999990002" },
+  "content": {
+    "transcript": "registrar encomenda para João unidade 202"
+  },
+  "metadata": { "scenario": "create_package_voice" },
+  "api_body": {
+    "input_type": "voice",
+    "recipient": "João",
+    "unit": "202",
+    "type": "Encomenda",
+    "text": "registrar encomenda para João unidade 202",
+    "metadata": { "source": "n8n", "stt": "normalized" }
+  }
+}

@@ -1,0 +1,218 @@
+SENTINELA AUT — G7 — SERVER RUNTIME READINESS AUDIT
+Data: 2026-08-14
+Status: G7 = READY FOR IMPLEMENTATION
+
+Pré-requisitos confirmados:
+  M1–M4 = CLOSED / PASS
+  G1–G5 = CLOSED / PASS
+  G6-1 = CLOSED / PASS (api_idempotency_keys LIVE)
+  G6-2 = CLOSED / PASS (api_confirmations LIVE)
+
+Tipo: AUDITORIA / DOCUMENTAÇÃO ONLY
+SQL / migration / APPLY / wiring / n8n / WhatsApp = NÃO
+
+============================================================
+ESCOPO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+G6-1 / G6-2 / M1–M4 = NÃO ALTERADOS
+
+Doc: docs/SENTINELA-AUT-G7-SERVER-RUNTIME.md
+
+============================================================
+1. ARQUITETURA ATUAL
+============================================================
+API (HMAC → tenant → AuthZ → classification)
+  → WRITE: Idempotency (unavailable em prod) → Core
+  → SENSITIVE: Confirmation (unavailable) → sensitiveBlocked (Core NÃO)
+  → Core → persistence? (default = dataService/Dexie; API sem inject)
+
+Port: sentinela/core/adapters/persistence.ts (CorePersistence)
+Default: getDefaultPersistence() → services/dataService (BROWSER)
+Memory: api/v1/_lib/execution/memoryPersistence.ts (TEST_ONLY)
+Server Adapter Supabase: AUSENTE
+Composition root createProductionApiDeps: AUSENTE
+
+Fronteira alvo:
+  API → Core → Server Adapter → Supabase/Postgres (service-role)
+
+============================================================
+2. DEPENDÊNCIAS BROWSER-ONLY
+============================================================
+Core package (sentinela/core/**): SEM React/Dexie/localStorage/IndexedDB
+
+Path default perigoso se usado no server:
+  dataService → offlineDataService → offlineDb (Dexie)
+  services/supabase.ts → import.meta.env.VITE_*
+
+App.tsx / DashboardView: UI only (snapshots, events UI)
+Server Adapter DEVE proibir:
+  Dexie · localStorage · IndexedDB · React · browser APIs ·
+  App.tsx state · fallback dados globais · getDefaultPersistence na API
+
+============================================================
+3. OPERAÇÕES SERVER-SAFE (com adapter)
+============================================================
+SERVER-SAFE com adapter/provider:
+  identify_resident (precisa ResidentsProvider)
+  identify_unit (opcional units M2)
+  get_boleto
+  create_package / create_occurrence / update_occurrence / create_reservation
+
+SERVER-SAFE Core existe; API ainda bloqueada até confirmation wiring:
+  pickup_package (precisa getPackageById)
+  cancel_reservation
+
+BLOQUEADO AuthZ (DECISION REQUIRED):
+  notify_resident
+
+============================================================
+4. OPERAÇÕES QUE PRECISAM ADAPTER
+============================================================
+CorePersistence methods:
+  savePackage / updatePackage / getPackageById(NEW obrigatório)
+  saveOccurrence / updateOccurrence
+  saveReservation / deleteReservation
+  getBoletos (sem onRemoteUpdate browser)
+  createNotification (só se notify liberado)
+
+Extras necessários:
+  ResidentsProvider.listResidents()
+  listReservationSlots(areaId, date) — para conflito server-side
+  createSupabaseIdempotencyStore (R1)
+  createSupabaseConfirmationStore (consume atômico)
+
+============================================================
+5. IDEMPOTENCY INTEGRATION POINTS
+============================================================
+Tabela: public.api_idempotency_keys (LIVE, rows=0 baseline)
+
+Onde entra (WRITE):
+  request → HMAC → tenant → AuthZ → classification=WRITE
+  → Idempotency (claim/replay/R1) → Core → persist result
+
+Código hoje:
+  executeCoreOperation exige Idempotency-Key
+  resolveIdempotencyStore() = unavailable (prod)
+  createSupabaseIdempotencyStore = AUSENTE
+  gates: idempotency_store=false, writes_enabled=false
+
+Respeitar R1 lazy reclaim (decisão G6-1 CLOSED).
+Não implementado nesta auditoria.
+
+============================================================
+6. CONFIRMATION INTEGRATION POINTS
+============================================================
+Tabela: public.api_confirmations (LIVE, rows=0 baseline)
+
+Onde entra (SENSITIVE):
+  request → HMAC → tenant → AuthZ → classification=SENSITIVE
+  → validate → atomic consume → Core
+
+Ops: pickup_package, cancel_reservation
+
+Código hoje:
+  withConfirmedOperation (G4)
+  resolveConfirmationStore() = unavailable
+  pós-gate: sensitiveBlocked → core_executed=false
+  pickup/cancel NÃO no switch executeCoreOperation
+  createSupabaseConfirmationStore = AUSENTE
+  gates: confirmation_persistent_store=false, sensitive_execution_enabled=false
+
+Regra: SEM confirmação válida consumida → SEM Core.
+
+============================================================
+7. EVENT INTEGRATION POINTS
+============================================================
+Bus memória: sentinela/core/domain/events.ts (MAX 200)
+
+Emitidos:
+  package.created / package.picked_up
+  occurrence.created / occurrence.updated
+  reservation.created / reservation.cancelled
+
+Consumidor atual: DashboardView + JSON response
+Futuro n8n: consumidor externo via Event Store (NÃO nesta etapa)
+
+Event Store = NÃO CRIAR agora.
+
+============================================================
+8. RESERVATION CONFLICT
+============================================================
+Warning: RESERVATION_CONFLICT_CLIENT_ONLY
+API: existingSlots=[] → checagem efetiva VAZIA
+Painel: existingSlots do estado local
+
+Antes de n8n criar reservas com segurança:
+  1) Server carregar slots reais (obrigatório app-level)
+  2) Exclusion constraint Postgres (recomendado; NÃO criar agora)
+
+============================================================
+9. TENANT GAPS
+============================================================
+API protect/AuthZ/confirmation/idempotency: org+condo OK (fail-closed)
+Core: warning se ausente (API preenche ctx)
+Operational tables sem org/condo columns: WARNING piloto / BLOCKING multi-condo
+identify_unit sem M2 codes na API: WARNING
+M5 = NÃO criar automaticamente
+
+============================================================
+10. RISCOS
+============================================================
+R1 HIGH — default Dexie se omitir inject na API
+R2 HIGH — WRITE sem idempotency store (hoje fail-closed OK)
+R3 HIGH — SENSITIVE sem confirmation/Core (hoje fail-closed OK)
+R4 HIGH — double-book reservas até slots server
+R5 HIGH — pickup sem getPackageById
+R6 MED/HIGH — M5 isolamento linha
+R7 MED — events efêmeros serverless
+R8 LOW — notify_resident DENY
+R9 HIGH — reusar cliente Vite no server
+
+============================================================
+11. ORDEM RECOMENDADA DE IMPLEMENTAÇÃO
+============================================================
+G7-A  createSupabaseCorePersistence + server env client
+G7-B  ResidentsProvider + identify/enrich
+G7-C  createSupabaseIdempotencyStore + WRITE composition root
+G7-D  createSupabaseConfirmationStore + pickup/cancel → Core
+G7-E  getPackageById + listReservationSlots
+G7-F  flip gates com evidência
+
+Depois (gates separados):
+  reservation DB constraint · Event Store · M5 · n8n · WhatsApp · notify decision
+
+Cada sub-gate: autorização explícita · STOP.
+
+============================================================
+DECISÕES
+============================================================
+Arquitetura G7 suficientemente definida → READY FOR IMPLEMENTATION
+
+Abertas (não bloqueiam G7-A):
+  D-G7-1 notify_resident RBAC = DECISION REQUIRED
+  D-G7-2 Idempotency em SENSITIVE = fechar no wiring
+  D-G7-3 DB exclusion reservas = adiado
+  D-G7-4 Event Store = adiado
+  D-G7-5 M5 = adiado
+
+============================================================
+RESULTADO
+============================================================
+G7 = READY FOR IMPLEMENTATION
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+G6-1 = CLOSED / PASS
+G6-2 = CLOSED / PASS
+M1–M4 = INTACTOS
+
+STOP OBRIGATÓRIO.
+Não iniciar wiring / G7-A automaticamente.

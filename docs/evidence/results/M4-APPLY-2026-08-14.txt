@@ -1,0 +1,131 @@
+# M4 APPLY — EVIDÊNCIA PRODUÇÃO (SEED PILOTO)
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Migration:           supabase/migrations/20260814180000_004_seed_pilot.sql
+Nome lógico:         004_seed_pilot (plano: 004_pilot_seed)
+Método:              psql -f (arquivo íntegro, sem SQL improvisado)
+Executor:            agente
+Início UTC:          2026-08-14T13:07:56Z
+Fim UTC:             2026-08-14T13:07:58Z
+psql apply_exit:     0
+
+Autorização:         EXPLÍCITA (APPLY M4)
+Gates:               M1–M3 CLOSED/PASS; Deep Review PASS; PRE-CHECK PASS
+Secrets no relatório: NENHUM
+
+================================================================================
+BACKUP / SNAPSHOT PRÉ-M4 (DR6)
+================================================================================
+Tipo:                pg_dump -Fc --no-owner --no-acl (READ-ONLY no banco)
+Arquivo:             docs/evidence/backups/backup-pre-m4-2026-08-14-130554.dump
+Dump UTC:            2026-08-14T13:05:54Z
+Tamanho:             515573 bytes
+SHA-256:             060762a1e1d6477b18407f8b967bcecfba52f60988ad1333908c323bc67fbf11
+pg_restore --list:   exit 0; TOC Entries 898; Format CUSTOM
+gitignore:           *.dump (não commitar)
+Nota:                backup-pre-m1-2026-08-13 existente, mas insuficiente pós-M1–M3;
+                     snapshot específico pré-M4 gerado e validado antes do INSERT.
+Restore:             NÃO executado
+
+PRE_M4_SNAPSHOT = PASS
+
+================================================================================
+PRÉ-APPLY (read-only, imediato antes do APPLY)
+================================================================================
+m4_seed_safe = TRUE
+organizations_rows = 0
+condominiums_rows  = 0
+units_rows = 0
+tenant_memberships_rows = 0
+org slug qualivida-admin = 0
+condo slug qualivida-club-residence = 0
+legado BEFORE: users=4 staff=1 residents=4 roles=5
+
+================================================================================
+APPLY
+================================================================================
+Saída psql:
+  BEGIN
+  DO (guards)
+  DO (seed)
+  NOTICE: M4_SEED_OK organization_id=0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+  NOTICE: M4_SEED_OK condominium_id=3f383313-5ec0-4d21-97c7-1b2500c933be
+  NOTICE: M4_SEED_OK organizations.slug=qualivida-admin
+  NOTICE: M4_SEED_OK condominiums.slug=qualivida-club-residence
+  COMMIT
+
+exit code = 0
+
+NÃO executado:
+  M1/M2/M3 reapply
+  M5+
+  rollback
+  INSERT/UPDATE/DELETE manual fora da migration
+  RLS/policies
+  seed adicional
+
+================================================================================
+PÓS-APPLY — VALIDAÇÃO LIVE
+================================================================================
+
+organization_id REAL =
+  0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+  name   = Empresa/Administradora piloto
+  slug   = qualivida-admin
+  status = active
+  count(slug) = 1
+
+condominium_id REAL =
+  3f383313-5ec0-4d21-97c7-1b2500c933be
+  organization_id = 0e5a5c4b-4cc6-48ee-8c1b-08d5015ab928
+  name     = Qualivida Club Residence
+  vertical = condominium
+  slug     = qualivida-club-residence
+  status   = active
+  org_fk_match = TRUE
+  count(org piloto + slug) = 1
+
+Contagens:
+  organizations: antes=0 depois=1
+  condominiums:  antes=0 depois=1
+  units:         0 → 0
+  tenant_memberships: 0 → 0
+  users:         4 → 4
+  staff:         1 → 1
+  residents:     4 → 4
+  roles:         5 → 5
+
+Constraints / associação:
+  condominiums.organization_id = organizations.id — PASS
+  UNIQUE org slug — 1 row — PASS
+  UNIQUE (organization_id, slug) piloto — 1 row — PASS
+
+Estrutural / isolamento:
+  ALTER legado = 0
+  units alteradas = 0
+  tenant_memberships alteradas = 0
+  memberships criadas = 0
+  units criadas = 0
+  backfill = 0
+  RLS/policies novas (pg_policies org/condo) = 0
+  migrations adicionais = 0
+  DML fora do M4 = 0
+  seed adicional = 0
+  rollback = NOT EXECUTED
+
+================================================================================
+GIT
+================================================================================
+Sem commit / tag / push nesta tarefa.
+Dump permanece local sob docs/evidence/backups/ (gitignored).
+
+================================================================================
+RESULTADO
+================================================================================
+M4 APPLY = PASS
+
+Próximo passo autorizado somente sob nova ordem:
+  M4 CLOSEOUT (READ-ONLY)
+  NÃO M5 / NÃO rollback automático

@@ -1,0 +1,122 @@
+# SENTINELA AUT — ETAPA 1 — OPERATIONAL CORE
+
+Data/hora UTC: 2026-08-14T15:31:00Z (aprox. execução testes)
+Projeto: Gestao-Qualivida-Residence / SENTINELA AUT
+Modo: REFACTORING / EXTRAÇÃO — sem banco
+
+================================================================================
+CONFIRMAÇÕES OBRIGATÓRIAS
+================================================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = NÃO IMPLEMENTADO
+N8N = NÃO IMPLEMENTADO
+PAINEL NOVO = NÃO IMPLEMENTADO
+RLS / policies = NÃO ALTERADOS
+M1–M4 = NÃO REABERTOS
+pre-m1-checkpoint = intacto (não movido)
+
+================================================================================
+1. OPERATIONAL CORE CRIADO
+================================================================================
+Path: sentinela/core/
+
+Arquivos:
+  index.ts
+  types.ts
+  context.ts
+  adapters/persistence.ts
+  domain/events.ts
+  domain/reservationConflict.ts
+  operations/identifyResident.ts
+  operations/identifyUnit.ts
+  operations/createPackage.ts
+  operations/pickupPackage.ts
+  operations/createOccurrence.ts
+  operations/createReservation.ts
+  operations/getBoleto.ts
+  core.test.ts
+
+================================================================================
+2. OPERAÇÕES EXTRAÍDAS
+================================================================================
+Fase A: identify_resident, identify_unit, create_package, pickup_package
+Fase B: create_occurrence, update_occurrence
+Fase C: create_reservation, cancel_reservation
+Fase D: get_boleto, notify_resident
+
+================================================================================
+3. ORIGEM DAS REGRAS
+================================================================================
+create_package     ← services/dataService.savePackage (+ resolução residente)
+pickup_package     ← App.handleDeliverPackage + updatePackage
+create_occurrence  ← saveOccurrence
+update_occurrence  ← updateOccurrence
+create_reservation ← saveReservation + hasTimeConflict (App) → reservationConflict.ts
+cancel_reservation ← deleteReservation
+identify_*         ← phoneNormalizer + unitFormatter + heurísticas voz
+get_boleto         ← getBoletos
+notify_resident    ← createNotification (inbox only)
+
+================================================================================
+4. CONSUMIDORES ATUALIZADOS (App.tsx)
+================================================================================
+- Registro encomenda (modal / QR / foto channel)
+- Import encomendas
+- Voz → encomenda / ocorrência
+- Entrega (pickup)
+- Nova reserva / cancelar reserva
+- Nova ocorrência / update / mensagens
+
+dataService permanece como adapter de persistência.
+UI (toast / openWhatsApp) permanece fora do Core.
+
+================================================================================
+5. CONTRATOS
+================================================================================
+OperationResult success|fail + events + notifications + warnings
+OperationContext com channel + tenant opcional
+Domain events in-memory (sem tabela)
+
+================================================================================
+6. TESTES
+================================================================================
+Comando: npm run test:run -- sentinela/core/core.test.ts utils/unitFormatter.test.ts
+Resultado: 17 passed (14 core + 3 unitFormatter)
+Sem banco de produção.
+
+================================================================================
+7. LIMITAÇÕES / DECISION REQUIRED
+================================================================================
+1) TENANT_CONTEXT_ABSENT = warning, não fail (legado single-tenant).
+   Fail-closed após M5+ = DECISION REQUIRED.
+2) Conflito de reserva ainda client-supplied list (sem migration).
+3) get_boleto / notify_resident expostos no Core; UI boletos ainda pode
+   chamar dataService diretamente (incremental).
+4) geminiService triplicado NÃO unificado nesta etapa (não bloqueante).
+5) Views Nutri leftover NÃO removidas.
+
+================================================================================
+8. PREPARAÇÃO n8n / WhatsApp
+================================================================================
+- channel whatsapp_future
+- identify_resident por telefone
+- events package.* / occurrence.* / reservation.*
+- notify_resident declara intent WA sem enviar
+
+================================================================================
+9. GIT (sem commit)
+================================================================================
+Criados: sentinela/core/** , docs atualizados
+Modificados: App.tsx, docs/SENTINELA-AUT-OPERATIONS.md
+Removidos: nenhum
+Artefatos M1–M4: preservados
+
+================================================================================
+10. RESULTADO
+================================================================================
+Operational Core = CRIADO
+UI usando Core onde aplicável = SIM
+Testes básicos = PASS
+Banco inalterado = SIM
+Etapa 1 = CONCLUÍDA (aguardando revisão humana antes da Etapa 2)

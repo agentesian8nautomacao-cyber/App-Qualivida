@@ -1,0 +1,144 @@
+SENTINELA AUT — G6-1 — APPLY LIVE
+Data/hora UTC início: 2026-08-14T18:18:51Z
+Data/hora UTC fim:    2026-08-14T18:18:56Z (APPLY)
+Validação UTC:        2026-08-14T18:18:57Z
+Projeto:              zaemlxjwhzrfmowbckmk
+Host DB:              db.zaemlxjwhzrfmowbckmk.supabase.co
+Autorização:          EXPLÍCITA (APPLY G6-1 somente)
+
+Migration aplicada:
+  supabase/migrations/20260814190000_005_api_idempotency_keys.sql
+Nome lógico:          005_api_idempotency_keys
+Gate:                 M-G6-1
+
+Método:               psql -f (arquivo íntegro, ON_ERROR_STOP=1)
+psql apply_exit:      0
+psql validation_exit: 0
+
+Saída APPLY (resumo):
+  BEGIN
+  DO
+  CREATE TABLE
+  CREATE INDEX
+  CREATE INDEX
+  COMMENT ×12
+  COMMIT
+
+============================================================
+PRE-APPLY RECONFIRM
+============================================================
+PRE_UTC: 2026-08-14T18:18:17Z
+organizations_exists = t
+condominiums_exists  = t
+units_exists         = t
+tenant_memberships_exists = t
+api_idempotency_keys_absent = t
+m_g6_1_create_safe = t
+Alvo confirmado: 005_api_idempotency_keys (somente este arquivo)
+Outras migrations nesta tarefa: 0
+
+============================================================
+POST-APPLY VALIDATION
+============================================================
+api_idempotency_keys EXISTS = t (regclass = api_idempotency_keys)
+ROW COUNT = 0
+
+COLUMN COUNT = 13 (exato, via information_schema):
+  1  id                 uuid        NOT NULL  DEFAULT gen_random_uuid()
+  2  organization_id    uuid        NOT NULL
+  3  condominium_id     uuid        NOT NULL
+  4  idempotency_key    text        NOT NULL
+  5  fingerprint        text        NOT NULL
+  6  operation          text        NOT NULL
+  7  request_id         text        NOT NULL
+  8  status             text        NOT NULL
+  9  response_status    integer     NULL
+ 10  response_body      jsonb       NULL
+ 11  created_at         timestamptz NOT NULL  DEFAULT now()
+ 12  expires_at         timestamptz NOT NULL
+ 13  completed_at       timestamptz NULL
+
+PK:
+  api_idempotency_keys_pkey (id)
+
+FKs:
+  api_idempotency_keys_organization_id_fkey
+    organization_id → organizations(id)  delete_rule=RESTRICT
+  api_idempotency_keys_condominium_id_fkey
+    condominium_id → condominiums(id)    delete_rule=RESTRICT
+
+UNIQUE:
+  api_idempotency_keys_org_condo_key_key
+    (organization_id, condominium_id, idempotency_key)
+
+expires_at:
+  present, NOT NULL, CHECK expires_at > created_at
+
+defaults:
+  id DEFAULT gen_random_uuid()
+  created_at DEFAULT now()
+
+CHECKs nomeados (além NOT NULL implícitos):
+  api_idempotency_keys_status_check
+  api_idempotency_keys_idempotency_key_nonempty_check
+  api_idempotency_keys_fingerprint_nonempty_check
+  api_idempotency_keys_operation_nonempty_check
+  api_idempotency_keys_request_id_nonempty_check
+  api_idempotency_keys_expires_after_created_check
+  api_idempotency_keys_completed_coherence_check
+  api_idempotency_keys_failed_coherence_check
+
+Índices:
+  api_idempotency_keys_pkey
+  api_idempotency_keys_org_condo_key_key (UNIQUE)
+  idx_api_idempotency_keys_expires_at
+  idx_api_idempotency_keys_tenant
+
+RLS / policies:
+  relrowsecurity (rls_enabled) = t
+  relforcerowsecurity           = f
+  policy_count                 = 0
+  OBSERVAÇÃO: a migration SQL NÃO contém ENABLE ROW LEVEL SECURITY.
+  Provável default/plataforma Supabase ao criar tabela em public.
+  Com 0 policies: acesso efetivo fail-closed para roles sem BYPASSRLS;
+  service_role permanece utilizável. Sem CREATE POLICY inventada.
+  Compatível com decisão “sem policies nesta migration”.
+
+DML inicial (seed/INSERT): AUSENTE — row_count=0
+
+============================================================
+M1–M4 / LEGADO
+============================================================
+organizations_exists = t  rows=1  pilot(qualivida-admin)=1
+condominiums_exists  = t  rows=1  pilot(qualivida-club-residence)=1
+units_exists = t
+tenant_memberships_exists = t
+LEGACY ALTERATIONS = 0
+M1–M4 = INTACTOS
+
+============================================================
+ESCOPO
+============================================================
+DATABASE CHANGES = 1 tabela criada (public.api_idempotency_keys)
+OTHER MIGRATIONS EXECUTED = 0
+G6-2 = NÃO
+n8n = NÃO
+WhatsApp = NÃO
+Wiring API idempotency = NÃO
+Rollback = NÃO EXECUTADO
+
+============================================================
+GIT (workspace)
+============================================================
+HEAD short: 31731e7
+Working tree: DIRTY (muitas alterações Sentinela/API/docs/migrations untracked/modified)
+Commit/tag/push nesta tarefa: NÃO
+Nota: migration file versionada no working tree; APPLY foi no banco LIVE.
+
+============================================================
+RESULTADO
+============================================================
+G6-1 APPLY = PASS
+
+G6-1 NÃO está CLOSED.
+Próximo gate obrigatório: CLOSEOUT LIVE (autorização separada).

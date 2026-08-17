@@ -1,0 +1,124 @@
+SENTINELA AUT — G6-1 — IDEMPOTENCY REVISION (R1 LAZY RECLAIM)
+Data: 2026-08-14
+Status: G6-1 = REVISED / AWAITING DEEP REVIEW
+
+Decisão: R1 LAZY RECLAIM (não R2, não R3)
+Motivo: deep review NEEDS REVISION — TTL × UNIQUE (cenário F)
+
+============================================================
+CONFIRMAÇÃO OBRIGATÓRIA
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+M1–M4 = INTACTOS
+APPROVED FOR LIVE PRE-CHECK = NÃO
+API WIRING CODE = NÃO IMPLEMENTADO (somente contrato documentado)
+
+============================================================
+O QUE MUDOU
+============================================================
+1) Migration SQL revisada (mesmo arquivo, ainda NOT EXECUTED):
+   supabase/migrations/20260814190000_005_api_idempotency_keys.sql
+
+   - UNIQUE MANTIDA: (organization_id, condominium_id, idempotency_key)
+   - expires_at MANTIDO (TTL lógico 48h)
+   - Header/COMMENTs: expires_at NÃO libera sozinho; R1 reclaim na API
+   - Contrato R1 documentado no SQL (sem trigger)
+   - CHECKs novos:
+       completed → response_body + response_status + completed_at NOT NULL
+       failed    → response_status + completed_at NOT NULL
+   - Sem campos novos
+   - Sem cron / RLS / CASCADE / IF NOT EXISTS create
+
+2) Rollback: NÃO alterado (ainda adequado)
+
+3) Docs: docs/SENTINELA-AUT-G6-IDEMPOTENCY.md (R1 + matriz A–H)
+
+4) Pré-check LIVE: inalterado (ainda válido)
+
+============================================================
+CONTRATO R1 (RESUMO)
+============================================================
+ANTES de criar operação com Idempotency-Key (tenant-scoped):
+
+  SELECT (org, condo, key)
+
+  miss              → INSERT
+  ativa + fp igual  → replay / in_progress policy (NÃO reclaim)
+  ativa + fp ≠      → DUPLICATE_REQUEST (NÃO reclaim)
+  expirada          → DELETE WHERE org AND condo AND key AND expires_at <= now()
+                      depois INSERT
+
+NUNCA DELETE só por idempotency_key.
+
+Concorrência:
+  transação + tratar unique_violation com re-SELECT
+  UNIQUE continua serializando duas rows
+
+============================================================
+MATRIZ DE CENÁRIOS
+============================================================
+A  primeira utilização                         → INSERT
+B  same key + same fp + in_progress (ativa)    → sem 2ª row; await/retry
+C  same key + same fp + completed (ativa)      → replay
+D  same key + fp diferente (ativa)             → DUPLICATE_REQUEST
+E  concorrência                                → UNIQUE + re-SELECT
+F  key expirada (>48h)                         → lazy reclaim → nova INSERT
+G  expirada em A não afeta B                   → DELETE scoped
+H  reclaim sem tenant exato                    → 0 rows; sem cross-tenant
+
+============================================================
+STATIC VALIDATION (local, sem banco)
+============================================================
+UNIQUE (organization_id, condominium_id, idempotency_key): presente
+completed_coherence_check: presente
+failed_coherence_check: presente
+ON DELETE RESTRICT ×2: presente
+Sem CREATE POLICY / RLS enable
+Sem trigger reclaim
+Sem cron
+Sem INSERT/UPDATE/DELETE DML na migration
+Sem ALTER M1–M4
+Rollback DROP sem CASCADE: inalterado
+tenant_id coluna: ausente
+
+============================================================
+DIVERGÊNCIAS / RESÍDUOS APÓS REVISÃO
+============================================================
+[OK] TTL×UNIQUE (F) — endereçado por contrato R1 (wiring futuro obrigatório)
+[OK] CHECKs completed/failed — adicionados
+[RESIDUAL] condo∈org sem FK composta — aceito (API); sem ALTER M1–M4
+[RESIDUAL] política lease de in_progress (timeout curto) — wiring, não DDL
+[RESIDUAL] failed + response_body opcional — intencional
+[RESIDUAL] reclaim só é seguro se wiring implementar DELETE scoped + txn;
+            SQL sozinho não executa reclaim (correto: sem trigger)
+
+Nenhuma divergência bloqueante restante no DDL revisado para o escopo R1.
+Deep review humano ainda obrigatório antes de LIVE PRE-CHECK.
+
+============================================================
+NÃO FEITO (RESPEITADO)
+============================================================
+APPLY migration
+DDL no banco LIVE
+Wiring API
+Confirmation Store / Event Store
+n8n / WhatsApp
+Mudanças HMAC / AuthZ / Core
+R2 exclusion / R3 single-use
+
+============================================================
+PRÓXIMO GATE
+============================================================
+Deep Review da revisão R1
+  → se PASS: APPROVED FOR LIVE PRE-CHECK
+  → só então executar docs/evidence/M-G6-1-PRECHECK-LIVE.sql
+  → APPLY = autorização separada
+
+============================================================
+RESULTADO
+============================================================
+G6-1 = REVISED / AWAITING DEEP REVIEW

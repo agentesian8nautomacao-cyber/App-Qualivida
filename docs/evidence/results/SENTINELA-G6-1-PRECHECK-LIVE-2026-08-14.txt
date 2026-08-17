@@ -1,0 +1,134 @@
+SENTINELA AUT — G6-1 — LIVE PRE-CHECK (READ-ONLY)
+Data/hora UTC:       2026-08-14T18:09:59Z → 2026-08-14T18:10:02Z
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Pré-check canônico:  docs/evidence/M-G6-1-PRECHECK-LIVE.sql
+Pré-check expandido: docs/evidence/M-G6-1-PRECHECK-LIVE-EXEC.sql
+Deep Review Final:   APPROVED FOR LIVE PRE-CHECK
+  (SENTINELA-G6-1-IDEMPOTENCY-DEEP-REVIEW-FINAL-2026-08-14.txt)
+
+Método:              psql READ-ONLY (-f SELECT / to_regclass / information_schema / pg_class)
+Modo:                READ-ONLY
+WRITE OPERATIONS:    0
+Migration APPLY:     NÃO EXECUTADO
+Rollback:            NÃO EXECUTADO
+Wiring API:          NÃO
+n8n / WhatsApp:      NÃO
+Secrets no relatório: NENHUM
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+psql_exit        = 0
+
+============================================================
+2–3. ORGANIZATIONS / CONDOMINIUMS
+============================================================
+organizations_regclass = organizations
+organizations_verdict  = EXISTS — OK (M1)
+
+condominiums_regclass  = condominiums
+condominiums_verdict   = EXISTS — OK (M1)
+
+============================================================
+4–5. PK / TIPOS (alvo das FKs)
+============================================================
+organizations.id:
+  data_type = uuid
+  udt_name  = uuid
+  nullable  = NO
+  PK        = organizations_pkey (PRESENT)
+
+condominiums.id:
+  data_type = uuid
+  udt_name  = uuid
+  nullable  = NO
+  PK        = condominiums_pkey (PRESENT)
+
+FK type compatibility (condominiums.organization_id → organizations.id):
+  both uuid / uuid
+  org_fk_types_compatible = t (TRUE)
+
+Migration FKs planejadas:
+  organization_id uuid → organizations(id)   COMPATÍVEL
+  condominium_id  uuid → condominiums(id)    COMPATÍVEL
+
+============================================================
+6–8. api_idempotency_keys / OBJETOS CONFLITANTES
+============================================================
+api_idempotency_keys_regclass = NULL
+api_idempotency_keys_verdict  = ABSENT — OK for M-G6-1 CREATE
+
+pg_class relname=api_idempotency_keys (qualquer schema) = 0 rows
+pg_type  typname=api_idempotency_keys                 = 0 rows
+
+Objetos inesperados conflitantes: NENHUM
+
+============================================================
+9 / 13. DEPENDÊNCIAS / M1–M4
+============================================================
+organizations_exists        = t
+condominiums_exists         = t
+units_exists                = t   (M2)
+tenant_memberships_exists   = t   (M3)
+api_idempotency_keys_absent = t
+
+M4 seed piloto (informativo):
+  organizations_rows = 1
+  condominiums_rows  = 1
+  org_pilot_rows (slug=qualivida-admin) = 1
+  condo_pilot_rows (slug=qualivida-club-residence) = 1
+
+M1–M4 = INTACTOS (presentes; esta tarefa não alterou)
+
+============================================================
+11 / 15. GUARD / CREATE SAFE
+============================================================
+m_g6_1_create_safe = t (TRUE)
+
+Interpretação do guard da migration (estático + live):
+  organizations EXISTS  → OK
+  condominiums EXISTS   → OK
+  api_idempotency_keys ABSENT → OK
+  Estado atual PERMITE criação da tabela no APPLY futuro
+
+Migration AINDA NÃO aplicada: CONFIRMADO
+
+============================================================
+12 / 14. WRITE / TABELAS OPERACIONAIS
+============================================================
+WRITE OPERATIONS = 0
+INSERT/UPDATE/DELETE/DDL nesta tarefa = 0
+Tabelas operacionais legadas alteradas = 0
+Nenhuma alteração em packages/occurrences/reservations/boletos/residents
+
+============================================================
+16. ROLLBACK (ESTÁTICO APENAS)
+============================================================
+Arquivo: supabase/migrations/20260814190000_005_api_idempotency_keys.rollback.sql
+Comando: DROP TABLE public.api_idempotency_keys;
+CASCADE no comando: NÃO
+IF EXISTS no comando: NÃO
+Rollback LIVE: NÃO EXECUTADO
+
+============================================================
+17. OBJETOS INESPERADOS / BLOQUEIOS DE APPLY
+============================================================
+Nenhum objeto conflitante com nome api_idempotency_keys.
+Nenhum bloqueio detectado para APPLY futuro (após autorização explícita).
+
+============================================================
+RESULTADO FINAL
+============================================================
+G6-1 PRE-CHECK = PASS
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WRITE OPERATIONS = 0
+M1–M4 = INTACTOS
+
+G6-1 APPLY = BLOCKED / AWAITING EXPLICIT AUTHORIZATION

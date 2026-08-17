@@ -1,0 +1,19 @@
+{
+  "source": "harness",
+  "input_type": "photo",
+  "external_message_id": "harness-msg-photo-001",
+  "sender": { "phone": "5511999990003" },
+  "content": {
+    "image_url": "https://example.invalid/packages/label-001.jpg",
+    "ocr_recipient": "Ana",
+    "ocr_unit": "303"
+  },
+  "metadata": { "scenario": "create_package_photo" },
+  "api_body": {
+    "input_type": "photo",
+    "recipient": "Ana",
+    "unit": "303",
+    "image_url": "https://example.invalid/packages/label-001.jpg",
+    "metadata": { "source": "n8n", "vision": "normalized" }
+  }
+}

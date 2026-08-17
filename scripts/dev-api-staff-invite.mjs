@@ -44,7 +44,7 @@ if (!hasServiceKey || !hasSupabaseUrl) {
 }
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -74,6 +74,37 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, cors);
     res.end();
+    return;
+  }
+
+  // SENTINELA API v1 foundation (Etapa 4 / G1) — health via dynamic import when available
+  if (path === '/api/v1/health' && req.method === 'GET') {
+    try {
+      const healthUrl = pathToFileURL(join(root, 'api', 'v1', 'health.ts')).href;
+      const mod = await import(healthUrl);
+      const handler = mod.default;
+      const incoming = new Request(`http://localhost:${PORT}${req.url}`, { method: 'GET', headers: req.headers });
+      const response = await handler.fetch(incoming);
+      const buf = Buffer.from(await response.arrayBuffer());
+      const headers = { 'Content-Type': response.headers.get('Content-Type') || 'application/json' };
+      for (const [k, v] of response.headers.entries()) {
+        if (k.toLowerCase() === 'content-type' || k.toLowerCase().startsWith('x-') || k.toLowerCase().startsWith('access-control')) {
+          headers[k] = v;
+        }
+      }
+      res.writeHead(response.status, headers);
+      res.end(buf);
+    } catch (err) {
+      console.warn('[dev-api] /api/v1/health import failed (use vitest for full G1 coverage):', err?.message || err);
+      res.writeHead(501, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: {
+          code: 'GATE_PENDING',
+          message: 'Sentinela /api/v1/health requires TS loader in this Node process. Prefer: npm run test:run -- api/v1',
+        },
+      }));
+    }
     return;
   }
 
@@ -320,6 +351,48 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (path.startsWith('/api/master')) {
+    try {
+      const liveUrl = pathToFileURL(join(root, 'api', 'master', '_lib', 'live.ts')).href;
+      const mod = await import(liveUrl);
+      const handle = mod.handleLiveMasterRequest;
+      const chunks = [];
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+        for await (const chunk of req) chunks.push(chunk);
+      }
+      const bodyBuf = chunks.length ? Buffer.concat(chunks) : undefined;
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (v == null) continue;
+        headers.set(k, Array.isArray(v) ? v.join(', ') : String(v));
+      }
+      const incoming = new Request(`http://localhost:${PORT}${req.url}`, {
+        method: req.method,
+        headers,
+        body: bodyBuf ? new Uint8Array(bodyBuf) : undefined,
+      });
+      const response = await handle(incoming);
+      const buf = Buffer.from(await response.arrayBuffer());
+      const outHeaders = { 'Content-Type': response.headers.get('Content-Type') || 'application/json' };
+      for (const [k, v] of response.headers.entries()) {
+        if (
+          k.toLowerCase() === 'content-type' ||
+          k.toLowerCase().startsWith('x-') ||
+          k.toLowerCase().startsWith('access-control')
+        ) {
+          outHeaders[k] = v;
+        }
+      }
+      res.writeHead(response.status, outHeaders);
+      res.end(buf);
+    } catch (err) {
+      console.error('[dev-api] /api/master', err);
+      res.writeHead(500, { ...cors, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err?.message || 'Erro interno Master', code: 'INTERNAL_ERROR' }));
+    }
+    return;
+  }
+
   res.writeHead(404, { ...cors, 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found', code: 'NOT_FOUND' }));
 });
@@ -327,4 +400,5 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, 'localhost', () => {
   console.log(`[dev-api] Staff invite API rodando em http://localhost:${PORT}`);
   console.log(`[dev-api] GET /api/staff-invite, POST /api/accept-staff-invite, POST /api/send-invite-email`);
+  console.log(`[dev-api] /api/master/* (session, dashboard, organizations)`);
 });

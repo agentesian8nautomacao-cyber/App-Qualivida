@@ -1,0 +1,412 @@
+SENTINELA AUT — G6-2 — CONFIRMATION STORE DEEP REVIEW
+Data: 2026-08-14
+Tipo: revisão adversarial READ-ONLY (SQL estático)
+Migration: supabase/migrations/20260814200000_006_api_confirmations.sql
+Rollback:  supabase/migrations/20260814200000_006_api_confirmations.rollback.sql
+Spec: docs/SENTINELA-AUT-G6-CONFIRMATIONS.md
+Decisões: docs/evidence/results/SENTINELA-G6-2-DECISIONS-2026-08-14.txt (DR1–DR20 CLOSED)
+Criação: docs/evidence/results/SENTINELA-G6-2-SQL-CREATION-2026-08-14.txt
+
+============================================================
+VEREDITO
+============================================================
+G6-2 = APPROVED FOR LIVE PRE-CHECK
+
+NÃO é APPLY.
+NÃO é wiring.
+LIVE PRE-CHECK ainda NÃO executado.
+Nenhuma alteração de banco nesta etapa.
+
+============================================================
+CONFIRMAÇÃO DE ESCOPO DESTA REVIEW
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+N8N = 0
+WHATSAPP = 0
+G6-1 = CLOSED / PASS (intocada)
+M1–M4 = INTACTOS
+Pré-check LIVE = NÃO EXECUTADO
+Wiring API = NÃO EXECUTADO
+
+HIGH findings = 0
+BLOCKING findings = 0
+
+============================================================
+MÉTODO
+============================================================
+Revisão adversarial contra DR1–DR20 + contrato G4/G5.
+Validação estática local (grep/leitura). Sem conexão LIVE. Sem DML/DDL remoto.
+
+============================================================
+1. ESTRUTURA
+============================================================
+PASS
+
+Tabela: public.api_confirmations (única CREATE TABLE)
+
+Colunas vs campos mínimos DR / doc:
+  confirmation_id text PK                 OK (DR1)
+  token_hash text NOT NULL                OK (DR2)
+  organization_id uuid NOT NULL           OK (DR4)
+  condominium_id uuid NOT NULL            OK (DR4)
+  client_id text NOT NULL                 OK
+  operation text NOT NULL                 OK (DR3)
+  resource_id text NOT NULL               OK
+  operation_fingerprint text NOT NULL     OK (DR5)
+  status text NOT NULL                    OK (DR9) — sem DEFAULT (INSERT explícito)
+  prompt text NOT NULL                    OK
+  requester_identity text NULL            OK
+  created_request_id text NULL            OK
+  created_at timestamptz NOT NULL DEFAULT now()  OK
+  expires_at timestamptz NOT NULL         OK (DR6)
+  consumed_at timestamptz NULL            OK (DR7; ≡ used_at no TS G4)
+
+FKs:
+  organization_id → organizations(id) ON DELETE RESTRICT  OK (DR10)
+  condominium_id  → condominiums(id)  ON DELETE RESTRICT  OK (DR10)
+  Sem FK composta org↔condo                         OK (contrato)
+
+Índices (DR11):
+  PK confirmation_id
+  idx_api_confirmations_expires_at
+  idx_api_confirmations_tenant (organization_id, condominium_id)
+  Sem índice em token_hash                            OK (DR11)
+
+Guards fail-closed (DO $$):
+  organizations EXISTS / condominiums EXISTS /
+  api_confirmations ABSENT — coerente com pré-check.
+
+============================================================
+2. SEGURANÇA DO TOKEN
+============================================================
+PASS (DDL + contrato documentado; enforcement runtime = wiring)
+
+- Coluna de plaintext ausente (só token_hash).
+- Comentários da migration reforçam “plaintext NEVER stored”.
+- Nenhum token de exemplo / secret / HMAC na migration.
+- Menções a “plaintext” apenas em comentários (não colunas).
+- SHA-256 é contrato da API (coluna não tipa algoritmo); aceitável — igual G6-1 fingerprint.
+- Expiração: CHECK expires_at > created_at; consumo com expires_at > now()
+  documentado no header (pseudocódigo wiring). DDL sozinho NÃO rejeita
+  UPDATE expirado — intencional (DR6/DR9; sem trigger DR13).
+- Reuso: CHECK pending⇔consumed_at NULL + consumed⇔consumed_at NOT NULL;
+  consumo atômico exige status='pending' AND consumed_at IS NULL (DR8).
+
+Residual NON-BLOCKING:
+  R-TOK-1 — comprimento/formato hex do token_hash não CHECK’ado (64 chars).
+            Wiring deve gravar SHA-256 hex; DDL não inventa regra além das DRs.
+
+============================================================
+3. TENANT ISOLATION
+============================================================
+PASS com residual documentado (mesmo padrão G6-1)
+
+- organization_id + condominium_id NOT NULL + FKs RESTRICT.
+- Sem tenant_id genérico / sem fallback global.
+- Pseudocódigo de consume no header inclui AND organization_id AND condominium_id.
+
+Residual NON-BLOCKING:
+  R-TEN-1 — PK é somente confirmation_id. SELECT/UPDATE físico por id
+            (sem tenant) é possível no SQL. DR1 fechou PK single-column.
+            Mitigações: id opaco cnf_…; wiring OBRIGATÓRIO tenant-scoped
+            em create/validate/consume; service-role only; fail-closed API.
+            Não é falha estrutural deste gate (DR1+DR8+DR12).
+
+  R-TEN-2 — Consistência condo∈org sem FK composta: residual herdado M3;
+            API (igual G6-1).
+
+Risco cross-tenant classificado: mitigado por contrato de wiring + opacidade;
+não BLOCKING para PRE-CHECK do SQL.
+
+============================================================
+4. FINGERPRINT
+============================================================
+PASS (persistência + contrato canônico; cálculo = API)
+
+Coluna operation_fingerprint text NOT NULL + CHECK nonempty.
+
+Canônico documentado (DR5 / header migration):
+  SHA-256("sentinela-confirm/v1\n" + org + "\n" + condo + "\n"
+          + operation + "\n" + resource_id)
+
+Consequências do canônico (quando API calcular corretamente):
+  ops diferentes     → hashes diferentes     (não colidem)
+  resources diferentes → hashes diferentes
+  tenants diferentes → hashes diferentes
+  ≠ fingerprint de body HTTP do G6-1 (prefixo sentinela-confirm/v1)
+
+DDL NÃO recalcula nem UNIQUE o fingerprint — correto (sem trigger;
+sem inventar unicidade não decidida). Validate/Consume exigem match na API.
+
+Residual NON-BLOCKING:
+  R-FP-1 — múltiplas rows pending com mesmo fingerprint possíveis
+           (sem UNIQUE). DR5/DR11 não exigem unicidade; desafios
+           concorrentes do mesmo recurso ficam a cargo do wiring futuro.
+
+============================================================
+5. TTL
+============================================================
+PASS
+
+- Default 300s e clamp 30–3600: API (G4 já implementa) — NÃO no DDL,
+  conforme DR6 e regra explícita do gate SQL.
+- CHECK expires_at > created_at presente.
+- Expiração lógica via expires_at; sem status 'expired' (DR9).
+- Token expirado: wiring rejeita (validate) e UPDATE consume exige
+  expires_at > $now (documentado). Sem cron/purge (DR14).
+
+============================================================
+6. MÁQUINA DE ESTADOS
+============================================================
+PASS (DDL) + residual irreversibilidade soft
+
+CHECK status IN ('pending','consumed')                         OK
+CHECK pending → consumed_at IS NULL                            OK
+CHECK consumed → consumed_at IS NOT NULL                       OK
+Impede estados inválidos mistos (pending+consumed_at / consumed+null).
+
+Impedimentos:
+  consumed → consumed (2ª vez): UPDATE com WHERE pending retorna 0 rows
+    (contrato DR8) — suporte estrutural OK
+  pending expirado → consumed: bloqueado pelo predicado expires_at > now()
+    no wiring (não por CHECK de status) — OK por DR9
+  estados inválidos tipo 'expired'/'cancelled': CHECK rejeita INSERT/UPDATE
+
+Residual NON-BLOCKING:
+  R-ST-1 — DDL NÃO impede UPDATE adversário
+           SET status='pending', consumed_at=NULL (reverte consumed).
+           DR13 proíbe trigger. Irreversibilidade = disciplina do wiring
+           (nunca reverter). Aceito no mesmo padrão fail-closed da API
+           service-role (G6-1).
+
+============================================================
+7. ATOMICIDADE DE CONSUMO / CONCORRÊNCIA
+============================================================
+PASS (desenho)
+
+Simulação conceitual Request A || Request B no mesmo confirmation_id:
+
+  Ambos: UPDATE … SET status='consumed', consumed_at=$now
+         WHERE confirmation_id=$id
+           AND organization_id=$org AND condominium_id=$condo
+           AND status='pending' AND consumed_at IS NULL
+           AND expires_at > $now
+         RETURNING *
+
+  Postgres: row lock na mesma PK.
+  Primeiro commit: 1 row → consume OK → Core permitido.
+  Segundo: 0 rows → ALREADY_USED / INVALID — Core NÃO.
+
+PK impede duas rows do mesmo id.
+Sem store em memória; sem trigger; suporte a UPDATE atômico adequado.
+
+Nota: implementação do UPDATE é gate de wiring — DDL fornece colunas/
+CHECKs/PK necessários. Adequado para APPROVED FOR LIVE PRE-CHECK.
+
+============================================================
+8. OPERAÇÕES AUTORIZADAS
+============================================================
+PASS
+
+CHECK operation IN ('pickup_package', 'cancel_reservation')
+Qualquer outra operação → violação de CHECK no INSERT/UPDATE.
+Alinhado DR3 / G3 SENSITIVE / G5 bloqueio até store.
+
+============================================================
+9. RELAÇÃO COM G6-1
+============================================================
+PASS
+
+- Migration NÃO ALTER api_idempotency_keys.
+- Sem UNIQUE que transforme confirmação em chave de retry HTTP.
+- Sem coluna idempotency_key.
+- Fingerprint de confirmação ≠ body fingerprint de idempotência (DR5/DR17).
+- Papéis distintos preservados:
+    G6-1 = retry/idempotência da mutação
+    G6-2 = autorização explícita de intenção sensível
+- Ambos podem coexistir em SENSITIVE no wiring futuro (DR17).
+
+============================================================
+10. ROLLBACK
+============================================================
+PASS
+
+Arquivo: 20260814200000_006_api_confirmations.rollback.sql
+  DROP TABLE public.api_confirmations;
+  — sem CASCADE
+  — sem IF EXISTS (falha se ausente — intencional)
+  — guards documentais no header
+  — não toca organizations/condominiums/api_idempotency_keys/M1–M4
+
+Comportamento:
+  Com dados: DROP remove todas as rows da tabela (esperado em rollback
+             de migration; não é delete seletivo cross-tenant).
+  Com FK externa apontando para a tabela: DROP falha (desejado).
+  Sem CASCADE: não derruba dependentes inesperados.
+
+============================================================
+11. RLS
+============================================================
+PASS (conforme DR12)
+
+- Migration NÃO cria ENABLE ROW LEVEL SECURITY.
+- Migration NÃO cria POLICY.
+- Situação registrada: fail-closed na API; service-role server-side.
+- Observação herdada G6-1: plataforma Supabase pode marcar
+  relrowsecurity=t com 0 policies após APPLY — NÃO é falha estrutural
+  deste gate (DR12 CLOSED: fora de escopo inventar policies).
+
+============================================================
+12. DDL LIMPO
+============================================================
+PASS (estático)
+
+CREATE FUNCTION (persistida) = 0
+CREATE TRIGGER = 0
+CREATE POLICY / ENABLE RLS = 0
+cron / pg_cron = 0
+INSERT / UPDATE / DELETE DML = 0
+ALTER TABLE = 0
+ALTER api_idempotency_keys = 0
+ALTER M1–M4 / legado = 0
+Event Store = 0
+Seed = 0
+
+Nota: bloco DO $$ anônimo só para guards (padrão G6-1) — não é
+CREATE FUNCTION persistida; aceitável.
+
+============================================================
+13. COMPATIBILIDADE G1–G5 / G6-1
+============================================================
+PASS
+
+G1 foundation / envelope: sem impacto DDL
+G2 auth/tenant: org+condo alinhados aos headers/tenant boundary
+G3 authz: ops SENSITIVE batem com CHECK
+G4 confirmation: campos cobrem ConfirmationRecord;
+  consumed_at ≡ used_at (mapeamento wiring — DR7/DR20);
+  operation_fingerprint é adição DR5 (lacuna G4) sem quebrar envelope HTTP
+G5 core execution: fases Create→Validate→Consume→Execute preservadas;
+  Core só após consume (contrato; wiring futuro)
+G6-1: tabela intocada; papéis não confundidos
+
+============================================================
+14. MATRIZ ADVERSARIAL (conceitual)
+============================================================
+Legenda:
+  PASS     = coberto pelo DDL e/ou contrato documentado de wiring
+  FAIL     = buraco estrutural no SQL vs DR
+  BLOCKING = impede APPROVED FOR LIVE PRE-CHECK
+  NON-BLOCKING = residual aceito (wiring / plataforma / DR explícito)
+
+A — criação válida
+    PASS / NON-BLOCKING residual nenhum material
+    INSERT pending + token_hash + fingerprint + expires_at > created_at
+
+B — token inválido
+    PASS (wiring: compare hash; DDL só guarda token_hash)
+    Sem plaintext para “adivinhar” no banco
+
+C — token expirado
+    PASS (contrato: validate rejeita; consume WHERE expires_at > now())
+    DDL: expires_at NOT NULL + CHECK > created_at
+    NON-BLOCKING: sem CHECK “não consumir se expirado” (seria trigger/função)
+
+D — token já consumido
+    PASS — status/consumed_at + UPDATE WHERE pending → 0 rows
+
+E — fingerprint diferente
+    PASS — coluna persistida; validate exige match (API)
+    DDL não recalcula (correto)
+
+F — operação diferente
+    PASS — CHECK operation + fingerprint inclui operation
+    Trocar op na row exige violar CHECK ou divergir fingerprint vs request
+
+G — tenant diferente
+    PASS — org/condo NOT NULL + FKs; consume documentado com AND tenant
+    Residual R-TEN-1 (lookup físico por PK) = NON-BLOCKING
+
+H — recurso diferente
+    PASS — resource_id + fingerprint inclui resource_id
+
+I — concorrência (A||B consume)
+    PASS — row lock + predicado pending/consumed_at NULL; um vence
+
+J — tentativa de replay (pós-consume)
+    PASS — segunda consume 0 rows; Core não deve executar
+
+K — confirmação fora do TTL
+    PASS — equivalente a C (expires_at); sem status expired (DR9)
+
+L — rollback com dados
+    PASS — DROP remove tabela/dados desta store; sem CASCADE;
+           falha se dependências externas
+
+M — confirmação inexistente
+    PASS — PK miss / UPDATE 0 rows → INVALID (wiring)
+
+Nenhum cenário A–M = FAIL ou BLOCKING.
+
+============================================================
+15. MAPA DR1–DR20 × SQL
+============================================================
+DR1  PK confirmation_id text + CHECK cnf_%          OK
+DR2  só token_hash                                  OK
+DR3  ops SENSITIVE only                             OK
+DR4  org+condo NOT NULL + FKs                       OK
+DR5  operation_fingerprint NOT NULL + canônico doc  OK
+DR6  TTL API; expires_at; sem cron                  OK
+DR7  pending→consumed + consumed_at                 OK
+DR8  consume atômico documentado                    OK
+DR9  pending|consumed; expiração lógica             OK
+DR10 ON DELETE RESTRICT                             OK
+DR11 índices mínimos; sem token_hash idx            OK
+DR12 sem RLS/policies nesta migration               OK
+DR13 sem trigger                                    OK
+DR14 sem cron                                       OK
+DR15 zero DML/seed                                  OK
+DR16 rollback DROP sem CASCADE                      OK
+DR17 ≠ G6-1 idempotency                             OK
+DR18 n8n fora do SQL                                OK (N/A DDL)
+DR19 sem secrets/plaintext na tabela                OK
+DR20 G1–G5 / G6-1 / M1–M4 intactos no artefato      OK
+
+============================================================
+FINDINGS
+============================================================
+HIGH / BLOCKING: nenhum
+
+NON-BLOCKING residuals (wiring / documentação — não bloqueiam PRE-CHECK):
+  R-TOK-1  formato hex length do token_hash
+  R-TEN-1  lookup físico por confirmation_id sem tenant (PK DR1)
+  R-TEN-2  condo∈org sem FK composta (herdado M3)
+  R-FP-1   sem UNIQUE em fingerprint
+  R-ST-1   reversão adversária consumed→pending possível sem trigger
+
+============================================================
+O QUE ESTA REVIEW NÃO FEZ
+============================================================
+- Não executou migration
+- Não executou pré-check LIVE
+- Não conectou ao LIVE para escrita
+- Não iniciou wiring / API changes / n8n / WhatsApp
+- Não alterou M1–M4 / G6-1
+
+============================================================
+RESULTADO
+============================================================
+G6-2 = APPROVED FOR LIVE PRE-CHECK
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+G6-1 = CLOSED / PASS
+G6-2 = APPROVED FOR LIVE PRE-CHECK
+
+STOP OBRIGATÓRIO.
+Próximo gate somente com autorização explícita: LIVE PRE-CHECK
+(docs/evidence/M-G6-2-PRECHECK-LIVE.sql).
+Não executar APPLY automaticamente.

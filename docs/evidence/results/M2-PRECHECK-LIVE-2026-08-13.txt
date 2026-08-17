@@ -1,0 +1,87 @@
+# M2 PRE-CHECK LIVE — EVIDÊNCIA
+
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Porta:               5432
+Database:            postgres
+User:                postgres
+sslmode:             require
+Data/hora UTC:       2026-08-13T20:24:12Z (início) / 2026-08-13T20:24:19Z (fim)
+
+Arquivo executado:   docs/evidence/M2-PRECHECK-LIVE.sql
+Arquivo alterado?    NÃO
+Migration alvo:      supabase/migrations/20260813160000_002_units.sql
+Método:              psql -f (READ-ONLY SELECT / to_regclass)
+Executor:            agente
+psql_exit:           0
+
+Identidade (read-only prévia):
+  current_database = postgres
+  current_user     = postgres
+
+================================================================================
+RESULTADOS
+================================================================================
+
+organizations_regclass = organizations
+organizations_verdict  = EXISTS — OK (M1)
+organizations_exists   = true (t)
+
+condominiums_regclass  = condominiums
+condominiums_verdict   = EXISTS — OK (M1)
+condominiums_exists    = true (t)
+
+units_regclass         = NULL
+units_verdict          = ABSENT — OK for M2 CREATE
+units_absent           = true (t)
+
+m2_create_safe         = true (t)
+
+Saída bruta (pipe):
+
+organizations_regclass|organizations_verdict
+organizations|EXISTS — OK (M1)
+
+condominiums_regclass|condominiums_verdict
+condominiums|EXISTS — OK (M1)
+
+units_regclass|units_verdict
+|ABSENT — OK for M2 CREATE
+
+organizations_exists|condominiums_exists|units_absent|m2_create_safe
+t|t|t|t
+
+================================================================================
+SEGURANÇA
+================================================================================
+
+Operações de escrita:     0 / NENHUMA
+CREATE/ALTER/DROP/DML:    NÃO
+Migration M2 aplicada:    NÃO
+Rollback executado:       NÃO
+M3/M4:                    NÃO
+pre-m1-checkpoint:        aec1f5f2150633519b8a6136b9ddbff61bfed513 (não movida)
+M1/M2 SQL files:          não alterados nesta tarefa
+
+Significado deste PASS:
+  Pré-condição estrutural satisfeita (pais M1 presentes; units ausente).
+  NÃO autoriza APPLY da migration M2.
+  NÃO significa migration executada.
+
+================================================================================
+GIT (somente status)
+================================================================================
+Worktree DIRTY (artefatos M1/M2 evidência; sem commit nesta tarefa).
+
+================================================================================
+STATUS FINAL
+================================================================================
+
+M2 PRE-CHECK = PASS
+
+M2 APPLY permanece BLOCKED até autorização explícita separada.
+
+Nenhuma alteração de banco foi executada.
+M2 migration NÃO foi aplicada.
+================================================================================

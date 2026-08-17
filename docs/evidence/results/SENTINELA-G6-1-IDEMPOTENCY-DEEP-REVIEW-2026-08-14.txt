@@ -1,0 +1,334 @@
+SENTINELA AUT — G6-1 — IDEMPOTENCY SQL DEEP REVIEW
+Data: 2026-08-14
+Artefato: supabase/migrations/20260814190000_005_api_idempotency_keys.sql
+Rollback: supabase/migrations/20260814190000_005_api_idempotency_keys.rollback.sql
+Pré-check: docs/evidence/M-G6-1-PRECHECK-LIVE.sql
+Criação: docs/evidence/results/SENTINELA-G6-1-IDEMPOTENCY-SQL-CREATION-2026-08-14.txt
+
+============================================================
+VEREDITO
+============================================================
+G6-1 DEEP REVIEW = NEEDS REVISION
+
+NÃO APPROVED FOR LIVE PRE-CHECK.
+
+Motivo principal (bloqueante para aprovação):
+  Divergência TTL × UNIQUE — cenário F.
+
+Escopo desta revisão:
+  DATABASE CHANGES = 0
+  MIGRATIONS EXECUTED = 0
+  N8N = 0
+  WHATSAPP = 0
+  M1–M4 = INTACTOS
+  LIVE PRE-CHECK = NÃO EXECUTADO
+  Código API = NÃO ALTERADO
+
+============================================================
+1. ESTRUTURA / TIPOS / NULLABILITY / DEFAULTS / PK
+============================================================
+PASS (estrutura base)
+
+| Campo            | Tipo         | Null | Default           | Avaliação |
+|------------------|--------------|------|-------------------|-----------|
+| id               | uuid PK      | NO   | gen_random_uuid() | OK        |
+| organization_id  | uuid         | NO   | —                 | OK        |
+| condominium_id   | uuid         | NO   | —                 | OK        |
+| idempotency_key  | text         | NO   | —                 | OK + CHECK trim |
+| fingerprint      | text         | NO   | —                 | OK + CHECK trim |
+| operation        | text         | NO   | —                 | OK + CHECK trim |
+| request_id       | text         | NO   | —                 | OK + CHECK trim |
+| status           | text         | NO   | —                 | OK + CHECK enum-like |
+| response_status  | integer      | YES  | —                 | OK (NULL em in_progress) |
+| response_body    | jsonb        | YES  | —                 | OK (NULL em in_progress) |
+| created_at       | timestamptz  | NO   | now()             | OK        |
+| expires_at       | timestamptz  | NO   | — (app)           | OK + CHECK > created_at |
+| completed_at     | timestamptz  | YES  | —                 | OK        |
+
+Sem ENUM (alinhado ao projeto).
+Sem tenant_id genérico.
+Sem defaults perigosos em status/fingerprint.
+
+============================================================
+2. FKs / ON DELETE RESTRICT / TENANT
+============================================================
+PASS com risco residual documentado
+
+- FK organization_id → organizations(id) ON DELETE RESTRICT  OK
+- FK condominium_id → condominiums(id) ON DELETE RESTRICT    OK
+- organization_id NOT NULL + condominium_id NOT NULL         OK
+- Sem fallback global                                       OK
+
+Condo ∈ Organization?
+  NÃO há FK composta (organization_id, condominium_id) → condominiums.
+  Mesmo residual DR7 de M3.
+  NÃO inventar ALTER em M1–M4 nesta gate.
+  Enforcement: API HMAC/tenant binding (credential scoped + validateTenantBinding).
+  RISCO RESIDUAL: MEDIUM — row poderia teoricamente apontar org A + condo de org B
+  se a API falhar. Mitigação atual = fail-closed na fronteira API (obrigatória no wiring).
+
+============================================================
+3. UNIQUE / ÍNDICES
+============================================================
+UNIQUE (organization_id, condominium_id, idempotency_key)  → PASS para A–E
+
+Índices:
+  idx_api_idempotency_keys_expires_at  → OK (cleanup futuro; sem cron agora)
+  idx_api_idempotency_keys_tenant      → OK auxiliar
+
+UNIQUE física cobre lookup + concorrência de INSERT (cenário E).
+
+============================================================
+4. CENÁRIOS DE IDEMPOTÊNCIA (A–F)
+============================================================
+
+A) Tenant A + key X + fingerprint F1 → primeira operação
+   PASS (desenho): INSERT sob UNIQUE; status in_progress → completed.
+   (Comportamento completo depende do wiring — fora desta migration.)
+
+B) Tenant A + key X + fingerprint F1 → reutilizar
+   PASS (desenho): SELECT por UNIQUE key; fingerprint igual → replay response_body.
+   Exige wiring: comparar fingerprint; não reexecutar Core.
+
+C) Tenant A + key X + fingerprint F2 → conflito
+   PASS (desenho): row existe; fingerprint ≠ → API DUPLICATE_REQUEST.
+   DB sozinho NÃO rejeita F2 (não há constraint fingerprint); correto —
+   a rejeição é de aplicação sobre a row existente.
+
+D) Tenant B + key X + fingerprint F1 → independente
+   PASS: UNIQUE inclui tenant; A e B isolados.
+
+E) Duas concorrentes Tenant A + key X
+   PASS (DB): UNIQUE garante no máximo 1 row; segundo INSERT falha (unique_violation).
+   Wiring DEVE tratar unique_violation como: re-ler row e aplicar B ou C
+   (não como INTERNAL_ERROR cego).
+
+F) Mesmo key após expires_at → nova operação
+   FAIL / DIVERGÊNCIA
+
+   expires_at = retenção LÓGICA apenas.
+   A UNIQUE (org, condo, key) PERMANECE após expires_at.
+   INSERT de nova row com a mesma key → unique_violation PARA SEMPRE
+   enquanto a row antiga existir.
+
+   Portanto:
+   - expires_at sozinho NÃO cria TTL físico
+   - sem DELETE/UPDATE de reclaim, key NÃO é reutilizável após 48h
+   - cleanup automático NÃO existe (e não deve ser inventado como cron nesta migration)
+
+   Classificação: DIVERGÊNCIA TTL × UNIQUE (bloqueante para APPROVED).
+
+============================================================
+5. CORREÇÃO PROPOSTA PARA F (NÃO IMPLEMENTADA NESTA REVISÃO)
+============================================================
+
+Opção R1 — CONTRATO DE RECLAIM OBRIGATÓRIO (preferida / mínima)
+  Manter UNIQUE (protege E).
+  Formalizar no SQL (COMMENT + docs) + wiring futuro:
+
+  get(key):
+    se row.expires_at <= now() → tratar como MISS (não replay)
+  put/claim(key) quando MISS mas row expirada existe:
+    DELETE WHERE org/condo/key AND expires_at <= now()
+    depois INSERT
+    OU UPDATE in-place da row expirada (novo fingerprint/operation/request_id/status)
+
+  Sem cron: purge lazy no caminho de escrita.
+  Concorrência: DELETE/UPDATE + UNIQUE ainda serializa E.
+
+  Exige REVISÃO do SQL/docs para tornar o contrato explícito
+  (hoje o COMMENT fala em TTL 48h sem explicar reclaim).
+
+Opção R2 — EXCLUSION CONSTRAINT por janela temporal
+  CREATE EXTENSION btree_gist;
+  EXCLUDE USING gist (
+    organization_id WITH =,
+    condominium_id WITH =,
+    idempotency_key WITH =,
+    tstzrange(created_at, expires_at, '[)') WITH &&
+  )
+  Remove UNIQUE simples; permite INSERT após janela sem overlap.
+  Custo: extensão, complexidade, revisão de índices.
+  Só se R1 for rejeitada.
+
+Opção R3 — NÃO permitir reuse após 48h
+  Documentar que Idempotency-Key é single-use lifetime por tenant
+  e que n8n deve gerar UUID novo por operação lógica; expires_at
+  só para purge futuro de storage.
+  Aceitável operacionalmente, mas CONTRADIZ a expectativa de TTL
+  como “limite após o qual a key pode ser reusada”.
+  Se adotada, atualizar docs e remover ambiguidade — ainda é REVISION
+  documental/SQL comments.
+
+Recomendação do reviewer: R1 (UNIQUE + reclaim lazy explícito).
+
+============================================================
+6. STATUS / RACES / INTEGRIDADE DE RESPOSTA
+============================================================
+Estados: in_progress | completed | failed
+Avaliação: SUFICIENTES para a implementação atual — não adicionar mais.
+
+Riscos:
+
+1) Operação presa em in_progress
+   RISCO: MEDIUM
+   Se o processo cair após INSERT in_progress, retry com mesma key+F1
+   pode ver in_progress sem response_body.
+   expires_at=48h é longo demais como lease de execução.
+   Correção (wiring, não novo status):
+     - lease curto derivado de created_at (ex. 60–120s) para reclaim de in_progress
+     - OU usar expires_at só para retenção e lease separado no wiring
+   NÃO exigir novo estado "abandoned".
+
+2) Retry indefinido
+   RISCO: LOW–MEDIUM se wiring não tratar in_progress.
+   Política sugerida: se in_progress e lease válido → 409/503 retry-later;
+   se lease expirado → reclaim.
+
+3) completed sem response
+   RISCO: MEDIUM — DDL permite status='completed' com response_body NULL.
+   Proposta REVISION opcional (CHECK):
+     CHECK (
+       status = 'in_progress'
+       OR (response_body IS NOT NULL AND response_status IS NOT NULL)
+     )
+   e completed_at NOT NULL quando status IN ('completed','failed').
+   Recomendado incluir na revisão SQL antes do APPLY.
+
+4) failed reutilizado incorretamente
+   RISCO: MEDIUM — política não definida no DDL.
+   Wiring deve decidir:
+     failed + mesmo fingerprint → replay erro OU permitir retry (reclaim)
+   Documentar uma política; sugerida: replay do erro cacheado até expires_at
+   (igual completed), salvo reclaim pós-expiry (R1).
+
+5) Race E
+   UNIQUE OK; wiring deve mapear unique_violation → re-get.
+
+============================================================
+7. CAMPOS ESPECÍFICOS
+============================================================
+request_id     PASS — NOT NULL; correlação; sem secret
+fingerprint    PASS — body hash; conflito C é app-level
+response_status PASS — NULL até terminal
+response_body  PASS com cuidado — jsonb pode conter PII do envelope;
+               proibir secrets/HMAC/client secret no wiring;
+               minimizar payload
+created_at     PASS
+completed_at   PASS — NULL em in_progress; CHECK de coerência sugerido (acima)
+expires_at     PASS como campo; FAIL como TTL físico sozinho (ver F)
+
+============================================================
+8. SEGURANÇA
+============================================================
+PASS (DDL)
+
+- Nenhum secret / HMAC / client secret na tabela
+- Sem dependência de frontend
+- Sem grant a n8n; n8n NÃO acessa banco (API only)
+- RLS ausente = INTENCIONAL
+- Fail-closed da API permanece obrigatório até wiring + (futuro) RLS/M5+
+- Acesso esperado: service-role server-side only
+
+============================================================
+9. RLS
+============================================================
+PASS (decisão)
+
+Ausência de RLS confirmada como intencional nesta migration.
+Não criar RLS agora.
+API continua responsável pelo fail-closed
+(IDEMPOTENCY_STORE_UNAVAILABLE quando store indisponível).
+
+============================================================
+10. ROLLBACK
+============================================================
+PASS neste estágio
+
+DROP TABLE public.api_idempotency_keys;
+- sem CASCADE
+- sem IF EXISTS (no comando; comentário documenta a regra)
+- Seguro enquanto nenhuma outra migration/FK referencia a tabela
+- Se houver dependência futura inesperada → DROP falha (desejado)
+
+============================================================
+11. PRÉ-CHECK
+============================================================
+PASS (conteúdo)
+
+READ-ONLY SELECTs.
+Confirma:
+  organizations EXISTS
+  condominiums EXISTS
+  api_idempotency_keys ABSENT
+  PKs presentes (information_schema)
+  m_g6_1_create_safe
+Zero writes / DDL no script.
+NÃO EXECUTADO nesta deep review.
+
+============================================================
+12. M1–M4
+============================================================
+PASS
+
+Arquivos M1–M4 presentes e não modificados por esta review.
+M-G6-1 apenas REFERENCIA organizations/condominiums (FK).
+Nenhuma migration anterior alterada.
+Nenhuma dependência quebrada no desenho.
+
+============================================================
+13. TESTES ESTÁTICOS (sem banco)
+============================================================
+PASS
+
+CREATE TABLE + UNIQUE tenant-scoped + 2× ON DELETE RESTRICT: OK
+Status CHECK 3 valores: OK
+Sem INSERT/UPDATE DML: OK
+Sem CREATE POLICY / RLS: OK
+Sem CREATE TABLE IF NOT EXISTS: OK
+Sem coluna tenant_id: OK
+Rollback DROP sem CASCADE: OK
+Pré-check sem writes: OK
+
+============================================================
+14. ACHADOS — RESUMO
+============================================================
+[D1] BLOCKING — TTL×UNIQUE (cenário F): expires_at não libera key;
+     UNIQUE impede INSERT pós-expiry sem reclaim.
+[D2] SHOULD FIX — CHECK coerência status↔response_body/response_status/completed_at
+[D3] WIRING — política in_progress lease / unique_violation / failed replay
+[D4] RESIDUAL — condo∈org sem FK composta (aceito; não ALTER M1–M4)
+[D5] OK — A–E, rollback, precheck, segurança, RLS decision, M1–M4
+
+============================================================
+15. AÇÕES ANTES DE LIVE PRE-CHECK
+============================================================
+1. Revisar SQL/docs adotando R1 (ou R2/R3 explícito) para cenário F
+2. Preferir adicionar CHECKs de coerência (D2)
+3. Atualizar SENTINELA-AUT-G6-IDEMPOTENCY.md com contrato de reclaim
+4. Nova evidência SQL-REVISION / re-deep-review
+5. Só então: APPROVED FOR LIVE PRE-CHECK → executar pre-check LIVE
+6. APPLY permanece bloqueado até autorização separada
+
+NÃO executar LIVE PRE-CHECK nesta etapa.
+NÃO aplicar migration.
+NÃO alterar banco nesta review (somente evidência).
+
+============================================================
+RESULTADO FINAL
+============================================================
+CLASSIFICAÇÃO OBRIGATÓRIA:
+
+  NEEDS REVISION
+
+Motivo: divergência TTL × UNIQUE (cenário F) + CHECKs de coerência
+recomendados antes de autorizar LIVE PRE-CHECK.
+
+G6-1 NÃO está APPROVED FOR LIVE PRE-CHECK.
+G6-1 NÃO está BLOCKED por M1–M4 / rollback / precheck / segurança estrutural.
+
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+N8N = 0
+WHATSAPP = 0
+M1–M4 = INTACTOS

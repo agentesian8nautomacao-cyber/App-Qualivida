@@ -1,0 +1,301 @@
+# M1 SQL — Deep Technical Review (arquivo real)
+
+Data/hora UTC: 2026-08-13T18:00:00Z
+Modo: SOMENTE LEITURA / ANÁLISE
+SQL / pré-check / rollback / APPLY: NÃO EXECUTADOS
+
+Arquivos revisados:
+  - supabase/migrations/20260813150000_001_platform_org_condo.sql
+  - supabase/migrations/20260813150000_001_platform_org_condo.rollback.sql
+  - docs/evidence/M1-PRECHECK-LIVE.sql
+  - docs/evidence/results/M1-SQL-CREATION-REVIEW-2026-08-13.txt
+  - docs/FASE-1-MIGRATION-PLAN.md § M1
+  - docs/FASE-1-ARQUITETURA-MULTITENANT.md §§ 2–3, Storage paths
+  - docs/OPERAUT-ARCHITECTURE-ADDENDUM.md § M1
+
+---
+
+## 1. SQL reviewed
+
+Arquivo: 20260813150000_001_platform_org_condo.sql
+Status artefato: PREPARED / NOT EXECUTED
+Conteúdo auditado integralmente (linhas 1–131).
+
+Resumo estrutural:
+  BEGIN → guard to_regclass → CREATE organizations → index status
+  → CREATE condominiums (+ FK/UNIQUE/CHECK) → indexes → COMMENTs → COMMIT
+
+Escopo DDL: somente public.organizations e public.condominiums.
+
+---
+
+## 2. Rollback reviewed
+
+Arquivo: …001_platform_org_condo.rollback.sql
+Ordem: DROP condominiums → DROP organizations
+CASCADE: ausente
+Objetos externos: nenhum
+DML: nenhum
+
+ROLLBACK = SAFE
+(condição operacional do plano: só se M4 não criou FKs dependentes;
+ sem CASCADE o DROP falha se FKs externas existirem — comportamento desejável)
+
+---
+
+## 3. Pre-check reviewed
+
+Arquivo: docs/evidence/M1-PRECHECK-LIVE.sql
+Detecta:
+  - organizations EXISTS/ABSENT via to_regclass
+  - condominiums EXISTS/ABSENT via to_regclass
+  - flag agregada m1_create_safe
+
+Não detecta (fora do mínimo necessário para M1 CREATE):
+  - colisões de slug (tabelas ainda não existem)
+  - objects em outros schemas com mesmo nome
+  - policies/RLS órfãs
+
+PRECHECK = ADEQUADO
+(para o critério “já existe → STOP”)
+
+---
+
+## 4. organizations review
+
+| Item | Valor no SQL | Classificação |
+|------|--------------|---------------|
+| id | uuid | REQUISITO (arquitetura: id) |
+| geração | DEFAULT gen_random_uuid() | DECISÃO (padrão repo/RBAC; spec não fixa gerador) |
+| name | text NOT NULL | REQUISITO (arquitetura §2: name) |
+| slug | text NOT NULL | REQUISITO (arquitetura §2: slug) |
+| status | text NOT NULL DEFAULT 'active' | REQUISITO coluna (arquitetura §2: status); DEFAULT = DECISÃO |
+| created_at | timestamptz NOT NULL DEFAULT now() | REQUISITO timestamps; DEFAULT = DECISÃO |
+| updated_at | timestamptz NOT NULL DEFAULT now() | REQUISITO timestamps; DEFAULT = DECISÃO; sem trigger = DECISÃO |
+| PK | PRIMARY KEY (id) | REQUISITO implícito |
+| UNIQUE | UNIQUE (slug) | DECISÃO de escopo (global); spec diz “UNIQUE slug” sem detalhar |
+| CHECK | nenhum em status | DECISÃO (spec sem enum org) |
+| índices | idx_organizations_status (status) | DECISÃO (busca futura) |
+| NULL | id/name/slug/status/created_at/updated_at todos NOT NULL | alinhado a campos obrigatórios |
+
+---
+
+## 5. condominiums review
+
+| Item | Valor no SQL | Classificação |
+|------|--------------|---------------|
+| id | uuid PK DEFAULT gen_random_uuid() | REQUISITO implícito + DECISÃO gerador |
+| organization_id | uuid NOT NULL FK → organizations(id) | REQUISITO M1 (critério sucesso FK) |
+| name | text NOT NULL | DECISÃO DE IMPLEMENTAÇÃO (não literal no addendum) |
+| vertical | text NOT NULL DEFAULT 'condominium' + CHECK (=) | REQUISITO Operaut/M1 |
+| slug | text NOT NULL UNIQUE global | REQUISITO coluna; escopo UNIQUE = DECISÃO |
+| status | text NOT NULL DEFAULT 'active' | REQUISITO coluna; DEFAULT = DECISÃO |
+| created_at/updated_at | timestamptz NOT NULL DEFAULT now() | REQUISITO timestamps |
+| ON DELETE | RESTRICT | DECISÃO (spec não fixa) |
+| UNIQUE | condominiums_slug_key (slug) | DECISÃO de escopo |
+| CHECK | vertical = 'condominium' | REQUISITO |
+| índices | organization_id, status, vertical | DECISÃO |
+| COMMENT tabela | “Operational Site — vertical condominium” | REQUISITO |
+
+---
+
+## 6. slug decision
+
+Estado atual:
+  organizations.slug UNIQUE global
+  condominiums.slug UNIQUE global
+
+Perguntas:
+
+1) organization.slug global?
+   Recomendação: SIM.
+   Motivo: Organization é entidade de plataforma B2B; slug tipicamente
+   namespace global (admin URLs, billing, paths). Multi-tenant org-vs-org
+   compete no mesmo nível PLATFORM.
+
+2) condominium.slug global?
+   Recomendação: NÃO (revisar).
+
+3) condominium.slug único dentro da organization?
+   Recomendação: SIM → UNIQUE (organization_id, slug)
+
+Cenário:
+  Org A: residencial-xyz
+  Org B: residencial-xyz
+  Com UNIQUE(slug) global → PROIBIDO
+  Com UNIQUE(organization_id, slug) → PERMITIDO
+
+Comparação arquitetura:
+  - Hierarquia org 1→N sites; isolamento por organization_id + site id.
+  - Storage paths usam UUIDs: organizations/{org_id}/condominiums/{condo_id}/…
+    (não dependem de slug global).
+  - Padrão análogo M2: UNIQUE (condominium_id, code) — unicidade scoped.
+  - Plano M1 teste “UNIQUE slug” é AMBÍGUO (não define escopo).
+
+Severidade: ALTA (design multi-tenant; difícil mudar após M4 seed sem migração).
+
+Recomendação técnica:
+  Trocar condominiums_slug_key por UNIQUE (organization_id, slug)
+  antes do APPLY. Manter organizations.slug UNIQUE global.
+  Atualizar COMMENT da coluna slug do site.
+
+---
+
+## 7. name decision
+
+Addendum M1 lista: vertical, slug, status, timestamps (+ FK no plano).
+Arquitetura §2 lista name para organizations; §3 Condominium NÃO lista campos.
+Plano seed/piloto (arquitetura): Condominium = “Qualivida Club Residence”
+  (nome humano, não slug).
+
+Avaliação:
+  - name NÃO é requisito literal do addendum.
+  - name É implicitamente necessário para identificação humana / M4.
+  - Foi DECISÃO DE IMPLEMENTAÇÃO (documentada no SQL e no creation review).
+  - NÃO foi inventado sem registro; está explícito no header do CREATE.
+
+Recomendação: PERMANECER (name text NOT NULL).
+Severidade se remover: MÉDIA (prejudica M4/UX; não quebra isolamento).
+Severidade se manter: BAIXA / documental.
+
+---
+
+## 8. status decision
+
+Arquitetura:
+  - org/condo: coluna status citada; SEM enum de valores.
+  - tenant_memberships: active / invited / suspended (outra entidade).
+
+SQL atual: text NOT NULL DEFAULT 'active'; sem CHECK.
+
+Avaliação:
+  - Não há enum org/site definido na arquitetura → ausência de CHECK
+    é coerente com “não inventar”.
+  - Risco: valores livres ('foo') no banco; app precisa validar.
+  - Para M1 (tabelas vazias, sem app): risco BAIXO operacionalmente.
+
+Recomendação M1:
+  MANTER text sem CHECK (intencional / deferido).
+  Documentar no plano valores previstos sugeridos: active | inactive | suspended
+  (sem CONSTRAINT até decisão explícita).
+  Alternativa (se produto quiser trava já): CHECK status IN (...) — seria
+  nova DECISÃO, não requisito atual.
+
+---
+
+## 9. FK decision
+
+ON DELETE RESTRICT em organization_id:
+
+Prós:
+  - Impede exclusão acidental de org com sites.
+  - Compatível com M4 (sites passam a ter valor).
+  - Rollback M1 puro: DROP tables; RESTRICT não atrapalha (drop filho primeiro).
+
+Contras / futuro:
+  - Lifecycle “arquivar org” exigirá soft-delete/status, não DELETE físico.
+  - CASCADE seria perigoso demais para M1.
+
+Recomendação: MANTER ON DELETE RESTRICT.
+Classificação: DECISÃO adequada.
+
+---
+
+## 10. indexes decision
+
+| Nome | Colunas | Motivo | Redundante? | FK? | Futuro? | Rec. |
+|------|---------|--------|-------------|-----|---------|------|
+| organizations_slug_key | slug | UNIQUE | — (é a constraint) | n/a | lookup | MANTER |
+| idx_organizations_status | status | filtro | não | não | sim | MANTER (baixo custo) |
+| condominiums_slug_key | slug | UNIQUE global | — | n/a | — | REVISAR → (org_id, slug) |
+| idx_condominiums_organization_id | organization_id | join/FK | não | sim (boa prática PG) | sim | MANTER |
+| idx_condominiums_status | status | filtro | não | não | sim | MANTER |
+| idx_condominiums_vertical | vertical | filtro | quase: M1 todas as rows = 'condominium' | não | baixo até multi-vertical | OPCIONAL REMOVER |
+
+Nenhum índice btree separado duplica UNIQUE além da própria constraint UNIQUE
+(correto: não há CREATE INDEX redundante em slug).
+
+---
+
+## 11. rollback decision
+
+ROLLBACK = SAFE / PASS
+
+---
+
+## 12. divergências
+
+| # | Divergência | Severidade |
+|---|-------------|------------|
+| D1 | condominiums.slug UNIQUE global vs unicidade scoped por org (multi-tenant) | ALTA |
+| D2 | condominiums.name presente sem lista literal no addendum | MÉDIA (documental + decisão) |
+| D3 | status sem CHECK/enum (spec também sem enum) | BAIXA / intencional |
+| D4 | ON DELETE RESTRICT não citado no plano | BAIXA (decisão saudável) |
+| D5 | idx_condominiums_vertical baixo valor em M1 | BAIXA |
+| D6 | updated_at sem trigger de sync | BAIXA / intencional |
+| D7 | Plano teste “UNIQUE slug” ambíguo | APENAS DOCUMENTAL (esclarecer após D1) |
+
+Escopo M1 (confirmação SQL real):
+  ALTERA TABELAS EXISTENTES = NÃO
+  DML = NÃO
+  BACKFILL = NÃO
+  SEED = NÃO
+  RLS = NÃO
+  POLICIES = NÃO
+  STORAGE = NÃO
+  FUNCTIONS = NÃO
+  TRIGGERS = NÃO
+→ escopo limpo; NÃO força NEEDS REVISION por vazamento de escopo.
+
+---
+
+## 13. riscos
+
+| Nível | Risco | Notas |
+|-------|-------|-------|
+| ALTO | UNIQUE slug global em sites bloqueia multi-org com mesmo slug comercial | Corrigir antes do APPLY / M4 |
+| MÉDIO | APPLY sem pré-check live | Guard DO $$ mitiga; pré-check ainda obrigatório |
+| BAIXO | status text livre | Validar no app; CHECK opcional depois |
+| BAIXO | name contestado | Manter recomendado |
+| BAIXO | Índice vertical inútil no piloto | Cosmético |
+
+CRÍTICO sem mitigação: nenhum de perda de dados (CREATE vazio).
+ALTO de design: D1 slug.
+
+---
+
+## 14. mudanças recomendadas (antes de APPROVE)
+
+OBRIGATÓRIA para aprovação técnica:
+  1. Alterar UNIQUE de condominiums.slug para UNIQUE (organization_id, slug)
+  2. Atualizar COMMENT de condominiums.slug (não mais “único global”)
+  3. Atualizar teste/docs do plano: “UNIQUE (organization_id, slug)”
+
+OPCIONAIS:
+  4. Remover idx_condominiums_vertical
+  5. Registrar na doc valores sugeridos de status (sem CHECK)
+  6. Confirmar formalmente condominiums.name (recomendação: manter)
+
+NÃO recomendado agora:
+  - Adicionar RLS/policies
+  - Seed
+  - CHECK status inventado sem aceite de produto
+  - CASCADE no FK
+
+---
+
+## Resultado final
+
+M1 SQL = NEEDS REVISION
+
+Motivo principal: unicidade global de condominiums.slug conflita com
+objetivo multi-tenant (mesmos slugs de site em organizations distintas
+devem ser permitidos). Demais pontos são decisões aceitáveis ou opcionais.
+
+Mesmo após revisão futura:
+  NÃO APPLY sem autorização explícita separada.
+  Pré-check live ainda obrigatório.
+
+NENHUMA alteração de banco foi executada.
+M1 APPLY permaneceu BLOCKED.
+================================================================================

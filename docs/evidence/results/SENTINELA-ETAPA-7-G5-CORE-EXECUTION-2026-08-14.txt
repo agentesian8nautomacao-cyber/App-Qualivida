@@ -1,0 +1,187 @@
+SENTINELA AUT — ETAPA 7 / G5 — OPERATIONAL CORE EXECUTION
+Data: 2026-08-14
+Status: CLOSED / PASS
+
+Critério PASS respeitado:
+  - API NÃO duplica regra de negócio; chama Operational Core
+  - Cadeia: HMAC → tenant → AuthZ → classification → confirmation(SENSITIVE) → Core
+  - READ liberadas e testadas (identify_resident, identify_unit, get_boleto)
+  - WRITE liberadas em teste com Idempotency store MEMORY TEST_ONLY
+  - WRITE em produção default = IDEMPOTENCY_STORE_UNAVAILABLE (não finge persistência)
+  - SENSITIVE (pickup_package, cancel_reservation) bloqueadas; core_executed=false
+  - Sem migration; sem Event Store; sem n8n; sem WhatsApp
+  - Sem bypass SINDICO/PORTEIRO; sem fallback global
+  - Envelope ok/success + request_id; sem stack/secrets
+
+Pré-requisitos: G1/G2/G3/G4 CLOSED/PASS
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+M1–M4 = INTACTOS
+PUBLIC BUSINESS MUTATION (prod default) = 0 (writes blocked sem idempotency store)
+SENSITIVE CORE EXECUTION = 0
+
+============================================================
+OPERAÇÕES
+============================================================
+READ LIBERADAS (via Core):
+  - identify_resident
+  - identify_unit
+  - get_boleto
+
+WRITE LIBERADAS (via Core) quando Idempotency store injetado (TEST_ONLY memory):
+  - create_package
+  - create_occurrence
+  - update_occurrence
+  - create_reservation
+
+WRITE PROD DEFAULT:
+  - Idempotency-Key ausente → IDEMPOTENCY_KEY_REQUIRED (core_executed=false)
+  - Store persistente ausente → IDEMPOTENCY_STORE_UNAVAILABLE (core_executed=false)
+  - gates.writes_enabled = false
+
+SENSITIVE BLOQUEADAS:
+  - pickup_package
+  - cancel_reservation
+  - Sem confirmation → CONFIRMATION_REQUIRED
+  - Store confirmation unavailable → CONFIRMATION_STORE_UNAVAILABLE
+  - Após confirmation (memory TEST_ONLY) → ainda bloqueado; core_executed=false
+  - Persistent confirmation store = FUTURE MIGRATION
+
+NÃO LIBERADAS NESTA FASE:
+  - pickup_package (SENSITIVE)
+  - cancel_reservation (SENSITIVE)
+  - notify_resident (DECISION REQUIRED / AuthZ G3)
+
+============================================================
+LIMITAÇÕES REGISTRADAS
+============================================================
+1. IDEMPOTENCY
+   - Store persistente = FUTURE MIGRATION / DECISION REQUIRED
+   - Memory = TEST_ONLY (não produção)
+   - Não há fingimento de idempotência persistente
+
+2. CONFIRMATION
+   - Store persistente = FUTURE MIGRATION
+   - SENSITIVE permanece bloqueada até store persistente
+
+3. CORE PERSISTENCE ADAPTER (API runtime)
+   - Testes injetam memoryPersistence (TEST_ONLY)
+   - Adapter server Supabase service-role wiring = FUTURE (não inventado nesta etapa)
+   - get_boleto / WRITE exigem persistence; sem adapter → erro controlado (não bypass)
+
+4. EVENTOS
+   - Eventos do Core em memória = observabilidade local/testes
+   - NÃO são auditoria persistente
+   - Event Store = NÃO CRIADO
+
+5. RESERVAS
+   - create_reservation reutiliza Core; conflito = client-supplied list
+   - Warning: RESERVATION_CONFLICT_CLIENT_ONLY
+   - Sem exclusão DB nesta etapa (limitação conhecida)
+
+6. BOLETOS
+   - get_boleto via Core; Storage/PDF não alterados
+
+============================================================
+ARQUITETURA ENTREGUE
+============================================================
+api/v1/_lib/execution/payload.ts          — validação central (strip tenant override)
+api/v1/_lib/execution/executeCore.ts      — dispatch → Core ops
+api/v1/_lib/execution/memoryPersistence.ts — TEST_ONLY
+api/v1/_lib/idempotency/store.ts          — unavailable (prod) + memory TEST_ONLY
+api/v1/_lib/withCoreExecution.ts          — handler bridge AuthZ → Core
+api/v1/_lib/gates.ts                      — g5_core_execution=true; writes_enabled=false
+Handlers READ/WRITE atualizados para withCoreExecution
+Handlers SENSITIVE: confirmation gate + block (CONFIRMATION_STORE_UNAVAILABLE)
+Envelope: ok + success + request_id + operation + data|error
+
+============================================================
+TESTES
+============================================================
+npm run test:run → 108 passed (8 files)
+  - G5 suite: api/v1/_lib/execution/g5.core-execution.test.ts (21)
+  - G1/G2/G3/G4 suites atualizadas para novo comportamento WRITE/SENSITIVE
+  - Core UI path: sentinela/core/core.test.ts (14) continua PASS
+
+Cobertura obrigatória G5 (mapa):
+  1-5 READ/HMAC/AuthZ/tenant   PASS
+  6-9 WRITE (memory idemp.)    PASS
+  10-12 TENANT isolation       PASS
+  13-16 SENSITIVE blocked      PASS
+  17-18 Idempotency rules      PASS
+  19-20 Core wiring            PASS
+  22-26 Security envelope      PASS
+  21 Core UI continua OK       PASS (core.test.ts)
+
+npm run build → PASS (vite build)
+
+============================================================
+STATIC VALIDATION
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS = 0 (nenhuma migration nova nesta etapa)
+M1–M4 files intactos (não modificados nesta etapa)
+n8n = NÃO IMPLEMENTADO
+WhatsApp = NÃO IMPLEMENTADO
+FRONTEND secrets = não expostos no envelope API
+Endpoint não acessa DB direto — só via Core + adapter injetado
+
+============================================================
+ARQUIVOS PRINCIPAIS ALTERADOS/CRIADOS (G5)
+============================================================
+api/v1/_lib/execution/*
+api/v1/_lib/idempotency/store.ts
+api/v1/_lib/withCoreExecution.ts
+api/v1/_lib/gates.ts
+api/v1/_lib/response.ts (ok field)
+api/v1/_lib/errors.ts (idempotency codes)
+api/v1/residents/identify.ts
+api/v1/units/identify.ts
+api/v1/boletos.ts
+api/v1/operations/packages/index.ts
+api/v1/operations/occurrences.ts
+api/v1/operations/occurrences/update.ts
+api/v1/operations/reservations/index.ts
+api/v1/operations/packages/pickup.ts
+api/v1/operations/reservations/cancel.ts
+api/v1/health.ts
+api/v1/_lib/auth/testFixtures.ts
+api/v1/_lib/auth/g2.auth.test.ts
+api/v1/_lib/authz/g3.authz.test.ts
+api/v1/_lib/confirmations/g4.confirmation.test.ts
+api/v1/_lib/foundation.test.ts
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+docs/evidence/results/SENTINELA-ETAPA-7-G5-CORE-EXECUTION-2026-08-14.txt
+
+============================================================
+RISCOS
+============================================================
+- Produção WRITE permanece bloqueada até Idempotency Store persistente
+- Produção SENSITIVE permanece bloqueada até Confirmation Store persistente
+- Adapter de persistência server-side ainda precisa wiring explícito (sem Dexie no serverless)
+- Conflict detection de reservas ainda client-side (documentado)
+
+============================================================
+DECISÕES PENDENTES / FUTURE MIGRATION
+============================================================
+1. Persistent Idempotency Store (Postgres) — obrigatório para WRITE prod
+2. Persistent Confirmation Store — obrigatório para SENSITIVE
+3. Server CorePersistence adapter (Supabase service role / scoped) — wiring prod
+4. Residents catalog provider server-side para identify_resident em prod
+5. Event Store persistente (auditoria) — fora de G5
+6. notify_resident permission mapping (G3 DECISION REQUIRED)
+7. n8n / WhatsApp — G6+ (NÃO iniciar)
+
+============================================================
+RESULTADO
+============================================================
+G5 = CLOSED / PASS
+
+Próximo gate sugerido: stores persistentes (idempotency/confirmation) e/ou adapter server
+NÃO avançar n8n/WhatsApp automaticamente.

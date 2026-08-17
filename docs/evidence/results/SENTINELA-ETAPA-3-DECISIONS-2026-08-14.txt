@@ -1,0 +1,660 @@
+SENTINELA AUT — ETAPA 3 — DECISION REVIEW
+Data: 2026-08-14
+Tipo: fechamento arquitetural (ZERO código / ZERO migration / ZERO commit)
+
+Documentos revisados:
+  docs/SENTINELA-AUT-API-ARCHITECTURE.md
+  docs/SENTINELA-AUT-TRANSFORMACAO.md
+  docs/SENTINELA-AUT-OPERATIONS.md
+
+Escopo autorizado: SOMENTE revisão e fechamento de decisões.
+Não implementado: API, n8n, WhatsApp, migration, RLS, RBAC, auth, login morador.
+
+============================================================
+PRINCÍPIO OFICIAL (CONFIRMADO)
+============================================================
+
+WhatsApp / n8n NÃO acessam o banco diretamente.
+
+Fluxo oficial:
+  WhatsApp
+    → n8n                          (orquestração)
+    → Sentinela API                (fronteira)
+    → Authn/Authz + Tenant + Idempotência
+    → Operational Core             (regras)
+    → Adapters
+    → Database
+
+Painel:
+  Porteiro/Síndico → Painel → Operational Core → Adapters → Database
+  (API opcional depois; não obrigatória para Etapa 3b)
+
+============================================================
+COMPATIBILIDADE PRESERVADA
+============================================================
+M1 CLOSED/PASS — intocado
+M2 CLOSED/PASS — intocado
+M3 CLOSED/PASS — intocado
+M4 APPLY PASS — intocado (IDs piloto apenas referência)
+Etapa 1 Operational Core — preservado
+Etapa 2 Central da Portaria — preservado
+DATABASE CHANGES (esta review) = 0
+MIGRATIONS EXECUTED = 0
+
+============================================================
+DR1 — LOCAL DA API (HOST)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Vercel Serverless sob /api/v1/... (pasta api/ existente).
+  Não usar Supabase Edge Functions como host principal.
+  Não criar servidor novo nesta fase.
+  Não colocar regra de negócio no n8n.
+
+RATIONALE:
+  Já existe padrão Node fetch handlers, service role no Vercel,
+  rewrite SPA que exclui /api/*, proxy de dev. Menor risco operacional.
+
+IMPACT:
+  Implementação futura reutiliza deploy atual; cold start aceitável
+  para piloto WhatsApp.
+
+RISK: LOW
+
+============================================================
+DR2 — ADAPTER DE PERSISTÊNCIA SERVER-SIDE
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  API usa adapter server dedicado (service role / client privilegiado)
+  chamando as mesmas operações de domínio via Core.
+  PROIBIDO reutilizar Dexie / outbox / navigator.onLine na API.
+  Painel mantém offline atual sem segunda camada.
+
+RATIONALE:
+  dataService atual é browser-oriented; serverless multi-instância
+  não pode depender de IndexedDB.
+
+IMPACT:
+  Código novo de adapter na implementação (sem DDL).
+  Offline do painel permanece isolado.
+
+RISK: MEDIUM (dívida se alguém importar dataService “cru” no server)
+
+============================================================
+DR3 — IDEMPOTÊNCIA
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  1) Header Idempotency-Key OBRIGATÓRIO em POST/PATCH mutáveis.
+  2) n8n gera key estável por intenção (preferir hash de wa_message_id
+     + operation + condominium_id).
+  3) Fingerprint = SHA-256(canonical: method + path + body_sha256 +
+     organization_id + condominium_id + operation).
+  4) Replay (mesma key + mesmo fingerprint): HTTP 200 + mesmo corpo
+     de sucesso previamente persistido (não reexecuta Core).
+  5) Mesma key + fingerprint diferente: HTTP 409 DUPLICATE_REQUEST.
+  6) GET identify / boletos: Idempotency-Key opcional (não exigida).
+  7) Janela de retenção recomendada: 72 horas (piloto); depois purge.
+  8) Store DEFINITIVO: PostgreSQL (tabela dedicada no tenant/schema app).
+
+  DATABASE CHANGE REQUIRED — FUTURE MIGRATION
+  (ex.: api_idempotency_keys — NÃO criar agora)
+
+  Gate de implementação:
+  - Mutações via API em produção só após migration do store.
+  - Memória de processo / single-instance = INADEQUADO (rejeitado).
+  - Redis/KV = alternativa transitória apenas se migration atrasar;
+    destino oficial permanece Postgres.
+
+RATIONALE:
+  WhatsApp/n8n reenviam; create_package não é idempotente por natureza.
+  Serverless exige store compartilhado. Postgres já é fonte da verdade.
+
+IMPACT:
+  Bloqueia writes públicos até migration futura.
+  Design e scaffolding de rotas podem ser preparados depois, com
+  writes desabilitados até o store existir.
+
+RISK: CRITICAL se ignorado; LOW se gate respeitado
+
+============================================================
+DR4 — AUTENTICAÇÃO (n8n ↔ API)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Modelo: Integration Credential (NÃO “Bearer SECRET” isolado)
+
+  Headers obrigatórios:
+    X-Sentinela-Client-Id
+    X-Sentinela-Timestamp          (unix seconds)
+    X-Sentinela-Signature         (hex HMAC-SHA256)
+    X-Organization-Id
+    X-Condominium-Id
+    Idempotency-Key               (mutações)
+    X-Correlation-Id              (recomendado)
+    Content-Type: application/json
+
+  Canonical string (exemplo fechado):
+    v1\\n
+    {timestamp}\\n
+    {METHOD}\\n
+    {path_with_query}\\n
+    {sha256_hex(body_or_empty)}\\n
+    {organization_id}\\n
+    {condominium_id}\\n
+    {idempotency_key_or_empty}
+
+  Signature = HMAC-SHA256(secret, canonical)
+
+  Anti-replay:
+    |now - timestamp| <= 300s
+    + Idempotency-Key para mutações
+    (nonce dedicado opcional; key cobre mutações)
+
+  Rotação:
+    Dois secrets ativos (current + previous) por client_id,
+    overlap mínimo 24h; previous revogável.
+
+  REJEITADO:
+    Authorization: Bearer <secret_unico> como único fator
+    Service role Supabase dentro do n8n
+    Segredos no frontend Vite
+
+RATIONALE:
+  Simples o bastante para n8n (HMAC em Function node / crypto),
+  amarra tenant + body + método, mitiga replay e vazamento parcial.
+
+IMPACT:
+  Secrets só em Vercel env + credential store do n8n.
+
+RISK: MEDIUM (implementação incorreta do canonical) — mitigar com testes de contrato
+
+============================================================
+DR5 — TENANT BOUNDARY (FAIL-CLOSED)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  API:
+    - organization_id + condominium_id obrigatórios em toda operação.
+    - Validar existência e vínculo condo∈org.
+    - Validar que credential está scoped EXATAMENTE a esse par.
+    - Nunca confiar em tenant “sugerido” pelo texto WhatsApp sem
+      cruzar com o escopo da credential.
+    - Passar ao Core SEMPRE com OperationContext preenchido.
+    - Sem fallback silencioso / sem withPilotTenantDefaults na API.
+    - Erros: TENANT_REQUIRED | TENANT_NOT_FOUND | TENANT_MISMATCH → 400/403
+
+  Core (dual-mode fechado):
+    - Caller API / channel whatsapp|n8n|system_integration:
+      enforceTenant = true → ausência = falha (não warning).
+    - Caller painel legado: mantém warning TENANT_CONTEXT_ABSENT
+      até App enviar IDs M4 (melhoria de wire — sem migration).
+    - PROIBIDO default silencioso para “tenant global”.
+
+  IDs piloto M4 = referência de config/runbook, NÃO hardcode de bypass.
+
+RATIONALE:
+  Canal externo sem tenant = vazamento cross-condo (CRITICAL).
+  Painel single-tenant legado não pode quebrar de uma vez.
+
+IMPACT:
+  Pequena evolução de enforce no Core na implementação da API
+  (sem DDL). Wire do App com IDs piloto recomendado em paralelo.
+
+RISK: HIGH se API implementar sem enforce; LOW se gate seguido
+
+============================================================
+DR6 — AUTORIZAÇÃO (RBAC + INTEGRAÇÃO)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Reutilizar catálogo existente permissions.key.
+  NÃO criar segundo sistema de permissões.
+  NÃO alterar matriz RBAC/RLS nesta etapa.
+
+  Enquanto tenant_memberships = 0:
+    Integration Profile (por client_id) bound a:
+      organization_id + condominium_id + permission_keys[]
+    Fonte v1 (piloto): configuração server-side (env/secret JSON)
+      — SEM migration, SEM admin global.
+    Fonte v2 (futuro multi-condo): tabela de credentials
+      DATABASE CHANGE REQUIRED — FUTURE MIGRATION (opcional depois)
+
+  Grants mínimos sugeridos por operação (keys existentes / aliases):
+
+    identify_resident / identify_unit
+      → residents.view (leitura identificação)
+
+    create_package
+      → packages.create
+
+    pickup_package
+      → packages.update
+
+    create_occurrence
+      → occurrences.create
+
+    update_occurrence
+      → occurrences.update
+
+    create_reservation
+      → reservations.create
+
+    cancel_reservation
+      → reservations.delete (alinhado ao Core atual = delete)
+
+    get_boleto
+      → boletos.view  (somente consulta no canal WA inicialmente)
+
+    notify_resident
+      → (usar permission de notices/notifications se existir;
+         senão gate explícito no profile: notify_resident permitido
+         SEM mapear a “admin total”)
+
+  Princípio:
+    n8n NÃO recebe acesso administrativo global.
+    Credential de um condomínio NÃO opera outro.
+    Falta de permission → FORBIDDEN (403).
+
+RATIONALE:
+  memberships vazios não podem bloquear o design; profile scoped
+  reutiliza keys sem novo RBAC. Tabela de clients fica para escala.
+
+IMPACT:
+  Authz na fronteira API consulta profile + keys.
+  Bypass SINDICO do frontend NÃO se aplica à API de integração.
+
+RISK: MEDIUM (env JSON mal rotacionado) — documentar runbook
+
+============================================================
+DR7 — IDENTIDADE DO MORADOR
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Telefone normalizado = identificador de ENTRADA do canal WhatsApp.
+  Nunca autorização suficiente sozinho para operações SENSITIVE.
+
+  Resolução oficial (escopo do condominium da credential):
+    telefone_normalizado
+      → resident(s) no condomínio
+      → unit
+      → condominium_id (deve == credential)
+      → organization_id (deve == credential)
+
+  Regras:
+    0 match → RESIDENT_NOT_FOUND (não executar write)
+    1 match inequívoco → OK para fluxo automático elegível
+    >1 match OU name_only fraco → AMBIGUOUS_RESIDENT /
+       NEEDS_CONFIRMATION — NÃO executar write sensível
+    identify_resident.ambiguous=true do Core → API traduz para
+       NEEDS_CONFIRMATION (não “success com chute”)
+
+  Confirmação humana (WA): n8n solicita clarificação; nova chamada
+  API só após resident_id explícito confirmado.
+
+RATIONALE:
+  Core já retorna ambiguous; telefone compartilhado / cadastro sujo
+  é risco real de entrega errada.
+
+IMPACT:
+  n8n precisa ramo de clarificação; Core identify permanece fonte.
+
+RISK: HIGH se ignorar ambiguidade; LOW se NEEDS_CONFIRMATION enforced
+
+============================================================
+DR8 — CLASSIFICAÇÃO DAS OPERAÇÕES
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  API = adapter HTTP sobre operações EXISTENTES do Core.
+  Nenhuma operação duplicada.
+
+  Operação              | Classe     | Idempotency | Notas
+  ----------------------|------------|-------------|------
+  identify_resident     | READ       | opcional    | puro
+  identify_unit         | READ       | opcional    | puro
+  get_boleto            | READ       | opcional    | SENSITIVE-read (PII/financeiro)
+  create_package        | WRITE      | obrigatória | automático se ID inequívoco
+  pickup_package        | WRITE+SENS | obrigatória | confirmação se ambiguidade/risco
+  create_occurrence     | WRITE      | obrigatória |
+  update_occurrence     | WRITE      | obrigatória |
+  create_reservation    | WRITE      | obrigatória | conflito = CONFLICT
+  cancel_reservation    | WRITE+SENS | obrigatória | confirmação recomendada
+  notify_resident       | WRITE      | obrigatória | inbox only; sem send WA no Core
+
+  SENSITIVE = impacto irreversível / entrega / cancelamento / dado financeiro.
+
+RATIONALE:
+  Classificação guia rate limit, confirmação e auditoria sem novo domínio.
+
+IMPACT:
+  Contratos OpenAPI futuros rotulam classe.
+
+RISK: LOW
+
+============================================================
+DR9 — CONFIRMAÇÃO HUMANA (CANAL WHATSAPP)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Automático (sem confirmação extra) quando:
+    - identify inequívoco E
+    - operação READ, OU
+    - create_package / create_occurrence / create_reservation
+      com dados estruturais completos e sem ambiguidade
+
+  Confirmação obrigatória quando:
+    - AMBIGUOUS_RESIDENT / NEEDS_CONFIRMATION
+    - pickup_package se match não for por resident_id confirmado
+      ou package_id explícito do fluxo anterior inequívoco
+    - cancel_reservation (sempre no canal WA nesta fase)
+    - qualquer write se CLARIFICATION_REQUIRED do Core
+
+  Financeiro:
+    - get_boleto = somente CONSULTA no WhatsApp inicialmente
+    - sem pagamento / baixa / alteração de boleto via API nesta fase
+
+  Painel humano:
+    - confirmação visual já existente na UI; regras WA não substituem UI
+
+RATIONALE:
+  Retirada/cancelamento errados são alto impacto; consulta pode fluir.
+
+IMPACT:
+  Workflows n8n terão steps de confirm; Core não implementa UI WA.
+
+RISK: MEDIUM
+
+============================================================
+DR10 — AUDITORIA (CONTRATO, SEM EVENT STORE)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Toda request API registra (log estruturado / futuro sink):
+    actor (client_id + optional wa_from)
+    source (whatsapp | n8n | panel | system)
+    integration_id (= client_id)
+    organization_id, condominium_id
+    operation
+    request_id
+    correlation_id
+    idempotency_key (se houver)
+    timestamp
+    result (success | error_code)
+    latency_ms
+
+  NÃO criar Event Store / tabela de auditoria nesta etapa.
+  Eventos de domínio do Core (package.created, …) permanecem
+  em memória no painel; API pode ecoá-los na resposta JSON.
+
+  DATABASE CHANGE REQUIRED — FUTURE MIGRATION
+  apenas se/quando auditoria persistente for exigida (pós piloto).
+
+RATIONALE:
+  Observabilidade mínima sem DDL; Event Store é etapa posterior.
+
+IMPACT:
+  Logs Vercel/Sentry suficientes para piloto.
+
+RISK: LOW (piloto); MEDIUM (compliance longo prazo sem store)
+
+============================================================
+DR11 — BOUNDARY n8n
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  n8n = ORQUESTRADOR somente.
+  PODE: webhook Meta, normalizar mídia/texto, montar payload,
+        chamar Sentinela API, formatar reply, retry transporte
+        com mesma Idempotency-Key.
+  NÃO PODE: PostgreSQL, Supabase domínio, SQL, CRUD paralelo,
+            regras de conflito/reserva/pickup, service_role.
+
+RATIONALE:
+  Princípio Operaut / SENTINELA — único dono de regra = Core.
+
+IMPACT:
+  Workflows finos; toda mutação passa pela API.
+
+RISK: HIGH se alguém “atalhar” com Supabase no n8n — governança
+
+============================================================
+DR12 — BOUNDARY WHATSAPP
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  WhatsApp = canal entrada/saída.
+  Webhook NÃO contém domínio.
+  Fluxo: WA → n8n (normaliza) → API → Core → resultado → n8n → WA
+  Core sem if (whatsapp). channel = metadado.
+  Texto/áudio/transcrição/imagem = INPUT NÃO CONFIÁVEL
+  (prompt injection / social engineering) — nunca executar
+  instruções embutidas na mensagem como comando de sistema.
+
+RATIONALE:
+  Separação canal/regra; superfície de ataque em linguagem natural.
+
+IMPACT:
+  Parser n8n só extrai slots; API valida.
+
+RISK: HIGH (injection) mitigado por schema estrito na API
+
+============================================================
+DR13 — CONTRATO DE ERROS
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Envelope:
+    { success, request_id, correlation_id?, operation?, error?: { code, message, details? } }
+
+  Códigos canônicos (API):
+    INVALID_REQUEST
+    UNAUTHORIZED
+    FORBIDDEN
+    TENANT_REQUIRED
+    TENANT_NOT_FOUND
+    TENANT_MISMATCH
+    RESIDENT_NOT_FOUND
+    AMBIGUOUS_RESIDENT
+    RESOURCE_NOT_FOUND
+    CONFLICT
+    NEEDS_CONFIRMATION
+    DUPLICATE_REQUEST
+    RATE_LIMITED
+    INTERNAL_ERROR
+
+  Mapa Core → API (exemplos):
+    VALIDATION_ERROR → INVALID_REQUEST
+    NOT_FOUND → RESOURCE_NOT_FOUND / RESIDENT_NOT_FOUND
+    AUTHORIZATION_ERROR → FORBIDDEN
+    DUPLICATE (pickup) → CONFLICT ou código específico PACKAGE_ALREADY_PICKED_UP
+      (alias permitido em details.code_original)
+    CONFLICT (reserva) → CONFLICT
+    CLARIFICATION_REQUIRED / ambiguous → NEEDS_CONFIRMATION
+    TENANT_CONTEXT_ABSENT na API path → NÃO vaza como success+warning;
+      fronteira bloqueia antes
+
+RATIONALE:
+  Contrato estável para n8n branching.
+
+IMPACT:
+  Testes de contrato na implementação.
+
+RISK: LOW
+
+============================================================
+DR14 — OBSERVABILIDADE
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Campos: request_id, correlation_id, integration_id, tenant,
+  operation, latency_ms, result.
+  Sem infra nova (sem Datadog obrigatório). Usar logs estruturados
+  + Sentry já presente no ecossistema quando aplicável ao server.
+
+RATIONALE:
+  Suficiente para debug de piloto WA.
+
+IMPACT:
+  Padrão de log na API futura.
+
+RISK: LOW
+
+============================================================
+DR15 — RATE LIMIT
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Limites por client_id + condominium_id (ordens de grandeza do
+  API-ARCHITECTURE §11).
+  Implementação: preferir store compartilhado (mesmo Postgres de
+  idempotência ou KV) — detalhe na subetapa de implementação.
+  Sem migration agora; writes em prod compartilham gate do DR3.
+
+RATIONALE:
+  Protege identify floods e abuse de credential.
+
+IMPACT:
+  429 + Retry-After.
+
+RISK: LOW–MEDIUM
+
+============================================================
+DR16 — PAINEL OPERACIONAL
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Painel continua consumindo Core/services existentes in-process.
+  NÃO criar segundo backend só para o painel.
+  Quando API estiver estável, painel PODERÁ opcionalmente usar a
+  mesma fronteira — fora do caminho crítico do WhatsApp.
+
+RATIONALE:
+  Evita duplicação; Etapa 2 já entrega Central da Portaria.
+
+IMPACT:
+  Zero mudança de painel nesta decision review.
+
+RISK: LOW
+
+============================================================
+DR17 — VERSIONAMENTO / CORS / SECRETS
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Versionamento: /api/v1/ (breaking → /api/v2/).
+  CORS: API server-to-server; NÃO usar Access-Control-Allow-Origin: *.
+  Secrets: HMAC + service role só Vercel; WA tokens só n8n/Meta.
+
+RATIONALE:
+  Já documentado; fecha §12–16 da arquitetura.
+
+IMPACT:
+  Convites legados /api/* fora de v1 permanecem.
+
+RISK: LOW
+
+============================================================
+DR18 — SEGURANÇA (RISCOS EXPLÍCITOS)
+============================================================
+STATUS: CLOSED
+
+RECOMMENDATION:
+  Tratar e mitigar na implementação futura:
+
+  Risco                      | Mitigação fechada nesta review
+  -------------------------- | ----------------------------------
+  cross-tenant access        | DR5 + credential scoped
+  replay                     | DR4 timestamp + DR3 idempotency
+  credential leakage         | rotação dual-secret; sem frontend
+  webhook spoofing (Meta)    | verificação assinatura Meta no n8n
+                             | (fora do Core); API não confia no WA
+  duplicate execution        | DR3
+  ambiguous resident         | DR7 NEEDS_CONFIRMATION
+  unauthorized operation     | DR6 grants mínimos
+  prompt injection (WA)      | input não confiável; schema slots;
+                             | sem execução de “ordens” em linguagem
+                             | natural no Core
+
+RATIONALE:
+  Superfície WA exige defesa em profundidade canal→API→Core.
+
+IMPACT:
+  Checklist de segurança na Etapa 3b.
+
+RISK: residual MEDIUM (sempre, em canal aberto)
+
+============================================================
+DECISÕES DO §18 (API-ARCHITECTURE) — MAPA DE FECHAMENTO
+============================================================
+§18.1 Local API              → DR1 CLOSED
+§18.2 Adapter server         → DR2 CLOSED
+§18.3 Idempotency store      → DR3 CLOSED (+ FUTURE MIGRATION)
+§18.4 Credential + RBAC      → DR4 + DR6 CLOSED (env profile v1;
+                               tabela clients = FUTURE opcional)
+§18.5 Tenant fail-closed     → DR5 CLOSED (dual-mode Core)
+§18.6 Wire App tenant IDs    → recomendado; não bloqueia design;
+                               não é migration (config/código App)
+§18.7 Rate limit             → DR15 CLOSED (detalhe impl depois)
+§18.8 Painel→API             → DR16 CLOSED (opcional, não pré-req)
+§18.9 RLS/RBAC/auth changes  → NÃO fazer agora (explícito)
+§18.10 WA/n8n exposição      → fora desta review; pós API+gates
+
+============================================================
+GATES ANTES DE PRODUÇÃO (API MUTÁVEL + WHATSAPP)
+============================================================
+G1. Migration do store de idempotência (Postgres)
+    DATABASE CHANGE REQUIRED — FUTURE MIGRATION
+G2. Adapter server + HMAC + tenant fail-closed implementados
+G3. Integration profile scoped (sem admin global)
+G4. NEEDS_CONFIRMATION enforced para ambiguidade / pickup / cancel WA
+G5. Testes de contrato + testes Core (17+) verdes
+G6. n8n sem service_role / sem SQL
+G7. M1–M4 permanecem CLOSED (não reabrir)
+
+Nota: Etapa 3b pode iniciar implementação de código da API
+com writes DESABILITADOS até G1, se desejado — decisão de
+execução da 3b, não desta review.
+
+============================================================
+VEREDITO FINAL
+============================================================
+
+Todas as decisões arquiteturais listadas (DR1–DR18): CLOSED.
+
+Itens que exigem banco no futuro estão explicitamente marcados
+como DATABASE CHANGE REQUIRED — FUTURE MIGRATION (não executados).
+
+ETAPA 3 = READY FOR API IMPLEMENTATION
+
+(sujeita aos gates G1–G7 para qualquer exposição pública /
+ mutações em produção / WhatsApp)
+
+Confirmação desta review:
+  DATABASE CHANGES = 0
+  MIGRATIONS EXECUTED = 0
+  WHATSAPP = 0
+  N8N = 0
+  PUBLIC API = 0
+  CODE CHANGES (app) = 0
+  COMMIT/PUSH = 0
+
+FIM — SENTINELA-ETAPA-3-DECISIONS-2026-08-14

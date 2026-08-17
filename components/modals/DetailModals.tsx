@@ -126,12 +126,9 @@ export const ResidentProfileModal = ({
 };
 
 // --- MODAL DETALHE PACOTE ---
-export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculatePermanence, currentRole, currentResident }: any) => {
+export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculatePermanence, currentRole }: any) => {
   if (!pkg) return null;
   
-  // Verificar se o morador pode dar baixa (só em encomendas da sua unidade)
-  const canResidentDeliver = currentRole === 'MORADOR' && currentResident && (pkg.recipientId ? pkg.recipientId === currentResident.id : pkg.unit === currentResident.unit) && pkg.status === 'pendente';
-  // Porteiro/Síndico sempre pode dar baixa
   const canStaffDeliver = (currentRole === 'PORTEIRO' || currentRole === 'SINDICO') && pkg.status === 'pendente';
   return (
     <div className="fixed inset-0 z-600 flex items-center justify-center p-4">
@@ -186,26 +183,14 @@ export const PackageDetailModal = ({ pkg, onClose, onDeliver, onNotify, calculat
                    <button onClick={() => onNotify(pkg)} className="w-full py-4 sm:py-6 md:py-8 bg-green-600 text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 transition-all"><MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" /> <span className="whitespace-nowrap">Notificar Morador agora</span></button>
                  )}
                  {/* Botão de dar baixa - para porteiro/síndico ou morador (quando é sua encomenda) */}
-                 {(canStaffDeliver || canResidentDeliver) && (
+                 {canStaffDeliver && (
                    <button 
                      onClick={() => onDeliver(pkg.id)} 
-                     className={`w-full py-4 sm:py-6 md:py-8 rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 active:scale-95 transition-all shadow-xl ${
-                       canResidentDeliver 
-                         ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02]' 
-                         : 'bg-zinc-100 text-black hover:bg-zinc-200'
-                     }`}
+                     className="w-full py-4 sm:py-6 md:py-8 rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-[0.2em] flex items-center justify-center gap-2 sm:gap-4 active:scale-95 transition-all shadow-xl bg-zinc-100 text-black hover:bg-zinc-200"
                    >
                      <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> 
-                     <span className="whitespace-nowrap">
-                      {canResidentDeliver ? 'Confirmar Retirada' : 'Marcar como Recebida'}
-                     </span>
+                     <span className="whitespace-nowrap">Marcar como Recebida</span>
                    </button>
-                 )}
-                 {/* Mensagem quando morador não pode dar baixa (não é sua encomenda) */}
-                 {currentRole === 'MORADOR' && !canResidentDeliver && pkg.status === 'pendente' && (
-                   <div className="w-full py-4 bg-amber-50 border border-amber-200 rounded-[24px] text-center">
-                     <p className="text-xs font-bold text-amber-800">Esta encomenda não pertence à sua unidade</p>
-                   </div>
                  )}
                </>
              ) : (
@@ -261,8 +246,7 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, onDelete, o
       id: Date.now().toString(),
       text: newMessage.trim(),
       senderRole: currentRole,
-      senderName: currentRole === 'MORADOR' && currentResident ? currentResident.name :
-                  currentAdminUser ? currentAdminUser.name : 'Sistema',
+      senderName: currentAdminUser ? currentAdminUser.name : 'Sistema',
       timestamp: new Date().toISOString(),
       read: false
     };
@@ -312,8 +296,8 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, onDelete, o
 
             <div className="space-y-3">
                <div>
-                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Descrição {['SINDICO', 'MORADOR', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(currentRole) ? '(Editável)' : ''}</label>
-                 {['SINDICO', 'MORADOR', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(currentRole) ? (
+                 <label className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest opacity-40 ml-2 mb-2 block">Descrição {['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(currentRole) ? '(Editável)' : ''}</label>
+                 {['SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'].includes(currentRole) ? (
                    <textarea value={occurrence.description} onChange={(e) => setOccurrence({...occurrence, description: e.target.value})} className="w-full h-28 sm:h-32 p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] font-medium text-xs sm:text-sm outline-none border-2 border-transparent focus:border-black/5 resize-none shadow-inner" />
                  ) : (
                    <div className="w-full h-28 sm:h-32 p-4 sm:p-5 bg-zinc-50 rounded-[20px] sm:rounded-[24px] font-medium text-xs sm:text-sm border-2 border-transparent shadow-inner overflow-y-auto">
@@ -384,11 +368,8 @@ export const OccurrenceDetailModal = ({ occurrence, onClose, onSave, onDelete, o
          </div>
 
          {/* Morador: Salvar. Síndico/Admin: Resolver e Excluir. Porteiro: sem barra de ações (só visualização). */}
-         {currentRole !== 'PORTEIRO' && (currentRole === 'SINDICO' || currentRole === 'MORADOR' || currentRole === 'ADMIN' || currentRole === 'ADMINISTRADOR' || currentRole === 'ADMINISTRADORA' || currentRole === 'CABO_TURMA') && (
+         {currentRole !== 'PORTEIRO' && (currentRole === 'SINDICO' || currentRole === 'ADMIN' || currentRole === 'ADMINISTRADOR' || currentRole === 'ADMINISTRADORA' || currentRole === 'CABO_TURMA') && (
            <div className="shrink-0 mt-6 pt-4 border-t border-zinc-100 flex flex-col sm:flex-row gap-3">
-             {(currentRole === 'MORADOR') && (
-               <button onClick={onSave} className="flex-1 py-4 sm:py-5 md:py-6 bg-black text-white rounded-[24px] sm:rounded-[32px] font-black uppercase text-[10px] sm:text-[11px] tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-2xl flex items-center justify-center gap-2 sm:gap-3"><Save className="w-4 h-4" /> <span className="whitespace-nowrap">Salvar Alterações</span></button>
-             )}
              {canResolve && (currentRole === 'SINDICO' || currentRole === 'ADMIN' || currentRole === 'ADMINISTRADOR' || currentRole === 'ADMINISTRADORA' || currentRole === 'CABO_TURMA') && occurrence.status === 'Aberto' && onResolve && (
                <button
                  onClick={() => {

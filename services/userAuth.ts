@@ -328,34 +328,7 @@ export const loginUser = async (
     // 1) tentar perfil em public.users via helper existente
     let profile = await getProfileByAuthId(authUser.id);
 
-    // 2) se não encontrou, tentar residents
-    if (!profile) {
-      try {
-        const { data: residentRow } = await supabase
-          .from('residents')
-          .select('id, auth_user_id, username, role, name, email, phone, is_active')
-          .eq('auth_user_id', authUser.id)
-          .maybeSingle();
-        if (residentRow) {
-          // Preservar o papel tal como salvo no banco (case-insensitive -> uppercase para consistência)
-          const rawRole = (residentRow.role ?? '').toString();
-          const roleNormalized = rawRole ? rawRole.toUpperCase() : 'MORADOR';
-          profile = {
-            id: authUser.id,
-            username: residentRow.username ?? residentRow.email ?? '',
-            role: roleNormalized,
-            name: residentRow.name ?? null,
-            email: residentRow.email ?? authUser.email ?? null,
-            phone: residentRow.phone ?? null,
-            is_active: residentRow.is_active ?? true
-          };
-        }
-      } catch {
-        // ignore errors (RLS) and continue to next
-      }
-    }
-
-    // 3) se ainda não, tentar staff ou users
+    // 2) se não encontrou, tentar staff
     if (!profile) {
       try {
         const { data: staffRow } = await supabase
@@ -381,13 +354,14 @@ export const loginUser = async (
       }
     }
 
-    // 4) fallback: usar dados do auth user quando não existir perfil nas tabelas
+    // 3) fallback: usar dados do auth user quando não existir perfil nas tabelas
     if (!profile) {
-      // Fallback: criar um perfil mínimo com papel "MORADOR" por padrão.
+      const metaRole = String((authUser.user_metadata as any)?.role || '').toUpperCase();
+      const fallbackRole = metaRole && metaRole !== 'MORADOR' ? metaRole : 'PORTEIRO';
       profile = {
         id: authUser.id,
         username: authUser.email ?? '',
-        role: 'MORADOR',
+        role: fallbackRole,
         name: (authUser.user_metadata as any)?.full_name ?? null,
         email: authUser.email ?? null,
         phone: (authUser.user_metadata as any)?.phone ?? null,
@@ -544,7 +518,7 @@ export const updateUserProfile = async (
     const updatedUser: User = {
       id: row.auth_user_id || row.auth_id || row.id,
       username: row.username ?? '',
-      role: (row.role as string) ?? 'MORADOR',
+      role: (row.role as string) ?? 'PORTEIRO',
       name: row.name ?? null,
       email: row.email ?? null,
       phone: row.phone ?? null,

@@ -17,6 +17,8 @@
         "serve:local": "npx serve -s dist",
         "test": "vitest",
         "test:run": "vitest run",
+        "pilot:api": "vite-node scripts/n8n-harness/local-api-pilot.ts",
+        "pilot:http": "node scripts/n8n-harness/pilot-http.mjs",
         "deploy:vercel": "vercel --prod --force --archive=tgz",
         "deploy:vercel:preview": "vercel --force --archive=tgz"
     },

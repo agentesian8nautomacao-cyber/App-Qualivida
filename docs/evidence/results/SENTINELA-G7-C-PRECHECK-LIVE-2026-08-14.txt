@@ -1,0 +1,154 @@
+SENTINELA AUT — G7-C — LIVE PRE-CHECK (READ-ONLY)
+Data/hora UTC:       2026-08-15T21:11:21Z → 2026-08-15T21:11:26Z
+Projeto:             zaemlxjwhzrfmowbckmk
+URL API:             https://zaemlxjwhzrfmowbckmk.supabase.co
+Host DB:             db.zaemlxjwhzrfmowbckmk.supabase.co
+Deep Review:         APPROVED FOR LIVE PRE-CHECK
+  (SENTINELA-G7-C-CONSTRAINT-DEEP-REVIEW-2026-08-14.txt)
+Migration alvo:      supabase/migrations/20260814210000_007_reservations_no_overlap.sql
+Rollback:            supabase/migrations/20260814210000_007_reservations_no_overlap.rollback.sql
+Pré-check canônico:  docs/evidence/M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE.sql
+Pré-check expandido: docs/evidence/M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE-EXEC.sql
+
+Método:              psql READ-ONLY (-f SELECT / to_regclass / information_schema / pg_*)
+Modo:                READ-ONLY
+WRITE OPERATIONS:    0
+Migration APPLY:     NÃO EXECUTADO
+Rollback:            NÃO EXECUTADO
+G7-D / Event Store / n8n / WhatsApp: NÃO
+Secrets no relatório: NENHUM
+
+============================================================
+RESULTADO
+============================================================
+G7-C PRE-CHECK = PASS
+
+create_safe (estado atual) = YES
+APPLY permanece NÃO autorizado nesta etapa.
+
+============================================================
+1. AUTENTICAÇÃO
+============================================================
+AUTHENTICATION = OK
+current_database = postgres
+current_user     = postgres
+psql_exit (auth) = 0
+utc_now          = 2026-08-15 21:11:23 / 21:11:24
+PostgreSQL       = 17.6 (aarch64-unknown-linux-gnu)
+
+============================================================
+2. DEPENDÊNCIAS / TABELAS
+============================================================
+public.reservations = EXISTS (regclass=reservations)
+public.areas        = EXISTS
+btree_gist          = EXISTS (schema public)
+
+============================================================
+3. SCHEMA REAL — public.reservations
+============================================================
+column_name    | data_type                 | udt_name   | nullable | default
+---------------+---------------------------+------------+----------+--------
+id             | uuid                      | uuid       | NO       | uuid_generate_v4()
+area_id        | uuid                      | uuid       | NO       |
+resident_id    | uuid                      | uuid       | NO       |
+resident_name  | character varying          | varchar    | NO       |
+unit           | character varying          | varchar    | NO       |
+date           | date                      | date       | NO       |
+start_time     | time without time zone    | time       | NO       |
+end_time       | time without time zone    | time       | NO       |
+status         | character varying          | varchar    | NO       | 'scheduled'
+created_at     | timestamp with time zone  | timestamptz | YES      | now()
+updated_at     | timestamp with time zone  | timestamptz | YES      | now()
+
+status CHECK LIVE:
+  scheduled | active | completed | canceled
+
+Tipos usados pela migration 007: CONFIRMADOS (uuid/date/time/status)
+
+============================================================
+4. condominium_id — NÃO INVENTAR
+============================================================
+reservations.condominium_id = ABSENT (f)
+areas.condominium_id        = ABSENT (f)
+Schema NÃO alterado nesta etapa.
+
+============================================================
+5–6. btree_gist
+============================================================
+btree_gist_exists = t
+pgcrypto / uuid-ossp = presentes (informativo)
+
+============================================================
+7–9. RESERVAS / CONFLITOS
+============================================================
+reservations_total       = 0
+overlapping_active_pairs = 0
+status distribution      = (vazio)
+
+Conflitos potenciais: NENHUM
+Correção automática: NÃO (nada a corrigir)
+
+Half-open smoke (somente SELECT):
+  10:00–12:00 ∩ 11:00–13:00 = t (conflito)
+  10:00–12:00 ∩ 12:00–14:00 = f (permitido)
+
+============================================================
+10–11. CONSTRAINT / OBJETOS CONFLITANTES
+============================================================
+reservations_area_date_slot_excl = ABSENT (OK for CREATE)
+pg_constraint conname match      = 0
+pg_class objetos com nome alvo   = 0
+reservations fora de public      = 0
+
+Constraints existentes em reservations (inalteradas):
+  reservations_pkey
+  reservations_area_id_fkey → areas(id)
+  reservations_resident_id_fkey → residents(id)
+  reservations_status_check
+
+============================================================
+12. SEGURANÇA PARA APPLY (estado atual)
+============================================================
+SUMMARY LIVE:
+  reservations_exists              = t
+  btree_gist_exists                = t
+  exclusion_absent                 = t
+  condominium_id_absent_expected   = t
+  no_overlapping_active_pairs      = t
+  m_g7c1_create_safe (composto)    = t
+
+Veredito de preparação: SAFE TO APPLY *quando houver autorização explícita*
+Esta etapa: APPLY = NÃO
+
+============================================================
+13. ESCRITAS
+============================================================
+WRITE OPERATIONS   = 0
+DATABASE CHANGES   = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE         = 0
+INSERT/UPDATE/DELETE/DDL = 0
+
+============================================================
+14–15. INTEGRIDADE PLATAFORMA
+============================================================
+organizations       = EXISTS (M1)
+condominiums        = EXISTS (M1)
+units               = EXISTS (M2)
+tenant_memberships  = EXISTS (M3)
+api_idempotency_keys = EXISTS (G6-1)
+api_confirmations    = EXISTS (G6-2)
+
+M1–M4     = INTACTOS (nenhuma alteração)
+G6-1/G6-2 = INTACTOS (nenhuma alteração)
+organizations / condominiums / units / tenant_memberships / tabelas operacionais
+  = NÃO ALTERADAS
+
+============================================================
+STOP
+============================================================
+G7-C PRE-CHECK = PASS
+APPLY 007 = NÃO EXECUTADO
+G7-D / Event Store / n8n / WhatsApp = NÃO INICIADOS
+
+Aguardando autorização explícita de APPLY.

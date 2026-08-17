@@ -1,0 +1,95 @@
+SENTINELA AUT — G7-J — EVENT STORE — SQL CREATION
+Data: 2026-08-15
+Status: G7-J SQL = CREATED — Deep Review segue neste mesmo gate
+
+Autorização: implementação schema Event Store (NÃO APPLY / NÃO wiring)
+
+Pré-requisitos:
+  G7-I = PASS (EVENT STORE = NECESSÁRIO)
+  G7-H-B = PASS
+  M1–M4 / G6-1 / G6-2 / G7-C = CLOSED / PASS
+
+============================================================
+ESCOPO
+============================================================
+DATABASE CHANGES (planejado) = CREATE public.api_domain_events
+MIGRATIONS EXECUTED          = 0
+LIVE WRITE                   = 0
+WIRING                       = 0 (G7-J-W futuro)
+N8N                          = sem alteração
+WHATSAPP                     = 0
+DOMAIN DATA                  = 0
+M1–M4 / G6 / G7-C            = INTACTOS (sem ALTER)
+
+============================================================
+ARTEFATOS CRIADOS
+============================================================
+Migration:
+  supabase/migrations/20260815220000_008_api_domain_events.sql
+
+Rollback:
+  supabase/migrations/20260815220000_008_api_domain_events.rollback.sql
+
+Pré-check READ-ONLY (não executado LIVE neste passo):
+  docs/evidence/M-G7J-EVENT-STORE-PRECHECK-LIVE.sql
+
+Documentação:
+  docs/SENTINELA-AUT-G7-J-EVENT-STORE.md
+
+Nome lógico: 008_api_domain_events
+Gate: G7-J
+Project alvo: zaemlxjwhzrfmowbckmk
+
+============================================================
+TABELA public.api_domain_events
+============================================================
+PK: event_id text (CHECK LIKE 'evt_%')
+
+Tenant:
+  organization_id uuid NOT NULL FK → organizations(id) RESTRICT
+  condominium_id  uuid NOT NULL FK → condominiums(id) RESTRICT
+
+Campos: occurred_at, request_id, client_id, correlation_id, operation,
+        event_type, status, source DEFAULT 'api.v1', classification,
+        http_status, error_code, retry_class, core_executed,
+        duration_ms, external_ref, confirmation_id, attributes jsonb,
+        created_at
+
+event_type CHECK (8 tipos G7-I; sem idempotency.created; sem received/authorized/core.started|completed)
+
+Índices:
+  idx_api_domain_events_tenant_occurred
+  idx_api_domain_events_request_id
+  idx_api_domain_events_tenant_type_occurred
+
+Acesso:
+  RLS ENABLE + zero policies (anon/auth deny)
+  service_role bypass — append-only via INSERT (wiring futuro)
+  Sem USING (true)
+  Sem triggers / cron / seed
+
+Proibido no store: HMAC, secrets, tokens, mídia, WhatsApp bruto, SQL/stack
+
+Retenção documental: 90d operacional / 180d segurança (purge = gate futuro)
+
+============================================================
+DECISÕES DE DESIGN
+============================================================
+D1 Tenant NOT NULL + FK — rejeições pré-tenant ficam só em logs (G7-J-W)
+D2 idempotency.created omitido do CHECK (volume)
+D3 RLS ON sem policy — fail-closed cliente (diferente de G6 stores sem RLS,
+   justificável: tabela de auditoria nunca exposta ao browser)
+D4 Sem CASCADE no rollback
+D5 Sem wiring nesta etapa
+
+============================================================
+TESTES / BUILD (sem mudança de código de produção)
+============================================================
+npm run test:run → 237 passed (17 files)
+npm run build    → PASS
+
+============================================================
+PRÓXIMO
+============================================================
+Deep Review → LIVE Pre-check → STOP AWAITING APPLY
+Wiring = G7-J-W após closeout (autorização separada)

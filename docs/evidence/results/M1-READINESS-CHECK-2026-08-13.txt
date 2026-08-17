@@ -1,0 +1,277 @@
+# M1 Readiness Check
+
+Data/hora UTC: 2026-08-13T17:35:44Z
+Projeto: Qualivida Residence / Supabase zaemlxjwhzrfmowbckmk
+Modo: SOMENTE AUDITORIA E PLANEJAMENTO
+SQL/DDL/DML/migrations/M1: NÃO EXECUTADOS
+
+---
+
+## Gates
+
+| Gate | Status | Evidência |
+|------|--------|-----------|
+| D1 RLS (flag ON) | PASS | results/D1-RLS-LIVE-2026-08-12.txt (19/19) |
+| D2 Storage (boletos) | PASS | results/D2-STORAGE-LIVE-2026-08-13.txt pós-R2A-MIN |
+| D5 Storage | PASS | results/D5-STORAGE-EVIDENCE-2026-08-13.txt public=false |
+| R2A-MIN | PASS | R2A-MIN-POST-LIVE-2026-08-13.md |
+| Backup (GATE 2) | PASS | BACKUP-PRE-M1-2026-08-13.txt + dump |
+| GATE 3 Git | PASS | commit aec1f5f + tag pre-m1-checkpoint; docs 31731e7 |
+
+Nota residual (fora do escopo M1 DDL):
+  D2 2026-08-12 ainda documenta policies {public}/true em tabelas de negócio
+  (não Storage). Isolamento efetivo = M12–M14. Não bloqueia CREATE de
+  organizations/condominiums se M1 não tocar RLS operacional.
+
+---
+
+## Git
+
+Branch: master
+HEAD: 31731e72ddb0d98426be852aebb21f7685beca6b
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513
+Tag movida? NÃO (aponta ao checkpoint; HEAD = docs finalize posterior)
+diff pre-m1-checkpoint..HEAD: 1 arquivo (GATE-3-CHECKPOINT-STAGING evidence finalize)
+Working tree (pré-relatório): CLEAN (estado informado + gates anteriores)
+Working tree (pós-Fase 9): 1 untracked — results/M1-READINESS-CHECK-2026-08-13.txt
+  (artefato desta auditoria; não invalida gates; não é alteração de código/SQL)
+Toplevel: D:/Gestao-Qualivida-Residence-main
+pre-multitenant-baseline: f6307264d5aef97d2c8aed51a4c8d2b90d5ef902 (intacta)
+
+---
+
+## Backup
+
+Arquivo: docs/evidence/backups/backup-pre-m1-2026-08-13-115734.dump
+SHA-256: 435b322410fa417856d00a1b7ad751eb0c3155b073a49244e07ff8027e80eb1a
+Tamanho: 495736 bytes
+Fora do Git: SIM (*.dump ignored)
+SHA reconfirmado nesta inspeção: SIM (match)
+
+---
+
+## Escopo M1
+
+Resumo (FASE-1-MIGRATION-PLAN § M1 — `001_platform_org_condo`):
+
+Objetivo:
+  Criar Organization + Operational Site (tabela condominiums, vertical
+  condomínio) como raiz de isolamento, SEM alterar tabelas operacionais.
+
+Ajuste Operaut (obrigatório no schema):
+  - condominiums.vertical default/check = 'condominium' OU equivalente documentado
+  - slug, status, timestamps
+  - comentário SQL: “Operational Site — vertical condominium”
+  - NÃO criar operational_sites genérica nem event tables
+
+Tabelas novas: organizations, condominiums
+FK: condominiums.organization_id → organizations.id
+Impacto app legado: nenhum (sem referência)
+Risco plano: 🟢
+Dependências: gates pré-M1 + addendum Operaut; nenhuma M2+
+Rollback: DROP condominiums; DROP organizations; (somente se M4 não rodou)
+
+O que M1 NÃO faz:
+  - condominium_id em residents/packages/...
+  - tenant_memberships
+  - units
+  - seed piloto (M4)
+  - backfill
+  - RLS / helpers / Storage path tenant
+  - frontend/backend
+
+Garantias M1: estrutura org+site vazia; contrato documental site_id≡condominium_id.
+Garantias adiadas: isolamento RLS (M12–M14); membership (M3/M11); dados (M4–M8).
+
+---
+
+## Migrations (implementação)
+
+Lista completa de arquivos SQL M1 no repo:
+
+  NENHUM.
+
+Busca: supabase/migrations/*001_platform* → 0
+Nome previsto no plano: 001_platform_org_condo
+Estado: ESPECIFICADO, NÃO IMPLEMENTADO
+
+Migrations existentes no repo (contexto; NÃO são M1):
+  - 20250225*–20250301* (staff_invites, RBAC, cron)
+  - 20260812* R1 packages / R2A Storage (remediação)
+  - 20260813* R2A-MIN
+
+---
+
+## Tabelas afetadas
+
+Previstas (novas apenas):
+  - public.organizations
+  - public.condominiums
+
+Existentes operacionais (users, staff, residents, packages, boletos, …):
+  - NÃO alteradas pelo escopo M1 documentado
+
+---
+
+## DDL
+
+Previsto (ainda sem arquivo .sql):
+  - CREATE TABLE organizations (...)
+  - CREATE TABLE condominiums (... organization_id FK, vertical, slug, status ...)
+  - índices de busca (slug, status) conforme plano/arquitetura
+  - PK/FK condominiums.organization_id
+
+NÃO previsto em M1:
+  - ALTER TABLE em domínio legado
+  - DROP de tabelas existentes
+  - ENABLE RLS novo em tabelas operacionais
+
+---
+
+## DML / Backfill
+
+Lista: NENHUM no M1.
+Seed piloto = M4 (fora desta etapa).
+
+---
+
+## RLS
+
+Lista: NENHUMA alteração de policy no M1.
+Policies tenant-aware = M12–M14.
+Helpers has_permission/is_member/current_condominium_id = M12.
+
+---
+
+## Functions / Triggers
+
+Lista M1: NENHUMA exigida pelo plano para 001_platform_org_condo.
+(Funções RLS existentes packages/staff_invites permanecem intocadas.)
+
+---
+
+## Índices / Constraints
+
+Previstos (documental):
+  - PK organizations, PK condominiums
+  - FK condominiums.organization_id → organizations.id
+  - UNIQUE slug (organizations e/ou condominiums — detalhar no SQL futuro)
+  - CHECK/default vertical = 'condominium'
+
+Arquivo SQL com DDL concreto: AUSENTE.
+
+---
+
+## Rollback
+
+Descrição (plano):
+  DROP TABLE IF EXISTS condominiums;
+  DROP TABLE IF EXISTS organizations;
+  Condição: apenas se M4 ainda não tiver populado FKs dependentes.
+
+Pré-requisito operacional: manter dump GATE 2 disponível.
+
+---
+
+## Validações (pós-M1, quando autorizar execução)
+
+Lista (derivada do plano; NÃO executada agora):
+  1. information_schema / \dt: organizations e condominiums existem
+  2. FK condominiums.organization_id válida
+  3. INSERT org + condo teste (staging) com vertical='condominium'
+  4. UNIQUE slug rejeita duplicata
+  5. App legado: login / packages / boletos download inalterados
+  6. Tabelas operacionais: zero colunas novas (comparar ao baseline)
+  7. pg_policies storage boletos: permanece pós-R2A-MIN (select autenticado)
+
+Confirmação se organizations/condominiums já existem em produção:
+  EXIGE SELECT read-only no momento da execução M1 (não feito nesta auditoria).
+
+---
+
+## Riscos
+
+| Nível | Risco | Causa | Mitigação | Detectar | Rollback |
+|-------|-------|-------|-----------|----------|----------|
+| MÉDIO | SQL M1 inexistente → execução impossível / ad-hoc | Só spec | Autorizar criação de arquivo SQL revisado antes do apply | Glob migrations | N/A até existir arquivo |
+| MÉDIO | Omitir vertical Operaut | Spec PRECISA AJUSTE | Checklist Operaut no PR do SQL | \d condominiums | DROP tables M1 |
+| MÉDIO | Aplicar no project ref errado | Múltiplos projetos CLI | Confirmar zaemlxjwhzrfmowbckmk | SELECT current_database / host | Restore dump |
+| BAIXO | Nome colide se tabelas já existirem | Schema desconhecido live | Pré-check EXISTS | information_schema | Abortar apply |
+| BAIXO | Quebra app | App referenciar tabelas cedo | M1 sem refs no código (plano) | Smoke UI | DROP |
+| BAIXO | Perda de dados M1 | Só CREATE vazias | Sem DML | Contagens domínio estáveis | DROP |
+| — | RLS fraco legado | Dívida D2 tabelas | Fora de M1; M12+ | D2 histórico | N/A M1 |
+
+Riscos CRÍTICOS sem mitigação: NENHUM identificado para o escopo M1 isolado (CREATE vazio).
+Riscos ALTOS sem mitigação: NENHUM no escopo M1 isolado.
+
+---
+
+## Dependências
+
+- Gates D1/D2(Storage)/D5/Backup/GATE3 = PASS (satisfeitos nesta inspeção)
+- Addendum Operaut publicado (satisfeito)
+- Aceite explícito addendum + plano (PENDENTE — checklist do plano ainda aberto)
+- Autorização explícita para executar M1 (PENDENTE)
+- Arquivo SQL 001_platform_org_condo (AUSENTE)
+- M2+ não iniciar antes de M1 validado
+
+---
+
+## Pontos pendentes
+
+1. Criar migration SQL `001_platform_org_condo` (com ajuste Operaut) — etapa separada autorizada.
+2. Aceite explícito do addendum + plano (checkbox no FASE-1-MIGRATION-PLAN).
+3. Pré-check live: tabelas organizations/condominiums ainda não existem (SELECT no apply).
+4. Atualizar header stale em FASE-1-ARQUITETURA (ainda diz gates PENDENTE) — cosmético.
+5. Dívida D2 policies {public} true em tabelas de negócio — pós-M1 / M12–M14.
+6. staff_invites REVIEW REQUIRED — fora de M1.
+
+---
+
+## Plano de execução proposto (NÃO EXECUTAR)
+
+PRE-CHECK
+  - Confirmar project zaemlxjwhzrfmowbckmk
+  - SELECT to_regclass('public.organizations'), to_regclass('public.condominiums') → ambos NULL
+  - Confirmar dump GATE 2 acessível
+  - PASS: tabelas ausentes + backup OK / FAIL: abortar
+↓
+REVISÃO SQL (criar arquivo se autorizado)
+  - Arquivo: supabase/migrations/<ts>_001_platform_org_condo.sql (+ rollback)
+  - Incluir vertical/slug/status/FK
+  - PASS: PR/revisão Operaut / FAIL: não aplicar
+↓
+MIGRATION APPLY (somente após autorização explícita)
+  - Aplicar só M1
+  - Esperado: 2 tabelas novas
+  - PASS: tabelas+FK / FAIL: rollback DROP
+↓
+VALIDAÇÃO
+  - Testes do plano (INSERT org+site, UNIQUE, vertical)
+  - Smoke app legado
+  - PASS: critérios sucesso M1 / FAIL: DROP + investigar
+↓
+CHECKPOINT FINAL
+  - Registrar evidência results/M1-POST-...
+  - NÃO iniciar M2 automaticamente
+
+---
+
+## Resultado
+
+M1 = NEEDS REVISION
+
+Motivo:
+  Gates, backup e baseline Git estão PASS e o escopo documental está claro,
+  mas NÃO existe arquivo de migration SQL executável para M1, e o plano ainda
+  exige aceite explícito do addendum + autorização de execução.
+
+Próximo passo (separado):
+  1) Aceite explícito do plano/addendum
+  2) Autorizar criação do SQL 001_platform_org_condo
+  3) Nova revisão do SQL
+  4) Só então: autorização de APPLY
+
+NENHUMA alteração de banco foi executada.
+M1 permaneceu BLOCKED.
+================================================================================

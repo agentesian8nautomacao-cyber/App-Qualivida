@@ -1,0 +1,189 @@
+# M4 SQL Creation Review
+
+Data/hora UTC: 2026-08-14T12:32:26Z
+Autorização: CRIAR SQL M4 somente (NÃO APPLY / NÃO seed no banco)
+Project alvo: zaemlxjwhzrfmowbckmk
+Decisões: DR1–DR6 CLOSED (M4-DECISIONS-2026-08-14.txt)
+Status M4 prévio: READY FOR SQL CREATION
+
+---
+
+## Resultado
+
+M4 SQL = CREATED — AWAITING REVIEW
+
+M4 APPLY: BLOCKED
+APPROVED FOR LIVE PRE-CHECK: NÃO (ainda)
+Banco: NENHUMA alteração executada nesta tarefa
+Pré-check LIVE: arquivo criado; NÃO executado nesta tarefa
+Git: sem commit / tag / push
+
+---
+
+## SQL criado
+
+SIM
+
+| Tipo | Caminho |
+|------|---------|
+| Migration | supabase/migrations/20260814180000_004_seed_pilot.sql |
+| Rollback | supabase/migrations/20260814180000_004_seed_pilot.rollback.sql |
+| Pré-check READ-ONLY | docs/evidence/M4-PRECHECK-LIVE.sql |
+
+Nome lógico arquivo: 004_seed_pilot
+Nome lógico plano:   004_pilot_seed (mesmo escopo; divergência só de naming — não bloqueante)
+
+---
+
+## Tabelas alteradas pelo SQL (estrutura)
+
+NENHUMA (sem CREATE/ALTER/DROP)
+
+População prevista (DML):
+  public.organizations  → +1 row
+  public.condominiums   → +1 row
+
+---
+
+## INSERTs previstos
+
+1) INSERT INTO public.organizations (name, slug, status)
+   name   = 'Empresa/Administradora piloto'   (DR1)
+   slug   = 'qualivida-admin'                 (DR2)
+   status = 'active'
+   id     = DEFAULT gen_random_uuid()         (DR4)
+
+2) INSERT INTO public.condominiums
+     (organization_id, name, vertical, slug, status)
+   organization_id = id REAL retornado do INSERT 1
+   name            = 'Qualivida Club Residence' (§14)
+   vertical        = 'condominium'
+   slug            = 'qualivida-club-residence' (DR3)
+   status          = 'active'
+   id              = DEFAULT gen_random_uuid()  (DR4)
+
+Exatamente 1 org + 1 condo na mesma transação BEGIN/COMMIT.
+
+---
+
+## Captura de IDs (DR4)
+
+- RETURNING id INTO variáveis PL/pgSQL
+- RAISE NOTICE 'M4_SEED_OK organization_id=%'
+- RAISE NOTICE 'M4_SEED_OK condominium_id=%'
+- Validação pós-APPLY manual sugerida no rodapé do SQL
+- UUIDs literais inventados: AUSENTES
+
+---
+
+## Guards (DR5)
+
+Fail-closed DO $$ blocks:
+  - organizations / condominiums / units / tenant_memberships EXISTS
+  - slug qualivida-admin ABSENT
+  - slug qualivida-club-residence ABSENT
+  - organizations COUNT = 0
+  - condominiums COUNT = 0
+  - pós-seed: counts = 1/1 + invariante FK/slug/vertical
+
+ON CONFLICT DO NOTHING: AUSENTE (só menção em comentário proibitivo)
+IF NOT EXISTS silencioso de reexecução: AUSENTE
+  (há IF NOT EXISTS apenas como assert pós-INSERT da row condo)
+Reexecução: 2ª vez → EXCEPTION BLOCKED
+
+---
+
+## DML / UPDATE / DELETE (migration principal)
+
+DML: SIM — 2× INSERT only
+UPDATE: NÃO (executável)
+DELETE: NÃO (executável)
+legado UPDATE/DELETE: NÃO
+
+---
+
+## Alterações em legado
+
+users / staff / residents / roles / permissions / role_permissions: NÃO
+units INSERT: NÃO
+tenant_memberships INSERT: NÃO
+backfill: NÃO
+seed adicional: NÃO
+
+---
+
+## RLS / policies / functions / triggers
+
+AUSENTES no SQL M4
+
+---
+
+## Rollback (DR6)
+
+Arquivo: …004_seed_pilot.rollback.sql
+CASCADE: NÃO (executável; proibido em header)
+Ordem: DELETE condominiums → DELETE organizations (por slug + id)
+Guards: seed parcial → BLOCKED; dependents units/memberships → BLOCKED
+Nota explícita: após M5+ / dependentes → PROIBIDO; usar snapshot restore
+Snapshot pré-APPLY: obrigatório (header migration + decisões)
+
+---
+
+## Pré-check LIVE
+
+Arquivo: docs/evidence/M4-PRECHECK-LIVE.sql
+Modo: READ-ONLY (sem INSERT/UPDATE/DELETE/DDL executáveis)
+Verifica: EXISTS M1–M3; rows org/condo=0; slugs ausentes; m4_seed_safe
+Executado nesta tarefa: NÃO
+
+---
+
+## Validação estática local
+
+Arquivos presentes: SIM
+BEGIN/COMMIT: SIM
+RETURNING + NOTICE IDs: SIM
+Valores DR1–DR3 + name site: SIM
+UUID hardcoded: NÃO
+CREATE/ALTER TABLE: NÃO
+RLS/POLICY/FUNCTION/TRIGGER: NÃO
+ON CONFLICT executável: NÃO
+INSERT units/memberships: NÃO
+Rollback DELETE ordenado + check deps: SIM
+Pré-check só SELECT: SIM
+
+---
+
+## Divergências
+
+| Item | Avaliação |
+|------|-----------|
+| Plano `004_pilot_seed` vs arquivo `004_seed_pilot` | Naming only — escopo idêntico — NÃO bloqueante |
+| Decisões DR1–DR6 vs SQL | Alinhado |
+| Arquitetura §14 name site | Alinhado |
+| Sem divergência bloqueante | OK — SQL criado |
+
+---
+
+## Riscos
+
+| Nível | Risco | Mitigação |
+|-------|--------|-----------|
+| HIGH | APPLY sem snapshot | DR6 + header obrigatório |
+| HIGH | Rollback após M5+ | Script BLOCKED se deps; restore |
+| MEDIUM | IDs só em NOTICE/evidência | Capturar no APPLY evidence |
+| LOW | Naming 004_seed_pilot vs plano | Documentado |
+
+CRITICAL bloqueante para criação: NENHUM
+
+---
+
+## Resultado final
+
+M4 SQL = CREATED — AWAITING REVIEW
+
+Próximos passos (fora desta tarefa; exigem autorização explícita):
+  1) Review humana do SQL
+  2) Pré-check LIVE (executar M4-PRECHECK-LIVE.sql)
+  3) Somente então eventual APPROVED FOR APPLY
+  4) APPLY permanece BLOCKED até autorização separada

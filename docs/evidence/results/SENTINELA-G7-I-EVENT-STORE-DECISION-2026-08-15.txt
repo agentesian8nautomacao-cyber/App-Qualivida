@@ -1,0 +1,171 @@
+SENTINELA AUT — G7-I — EVENT STORE DECISION GATE
+Data: 2026-08-15
+Status: G7-I = PASS (DECISION ONLY — sem implementação)
+
+Pré-requisito: G7-H-B = PASS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+EVENT STORE CRIADO  = 0
+N8N REAL (novo)     = 0
+WHATSAPP            = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+
+============================================================
+1. ESTADO ANTERIOR
+============================================================
+- Observabilidade G7-G/G7-H-A: envelope + redaction + wiring handlers
+- Sink: console [sentinela-obs] + ring buffer 200 (in-process)
+- Sem tabela api_domain_events
+- G7-H-B: n8n → API piloto validado; observabilidade emitida em runtime
+
+============================================================
+2. AUDITORIA REALIZADA
+============================================================
+Lidos:
+  docs/SENTINELA-AUT-EVENT-OBSERVABILITY.md
+  docs/SENTINELA-AUT-OBSERVABILITY.md
+  docs/SENTINELA-AUT-N8N-CONTRACT.md
+  docs/SENTINELA-AUT-API-CONTRACT.md
+  docs/evidence/results/SENTINELA-G7-H-B-N8N-API-PILOT-2026-08-15.txt
+  docs/evidence/results/SENTINELA-G7-F-N8N-READINESS*.txt
+  api/v1/_lib/observability/* (types, emit, redact, pipeline, runtime)
+  Grep supabase/: api_domain_events = AUSENTE
+
+Nota: docs/SENTINELA-AUT-G7-F-N8N-READINESS.md não existe;
+      readiness F está nas evidências.
+
+============================================================
+3. EVENTOS ANALISADOS / CLASSIFICAÇÃO
+============================================================
+PERSISTIR (Event Store futuro):
+  request.rejected
+  request.denied
+  confirmation.required
+  confirmation.consumed
+  idempotency.replay
+  core.failed
+  operation.completed
+  operation.failed
+
+OPCIONAL:
+  idempotency.created  (preferir omitir se volume alto)
+
+SOMENTE LOGS:
+  request.received
+  request.authorized
+  core.started
+  core.completed
+
+============================================================
+4. DECISÃO
+============================================================
+OPÇÃO B — EVENT STORE = NECESSÁRIO
+
+Motivos: auditoria de automações; painel tenant fail-closed;
+troubleshooting; segurança (reject/deny/confirmation);
+envelope/redaction já prontos — falta sink durável.
+
+NÃO implementar neste gate.
+Logs estruturados continuam obrigatórios em paralelo.
+
+============================================================
+5. MODELO CONCEITUAL (sem SQL)
+============================================================
+Tabela futura: api_domain_events (append-only, auditoria)
+Identidade: event_id, occurred_at, request_id
+Tenant: organization_id, condominium_id (modelo M1–M4)
+Operação: operation, event_type, status, source
+Execução: core_executed; confirmation_id (sem token);
+          idempotency_key_hash (sem plaintext se sensível)
+Dados: attributes jsonb redacted; external_ref opaco
+NÃO: HMAC, secrets, service-role, token, mídia, WhatsApp bruto,
+     SQL/stack, PII desnecessária
+
+Isolamento: RLS + queries sempre org+condo; fail-closed
+Core NÃO lê Event Store para regras
+n8n NÃO acessa via SQL
+
+============================================================
+6. SEGURANÇA / LGPD
+============================================================
+Minimização: só o suficiente para provar o que aconteceu
+Redaction: reutilizar redact.ts / assertNoSensitiveLeak
+PII: sem body de mensagem; sem mídia; sem CPF;
+     nome/unidade preferir no domínio, não no store
+Acesso: API admin futura + AuthZ (ex. sentinela.events.view)
+
+============================================================
+7. RETENÇÃO PROPOSTA
+============================================================
+Operacional: 90 dias
+Auditoria segurança (rejected/denied): 180 dias
+365 dias: não default nesta fase
+Job de limpeza: gate futuro (não G7-I)
+
+============================================================
+8. N8N
+============================================================
+Continua orquestrador → API v1 apenas
+Sem PostgreSQL / service-role / Event Store SQL
+Leitura futura de eventos: só via API autorizada (se houver)
+
+============================================================
+9. PAINEL
+============================================================
+Feed útil: outcomes, confirmation_required, falhas, replays
+UI porteiro: não mostrar received/authorized/core.started
+Entidades (encomendas/reservas): domínio, não Event Store
+Sem UI neste gate
+
+============================================================
+10. RISCOS
+============================================================
+- Segundo domínio → proibir Core read
+- Volume → persistência seletiva
+- Cross-tenant → RLS + AuthZ
+- PII → redaction + testes
+
+============================================================
+11. FUTURA MIGRATION
+============================================================
+DECISÃO: especificar SIM / criar NÃO / executar NÃO
+Doc: docs/SENTINELA-AUT-G7-I-EVENT-STORE-DECISION.md §10
+Quando autorizado: gate de implementação (ex. G7-J)
+
+============================================================
+12. ARTEFATOS
+============================================================
+CRIADOS:
+  docs/SENTINELA-AUT-G7-I-EVENT-STORE-DECISION.md
+  docs/evidence/results/SENTINELA-G7-I-EVENT-STORE-DECISION-2026-08-15.txt
+
+MODIFICADOS: nenhum código de produção neste gate
+             (somente docs + evidência + verificação test/build)
+
+============================================================
+13. TESTES / BUILD
+============================================================
+npm run test:run → 237 passed (17 files)
+npm run build    → PASS
+
+============================================================
+14. STOP
+============================================================
+G7-I = PASS (DECISION GATE)
+
+NÃO criar migration.
+NÃO aplicar migration.
+NÃO criar Event Store.
+NÃO iniciar WhatsApp.
+NÃO alterar workflow piloto.
+
+Próximo gate recomendado:
+  G7-J — implementar api_domain_events (se prioridade = auditoria)
+  OU gate WhatsApp (se prioridade = canal)
+  — somente com autorização explícita.

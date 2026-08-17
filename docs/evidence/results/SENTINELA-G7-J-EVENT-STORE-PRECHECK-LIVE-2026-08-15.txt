@@ -1,0 +1,49 @@
+SENTINELA AUT — G7-J — EVENT STORE — PRE-CHECK LIVE
+Data: 2026-08-15
+Status: G7-J PRE-CHECK PASS / AWAITING APPLY
+
+Project: zaemlxjwhzrfmowbckmk
+Script: docs/evidence/M-G7J-EVENT-STORE-PRECHECK-LIVE.sql
+Mode: READ-ONLY (sem DDL/DML)
+
+============================================================
+RESULTADO RESUMO (operador)
+============================================================
+organizations_exists       = true
+condominiums_exists        = true
+api_domain_events_absent   = true
+api_idempotency_keys_exists = true   (G6-1 intact)
+api_confirmations_exists   = true   (G6-2 intact)
+m_g7j_create_safe          = true
+
+============================================================
+INTERPRETAÇÃO
+============================================================
+[x] M1 organizations EXISTS
+[x] M1 condominiums EXISTS
+[x] api_domain_events ABSENT — seguro para CREATE 008
+[x] G6-1 / G6-2 presentes (informativo; não alterar)
+[x] Critério bloqueante PASS → APPLY autorizado pelo processo técnico
+
+Deep Review: APPROVED FOR LIVE PRE-CHECK (já PASS)
+Pré-check LIVE: PASS
+
+============================================================
+FRONTEIRAS (ainda)
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+APPLY 008           = NÃO EXECUTADO
+WIRING              = 0
+WHATSAPP            = 0
+
+============================================================
+STOP
+============================================================
+G7-J PRE-CHECK PASS / AWAITING APPLY
+
+Aguardar autorização explícita do operador para executar:
+  supabase/migrations/20260815220000_008_api_domain_events.sql
+
+NÃO iniciar WhatsApp / wiring G7-J-W / endpoint read / purge.

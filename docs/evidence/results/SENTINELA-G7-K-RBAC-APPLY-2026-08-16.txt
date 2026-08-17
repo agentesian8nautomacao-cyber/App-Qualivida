@@ -1,0 +1,106 @@
+SENTINELA AUT — G7-K-RBAC — APPLY LIVE
+Data/hora UTC (pre-reconfirm): 2026-08-16T17:18:38Z
+Backup UTC:                    2026-08-16T17:19:17Z → 2026-08-16T17:20:40Z
+APPLY UTC:                     2026-08-16T17:20:41Z → 2026-08-16T17:20:43Z
+Validação UTC:                 2026-08-16T17:20:43Z → 2026-08-16T17:21:18Z
+Projeto:                       zaemlxjwhzrfmowbckmk
+Host DB:                       db.zaemlxjwhzrfmowbckmk.supabase.co
+Autorização:                   EXPLÍCITA (APPLY G7-K-RBAC 009 somente)
+
+Migration aplicada:
+  supabase/migrations/20260815230000_009_events_view_permission.sql
+Nome lógico:                   009_events_view_permission
+Gate:                          G7-K-RBAC
+
+Pré-condições:
+  Deep Review = APPROVED FOR LIVE APPLY (0 HIGH/BLOCKING)
+  Pre-check LIVE (histórico) = PASS (m_g7k_create_safe=true)
+  Pre-check LIVE (reconfirm pré-APPLY) = PASS (m_g7k_create_safe=t)
+
+Método:                        psql -f (arquivo íntegro, ON_ERROR_STOP=1)
+psql apply_exit:               0
+pg_dump_exit:                  0
+
+Saída APPLY (resumo):
+  BEGIN
+  INSERT 0 1   (permissions: events.view)
+  INSERT 0 2   (role_permissions: sindico + administradora)
+  COMMIT
+
+RESULTADO: G7-K-RBAC APPLY = PASS
+
+============================================================
+PRE-APPLY RECONFIRM
+============================================================
+events.view ABSENT                 = t
+sindico EXISTS                     = t
+administradora EXISTS              = t
+events.view grants ABSENT          = t
+sentinela.view intact              = t (label: Sentinela AI — acessar página)
+permissions_count_before           = 50
+organizations / condominiums       = EXISTS
+units / tenant_memberships         = EXISTS
+api_idempotency_keys (G6-1)        = EXISTS
+api_confirmations (G6-2)           = EXISTS
+api_domain_events (G7-J)           = EXISTS
+reservations_area_date_slot_excl   = EXISTS (contype x)
+m_g7k_create_safe                  = t
+Alvo confirmado: 009_events_view_permission (somente este arquivo)
+Outras migrations nesta tarefa: 0
+
+============================================================
+BACKUP PRÉ-APPLY
+============================================================
+Tipo:     pg_dump -Fc --no-owner --no-acl
+Arquivo:  docs/evidence/backups/backup-pre-g7k-009-2026-08-16-141917.dump
+pg_dump_exit: 0
+SIZE_BYTES:   544406
+SHA-256:      0135a7ace51a8f5a3f639b0d81d08cf3bc0f1f08984d4b5aedcc412a163b76c9
+
+============================================================
+POST-APPLY VALIDATION (READ-ONLY)
+============================================================
+1. events.view EXISTS = t
+2. label = Eventos — visualizar auditoria
+   label_hex UTF-8 = 4576656e746f7320e280942076697375616c697a61722061756469746f726961
+   (em-dash U+2014 confirmado; match esperado)
+3. Grants:
+     sindico        has_events_view = t
+     administradora has_events_view = t
+     cabo_turma     has_events_view = f
+     porteiro       has_events_view = f
+     morador        has_events_view = f
+4. grants_total = 2 (somente roles esperadas)
+5. grants_forbidden_roles = 0
+6. permissions_count_after = 51 (50 + events.view)
+7. sentinela.view intact = t
+8. Nenhuma permission nova além de events.view
+   (chaves legacy manage_*/view_* pré-existentes; não criadas pela 009)
+9. Integridade:
+     M1 organizations/condominiums = t
+     M2 units = t
+     M3 tenant_memberships = t
+     G6-1 api_idempotency_keys = t
+     G6-2 api_confirmations = t
+     G7-C exclusion = t
+     G7-J api_domain_events = t (col_count=21 inalterado)
+10. exit code APPLY = 0
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = INSERT permissions(events.view) + 2 role_permissions
+MIGRATIONS EXECUTED = 1 (somente 009)
+EVENT STORE SCHEMA  = INALTERADO
+LIVE WRITE domínio  = 0
+N8N                 = 0
+WHATSAPP            = 0
+GET /api/v1/events  = NÃO INICIADO
+OpenAPI             = NÃO alterado
+
+============================================================
+STOP (APPLY)
+============================================================
+G7-K-RBAC APPLY = PASS
+Aguarda CLOSEOUT READ-ONLY → CLOSED / PASS
+Sem endpoint / WhatsApp / n8n prod / purge.

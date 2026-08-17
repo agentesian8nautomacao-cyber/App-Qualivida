@@ -1,0 +1,22 @@
+SENTINELA AUT — G7-K-RBAC — DEEP REVIEW
+Data: 2026-08-15
+Target: 20260815230000_009_events_view_permission.sql (+ rollback)
+
+HIGH / BLOCKING findings: 0
+
+FINDINGS
+--------
+Nenhum HIGH/BLOCKING.
+
+REVIEW NOTES
+------------
+1. Permission insert idempotente; sem UPDATE de rows existentes.
+2. Grants limitados a sindico + administradora (explícito).
+3. Rollback ordenado: grants → permission; sem CASCADE.
+4. Sem alteração de domínio / Event Store / RLS.
+5. Mirror TS alinhado; sem nova Core operation.
+6. Pre-check LIVE m_g7k_create_safe=true.
+
+VERDICT
+-------
+G7-K-RBAC SQL = CREATED + DEEP REVIEW APPROVED FOR LIVE APPLY (aguarda auth)

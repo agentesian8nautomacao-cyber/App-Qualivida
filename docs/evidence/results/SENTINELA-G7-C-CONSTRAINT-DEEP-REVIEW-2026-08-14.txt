@@ -1,0 +1,197 @@
+SENTINELA AUT — G7-C — RESERVATION EXCLUSION CONSTRAINT — DEEP REVIEW
+Data: 2026-08-14
+Migration:  supabase/migrations/20260814210000_007_reservations_no_overlap.sql
+Rollback:   supabase/migrations/20260814210000_007_reservations_no_overlap.rollback.sql
+
+RESULTADO: G7-C = APPROVED FOR LIVE PRE-CHECK
+
+HIGH / BLOCKING findings: 0
+MEDIUM findings: 3 (documentados; sem correção automática nesta etapa)
+LOW findings: 2
+
+DATABASE CHANGES   = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+APPLY 007           = NÃO EXECUTADO
+Pré-check formal    = NÃO EXECUTADO (próximo gate autorizado)
+Rollback            = NÃO EXECUTADO
+G7-D / Event Store / n8n / WhatsApp = NÃO
+
+============================================================
+MÉTODO
+============================================================
+1) Review estático adversarial da migration + rollback
+2) Inspeção LIVE READ-ONLY (spot-check schema; sem pré-check formal)
+3) Harness PostgreSQL LOCAL descartável (initdb temp :55433)
+   — CREATE TABLE espelho + ADD CONSTRAINT 007
+   — testes de fronteira, status, race A||B
+   — cluster destruído ao final
+4) Testes Vitest locais (artefatos SQL + domínio)
+5) Build não reexecutado nesta etapa; suíte exclusion reexecutada
+
+LIVE spot-check (READ-ONLY):
+  reservations EXISTS = t
+  btree_gist EXISTS   = t
+  condominium_id      = ABSENT (f)
+  reservations count  = 0
+  exclusion constraint ABSENT = t
+
+============================================================
+VALIDAÇÃO 1–20 (resumo)
+============================================================
+1. Impede duas reservas mesma area_id overlapping
+   LOCAL PASS — exclusion_violation; 1 linha sob race
+
+2. Concorrência real A||B
+   LOCAL PASS — 2 jobs paralelos INSERT mesmo slot:
+     um COMMIT sucesso; outro ERROR exclusion;
+     COUNT(*) no slot = 1
+   SQLSTATE = 23P01 (exclusion_violation)
+
+3. Half-open [start,end)
+   10–12 ∩ 11–13 = CONFLITO   LOCAL PASS + Core PASS
+   10–12 ∩ 12–14 = PERMITIDO  LOCAL PASS + Core PASS
+   10–12 ∩ 09–10 = PERMITIDO  LOCAL PASS + Core PASS
+
+4. Areas diferentes não conflitam
+   LOCAL PASS
+
+5. Status ativos
+   scheduled+scheduled = conflito LOCAL (implícito race/serial)
+   scheduled+active    = conflito LOCAL PASS
+   active+active       = conflito LOCAL PASS
+
+6. canceled / completed NÃO participam
+   LOCAL PASS — INSERT scheduled após canceled/completed OK
+
+7. NULLs / inválidos / vazios
+   Colunas NOT NULL no LIVE — NULLs rejeitados pelo schema
+   Intervalo invertido (12→10): INSERT falha
+     "range lower bound must be less than or equal to upper bound"
+     (fail-closed; erro ≠ exclusion)
+   Intervalo zero (10→10): AMBOS INSERTs passam (empty range)
+     → MEDIUM-1 (ver findings)
+
+8. Conversão date + time → tsrange
+   Confirmado no DETALHE PG:
+     date::timestamp without time zone + start_time::interval
+   Sem cast AT TIME ZONE — horário de parede preservado
+
+9. Timezone
+   time/date/timestamp WITHOUT time zone — sem mudança semântica TZ
+   PASS para slots de condomínio (wall-clock)
+
+10. Não exige condominium_id
+    PASS — EXCLUDE só area_id + date + tsrange; sem ADD COLUMN
+
+11. area_id suficiente no schema atual
+    PASS — UUID único; areas sem condominium_id no LIVE
+
+12. Cross-tenant / cross-condo pela constraint
+    Não introduz bloqueio cross-condo (areas distintas = UUIDs distintos)
+    Residual M5: se no futuro areas forem compartilhadas entre tenants
+    (não é o modelo atual), revisão necessária — LOW-1
+
+13. Nome constraint
+    reservations_area_date_slot_excl — determinístico; rollback idêntico
+
+14. Rollback
+    Somente DROP CONSTRAINT; sem CASCADE / DELETE / IF EXISTS
+    LOCAL: 2º DROP falha claramente se ausente — PASS
+
+15. btree_gist
+    Migration NÃO instala extensão; FAIL se ausente
+    LIVE: EXISTS — PASS
+
+16. Fail-closed
+    Guards: tabela/colunas/tipos/btree_gist/constraint-já-existe/
+    conflitos ativos > 0 → RAISE
+    Sem ADD COLUMN inventado; só ALTER reservations ADD CONSTRAINT
+    PASS
+
+17. Compatibilidade M1–M4 / G6-1 / G6-2 / G7-A / G7-B
+    Sem tocar organizations/condominiums/units/memberships/
+    api_idempotency_keys/api_confirmations
+    PASS (estático)
+
+18. Interferência ops
+    create_reservation: reforça (DB é fonte dura sob race)
+    cancel_reservation: DELETE remove do índice → libera slot
+    update status → completed/canceled: sai do WHERE parcial → libera
+    retries/idempotência: key distinta + conflito → 23P01;
+      key igual → replay G7-B (inalterado)
+    PASS com ressalva MEDIUM-2 (mapeamento erro API)
+
+19. Dois requests simultâneos
+    Um vence; outro 23P01; sem dupla reserva — LOCAL PASS
+    Erro tratável no PG: sim (23P01)
+    Na API atual: ainda NÃO mapeado para CONFLICT — MEDIUM-2 / G7-D
+
+20. Core/API tratar exclusion
+    REQUISITO G7-D (NÃO implementar agora):
+      supabasePersistence.saveReservation:
+        se error.code / message indica 23P01 / exclusion_violation
+        → falha tipada para Core mapear CONFLICT (não INTERNAL_ERROR)
+      Opcional: validar end_time > start_time no Core (MEDIUM-1)
+
+============================================================
+FINDINGS
+============================================================
+HIGH / BLOCKING: nenhum
+
+MEDIUM-1 — intervalo zero (start_time = end_time)
+  Evidência LOCAL: dois INSERTs 10:00–10:00 ambos OK (empty range).
+  Risco baixo operacional; recomendação futura:
+    CHECK (end_time > start_time) OU validação Core.
+  NÃO corrigido automaticamente nesta review.
+
+MEDIUM-2 — API não mapeia 23P01 → CONFLICT
+  saveReservation retorna error.message genérico →
+  createReservation → OPERATIONAL_ERROR → INTERNAL_ERROR.
+  Integridade DB OK; UX/retry n8n precisa de CONFLICT explícito.
+  Documentado como requisito G7-D. NÃO implementar agora.
+
+MEDIUM-3 — Core filtra cancelled/cancelada; LIVE usa canceled
+  Constraint WHERE usa 'canceled' (correto LIVE).
+  listReservationSlots/Core ainda não filtram 'canceled'.
+  Hoje cancel = DELETE (não soft-status), risco residual baixo.
+  Alinhar grafia no Core = follow-up (não bloqueia SQL).
+
+LOW-1 — isolamento condo via area_id UUID depende do modelo de areas
+  Adequado ao schema LIVE atual; M5 pode revisitar.
+
+LOW-2 — comentário em createReservation.ts ainda cita
+  "LIMITATION: no Postgres exclusion constraint yet"
+  Stale até APPLY; cosmético.
+
+============================================================
+TESTES
+============================================================
+Vitest: api/v1/_lib/execution/g7c.reservation-exclusion.test.ts
+  (estático + half-open + 09–10 + status spellings) — executar abaixo
+
+Harness LOCAL PG (destruído):
+  half-open / areas / status / race / SQLSTATE 23P01 / rollback fail-closed
+
+Build: não exigido para aprovação SQL; integrity suite prévia PASS
+  (reexecutar exclusion tests nesta entrega)
+
+============================================================
+STATUS PLATAFORMA
+============================================================
+M1–M4     = INTACTOS
+G6-1/G6-2 = INTACTOS
+G7-A/G7-B = INTACTOS (sem alteração de código runtime nesta review)
+G7-C SQL  = CREATED + DEEP REVIEW APPROVED FOR LIVE PRE-CHECK
+G7-C gate operacional completo = ainda depende de APPLY + mapeamento G7-D
+
+============================================================
+VEREDICTO FINAL
+============================================================
+G7-C = APPROVED FOR LIVE PRE-CHECK
+
+Próximo passo autorizado (humano): executar pré-check LIVE READ-ONLY
+formal (M-G7C-RESERVATION-EXCLUSION-PRECHECK-LIVE.sql).
+APPLY 007 permanece PROIBIDO até autorização explícita.
+
+STOP.

@@ -1,0 +1,394 @@
+# M4 READINESS REVIEW — Pré-especificação (sem SQL)
+
+Data/hora UTC:        2026-08-14T11:20:54Z
+Projeto:              zaemlxjwhzrfmowbckmk
+Modo:                 SOMENTE LEITURA / ANÁLISE / DOCUMENTAÇÃO
+SQL M4:               NÃO CRIADO
+Rollback M4:          NÃO CRIADO
+DDL/DML/APPLY:        NÃO EXECUTADOS
+M1 / M2 / M3:         CLOSED / PASS
+M4 APPLY:             BLOCKED (esta etapa não autoriza SQL nem APPLY)
+
+Fontes:
+  docs/FASE-1-MIGRATION-PLAN.md § M4 — 004_pilot_seed
+  docs/FASE-1-ARQUITETURA-MULTITENANT.md §14 Primeiro tenant + §2/§3
+  docs/OPERAUT-ARCHITECTURE-ADDENDUM.md (site = condominiums; piloto Qualivida)
+  docs/evidence/results/M1-CLOSEOUT-2026-08-13.txt
+  docs/evidence/results/M2-CLOSEOUT-2026-08-14.txt
+  docs/evidence/results/M3-CLOSEOUT-2026-08-14.txt
+  docs/evidence/results/M3-DECISIONS-2026-08-14.txt (DR7 → inserts corretos em M4/M11)
+  Schema LIVE M1: organizations / condominiums (CREATE já aplicado)
+
+================================================================================
+0. ESTADO LIVE (READ-ONLY) — 2026-08-14T11:20:54Z
+================================================================================
+AUTH_OK = YES (postgres / postgres)
+
+| Tabela              | EXISTS | rows |
+|---------------------|--------|------|
+| organizations       | YES    | 0    |
+| condominiums        | YES    | 0    |
+| units               | YES    | 0    |
+| tenant_memberships  | YES    | 0    |
+| roles               | YES    | 5    |
+| residents           | YES    | 4    |
+| staff               | YES    | 1    |
+
+organizations cols (M1): id, name, slug, status, created_at, updated_at
+  UNIQUE (slug); PK id; defaults: status='active', timestamps=now(), id=gen_random_uuid()
+
+condominiums cols (M1): id, organization_id, name, vertical, slug, status, created_at, updated_at
+  FK organization_id → organizations(id) ON DELETE RESTRICT
+  UNIQUE (organization_id, slug)
+  CHECK (vertical = 'condominium')
+  defaults: vertical='condominium', status='active', timestamps=now(), id=gen_random_uuid()
+
+roles LIVE (name): morador, porteiro, cabo_turma, administradora, sindico
+  (coluna = name, NÃO slug)
+
+Seed piloto ainda NÃO existe (org/condo rows = 0) — pré-condição estrutural para M4 OK.
+
+Git: worktree DIRTY; pre-m1-checkpoint = aec1f5f2150633519b8a6136b9ddbff61bfed513 intacta
+HEAD = 31731e7
+
+================================================================================
+1. OBJETIVO (documental)
+================================================================================
+Nome lógico: 004_pilot_seed
+
+Seed do primeiro tenant Operaut:
+  1) Organization piloto
+  2) Operational Site piloto em condominiums
+     name = "Qualivida Club Residence"
+     vertical = 'condominium'
+     condominium_id ≡ site_id no piloto
+
+Classificação Operaut: CONTINUA IGUAL
+Risco plano: 🔴 (DML prod)
+Dependências plano: M1–M3 (satisfeitas LIVE)
+
+Critério de sucesso (plano):
+  - 1 org + 1 site
+  - IDs piloto no runbook
+  - base para backfills (M5+)
+  - app legado ainda opera (sem ALTER legado)
+
+================================================================================
+2. ESCOPO IN / OUT
+================================================================================
+IN (previsto):
+  - INSERT em public.organizations (1 linha piloto)
+  - INSERT em public.condominiums (1 linha piloto, FK → org)
+  - Transação única (regra plano: DML M4 em transação)
+  - Comentários/runbook com IDs resultantes
+  - Rollback script documental (DELETE/snapshot — ver DRs)
+
+OUT (explícito / fora de M4):
+  - CREATE TABLE / ALTER TABLE (qualquer)
+  - INSERT units
+  - INSERT tenant_memberships (→ M11)
+  - INSERT/UPDATE roles, residents, staff, users, packages, boletos
+  - Backfill condominium_id em legado (→ M5–M8)
+  - RLS / policies / helpers (→ M12–M14)
+  - Storage (→ M15)
+  - Functions / triggers / Realtime
+  - tenant_id / nova chave de isolamento
+  - organization_id em units (já transitivo; units vazias)
+  - Operations Core / eventos / n8n
+
+================================================================================
+3. TABELAS
+================================================================================
+Novas:       NENHUMA
+Alteradas:   NENHUMA (somente DML nas tabelas M1)
+Populadas:   organizations, condominiums
+Intocáveis:  units, tenant_memberships, roles, residents, staff,
+             users, packages, boletos, permissions, role_permissions,
+             e demais legado operacional
+
+================================================================================
+4. COLUNAS / TIPOS / NULLABILITY / DEFAULTS (uso no seed)
+================================================================================
+Sem novas colunas. Seed usa schema M1 existente.
+
+organizations (INSERT):
+| campo      | tipo         | null | default LIVE        | seed M4                          | status     |
+|------------|--------------|------|---------------------|----------------------------------|------------|
+| id         | uuid         | NO   | gen_random_uuid()   | DR4 (fixo vs random)           | OPEN DR4   |
+| name       | text         | NO   | —                   | DR1 (nome legal)                 | OPEN DR1   |
+| slug       | text         | NO   | —                   | DR2                              | OPEN DR2   |
+| status     | text         | NO   | 'active'            | omitir → default OU 'active'     | CLOSED     |
+| created_at | timestamptz  | NO   | now()               | omitir → default                 | CLOSED     |
+| updated_at | timestamptz  | NO   | now()               | omitir → default                 | CLOSED     |
+
+condominiums (INSERT):
+| campo           | tipo        | null | default LIVE     | seed M4                              | status   |
+|-----------------|-------------|------|------------------|--------------------------------------|----------|
+| id              | uuid        | NO   | gen_random_uuid()| DR4                                  | OPEN DR4 |
+| organization_id | uuid        | NO   | —                | = id da org piloto (mesma TX)        | CLOSED   |
+| name            | text        | NO   | —                | "Qualivida Club Residence" (doc §14) | CLOSED   |
+| vertical        | text        | NO   | 'condominium'    | 'condominium' (CHECK)                | CLOSED   |
+| slug            | text        | NO   | —                | DR3                                  | OPEN DR3 |
+| status          | text        | NO   | 'active'         | omitir → default OU 'active'         | CLOSED   |
+| created_at      | timestamptz | NO   | now()            | omitir → default                     | CLOSED   |
+| updated_at      | timestamptz | NO   | now()            | omitir → default                     | CLOSED   |
+
+================================================================================
+5. PK / FK / ON DELETE / UNIQUE / INDEX / CHECK
+================================================================================
+M4 NÃO cria constraints novas.
+
+Reutiliza (já LIVE):
+  PK organizations_pkey (id)
+  PK condominiums_pkey (id)
+  FK condominiums.organization_id → organizations(id) ON DELETE RESTRICT
+  UNIQUE organizations_slug_key (slug)
+  UNIQUE condominiums_organization_id_slug_key (organization_id, slug)
+  CHECK condominiums_vertical_check (vertical = 'condominium')
+  INDEX idx_organizations_status
+  INDEX idx_condominiums_organization_id
+  INDEX idx_condominiums_status
+
+Impacto no seed:
+  - slug org deve ser único global
+  - slug site único dentro da org
+  - vertical obrigatoriamente 'condominium'
+  - DELETE org com condo existente → RESTRICT (rollback ordenado)
+
+================================================================================
+6. TENANT BOUNDARY
+================================================================================
+Organization: raiz B2B (não é o tenant operacional do piloto).
+Operational Site / tenant boundary: condominiums.id
+  condominium_id ≡ site_id (addendum / plano)
+
+NÃO introduzir:
+  - tenant_id
+  - organization_id em units (transitivo via condominiums)
+  - nova chave de isolamento
+
+organization_id em condominiums: REQUIRED (pai do site) — já no schema M1.
+organization_id em tenant_memberships: NÃO populado em M4 (M11).
+
+Risco cross-tenant em M4:
+  - Baixo no momento do seed (1 org / 1 site; memberships=0).
+  - Residual DR7 (M3): inserts futuros de membership devem manter
+    membership.organization_id = condominiums.organization_id do site.
+  - M4 NÃO cria memberships → risco DR7 adiado para M11.
+
+================================================================================
+7. DEPENDÊNCIAS M1/M2/M3 + LEGADO
+================================================================================
+Hard deps M4:
+  - organizations EXISTS (M1) — SIM
+  - condominiums EXISTS (M1) — SIM
+  - rows org/condo = 0 (seed ainda não aplicado) — SIM
+
+Soft / cadeia:
+  - M2 units EXISTS (vazia) — presente; NÃO populada em M4
+  - M3 tenant_memberships EXISTS (vazia) — presente; NÃO populada em M4
+  - roles / residents / staff — NÃO alterados; contagens legado intactas
+    (roles=5, residents=4, staff=1) — referência futura M11, não M4
+
+Não alterar nenhuma dependência.
+
+================================================================================
+8. DML / SEED / BACKFILL
+================================================================================
+DML permitido em M4: SIM — exclusivamente INSERT (plano: seed piloto).
+  Esperado: 1 INSERT organizations + 1 INSERT condominiums (mesma transação).
+
+Seed permitido: SIM — M4 É o seed piloto.
+
+Backfill: NÃO em M4.
+  - units DISTINCT / memberships / set condominium_id legado =
+    plano multi-etapa (arquitetura §14) → M5–M11, NÃO M4.
+
+Memberships em M4: NÃO.
+Residents/staff associação em M4: NÃO.
+Roles: reutilizar existentes; sem INSERT roles.
+Dados legados: NÃO copiar em M4.
+
+IDs: ver DR4 (fixos no SQL vs random + captura no runbook).
+Organização piloto: SIM (valores name/slug = DRs).
+Condomínio piloto: SIM (name fechado; slug = DR).
+
+Idempotência / reexecução: NÃO especificada → DR5.
+
+================================================================================
+9. SEGURANÇA
+================================================================================
+RLS / policies: FORA de M4
+Storage: FORA
+Functions / triggers: FORA
+Authorization app: FORA
+Helpers current_condominium_id: FORA (M12)
+
+Observação: relrowsecurity nas tabelas M1/M3 pode permanecer true sem policies
+(padrão Supabase) — M4 não altera RLS.
+
+================================================================================
+10. ROLLBACK (documental — NÃO EXECUTAR)
+================================================================================
+Plano: "Snapshot pré-M4 preferível."
+Runbook: "Snapshot pós-M4."
+
+Ordem conceitual se DELETE (somente enquanto sem FKs dependentes):
+  1) DELETE condominiums WHERE id = :piloto_site_id
+  2) DELETE organizations WHERE id = :piloto_org_id
+  (ordem invertida à criação; ON DELETE RESTRICT exige site antes da org)
+
+Após M5+ (FKs condominium_id em legado / units / memberships):
+  - DELETE seed pode falhar por RESTRICT
+  - DROP TABLE organizations/condominiums PROIBIDO se dependentes
+  - Rollback preferencial = restore snapshot
+
+Ponto de proibição soft:
+  - Após qualquer FK apontando para IDs piloto → rollback DELETE simples
+    deixa de ser seguro sem cascata controlada / restore.
+
+Detalhe operacional (script vs snapshot-only): OPEN → DR6.
+
+rollback nesta review = NOT EXECUTED
+
+================================================================================
+11. RISCOS
+================================================================================
+CRITICAL:
+  - Nenhum estrutural agora (deps presentes; tables vazias prontas para seed).
+  - CRITICAL operacional futuro: DML prod sem snapshot pré-M4.
+
+HIGH:
+  - Seed com name/slug/IDs ambíguos → runbook inconsistente / reexecução difícil (DR1–DR4)
+  - Reaplicar M4 sem guard → UNIQUE violation ou duplicata lógica (DR5)
+  - Rollback inadequado após M5+ → órfãos / bloqueio RESTRICT (DR6)
+
+MEDIUM:
+  - Confusão com §14 “plano backfill” (units/memberships na mesma narrativa) —
+    risco de SQL M4 escopo expandido indevidamente
+  - DR7 residual org↔membership (adiado; M4 não popula memberships)
+  - Nome org placeholder vs razão social real (negócio)
+
+LOW:
+  - status/timestamps defaults (já seguros no schema)
+  - vertical default/CHECK (já seguro)
+  - App legado continua sem referenciar org/condo (impacto nulo imediato)
+
+================================================================================
+12. DECISION REQUIRED (abertas — bloqueantes para SQL)
+================================================================================
+
+DR1 — ORGANIZATION NAME
+Pergunta: Qual valor exato de organizations.name no seed?
+Contexto: Arquitetura §14 = "Empresa/Administradora piloto" (nome legal a confirmar).
+Opções:
+  A) Usar literal "Empresa/Administradora piloto"
+  B) Nome legal real (fornecido pelo negócio) — ex. razão social Qualivida/administradora
+  C) Placeholder técnico distinto (ex. "Operaut Pilot Organization")
+Recomendação: B se disponível; senão A documentado como temporário até rename.
+Impacto: display/runbook; não bloqueia schema.
+Dependências: negócio / produto.
+
+DR2 — ORGANIZATION SLUG
+Pergunta: Qual organizations.slug (UNIQUE global)?
+Contexto: Schema exige slug NOT NULL; docs não fixam valor.
+Opções:
+  A) "piloto" / "pilot"
+  B) "qualivida" / "qualivida-admin"
+  C) slug derivado do nome legal (DR1)
+Recomendação: B "qualivida-admin" ou C após DR1 — precisa decisão explícita.
+Impacto: UNIQUE; Storage paths usam UUID (slug não é path crítico).
+Dependências: DR1 preferível.
+
+DR3 — CONDOMINIUM SLUG
+Pergunta: Qual condominiums.slug (UNIQUE por organization_id)?
+Contexto: name = "Qualivida Club Residence" fechado; slug não documentado.
+Opções:
+  A) "qualivida-club-residence"
+  B) "qualivida"
+  C) "qcr" / curto
+Recomendação: A (estável, legível, alinhado ao name).
+Impacto: UNIQUE scoped; runbook.
+Dependências: nenhuma hard.
+
+DR4 — IDS FIXOS vs gen_random_uuid()
+Pergunta: IDs piloto devem ser UUIDs fixos no SQL ou gerados e capturados?
+Contexto: Critério de sucesso = "IDs piloto no runbook".
+Opções:
+  A) UUIDs fixos conhecidos no migration (reprodutível / idempotente com ON CONFLICT)
+  B) DEFAULT gen_random_uuid() + SELECT pós-INSERT gravado no runbook/evidência
+  C) Variáveis psql / CTE RETURNING capturados em evidência APPLY
+Recomendação: A para runbook estável + testes; B/C aceitáveis se evidência capturar IDs.
+Impacto: M5–M11 scripts, Storage paths futuros, rollback DELETE.
+Dependências: DR5 (idempotência).
+
+DR5 — IDEMPOTÊNCIA / REEXECUÇÃO
+Pergunta: Como o SQL M4 se comporta se reaplicado?
+Contexto: Sem guard, 2ª execução falha em UNIQUE(slug) ou cria duplicata se slugs mudarem.
+Opções:
+  A) Guard DO $$: se COUNT(org/condo piloto)>0 → EXCEPTION BLOCKED
+  B) INSERT … ON CONFLICT (slug) DO NOTHING + assert 1/1
+  C) Somente documentação “aplicar uma vez”; sem guard SQL
+Recomendação: A (fail-closed, alinhado M1–M3 guards) ou B com asserts.
+Impacto: segurança operacional.
+Dependências: DR2/DR3/DR4.
+
+DR6 — ROLLBACK CONCRETO PÓS-SEED
+Pergunta: O artefato rollback M4 deve ser DELETE por IDs, restore snapshot, ou ambos?
+Contexto: Plano prefere snapshot; M1 rollback DROP só se M4 não rodou.
+Opções:
+  A) Snapshot-only (script rollback = instruções; sem DELETE automatizado)
+  B) DELETE condominium + organization por IDs fixos (válido só pré-M5 / sem FKs)
+  C) B + nota “PROIBIDO após M5+; usar restore”
+Recomendação: C.
+Impacto: recuperação; risco HIGH se mal usado pós-M5.
+Dependências: DR4.
+
+--------------------------------------------------------------------------------
+DECISÕES JÁ FECHADAS PELA DOCUMENTAÇÃO (não reabrir)
+--------------------------------------------------------------------------------
+D-CLOSED-1: M4 cria tabelas? NÃO — só seed.
+D-CLOSED-2: Nome do site = "Qualivida Club Residence".
+D-CLOSED-3: vertical = 'condominium'.
+D-CLOSED-4: status default 'active' OK.
+D-CLOSED-5: Sem memberships em M4 (M11).
+D-CLOSED-6: Sem units population em M4 (fora do objetivo M4; §14 é plano multi-etapa).
+D-CLOSED-7: Sem ALTER legado / RLS / Storage / functions.
+D-CLOSED-8: Tenant boundary operacional = condominium_id (= site_id).
+D-CLOSED-9: organization_id do site = FK da org piloto (consistência org↔site na criação).
+
+================================================================================
+13. PRÉ-CONDIÇÕES PARA FUTURA SQL CREATION (após fechar DRs)
+================================================================================
+[ ] DR1–DR6 CLOSED (arquivo M4-DECISIONS)
+[ ] Snapshot pré-M4 confirmado (gate operacional APPLY — não desta etapa)
+[ ] SQL 004_pilot_seed sob autorização explícita de criação
+[ ] Rollback anexado
+[ ] Pré-check LIVE: org/condo rows=0 OU política idempotente acordada
+[ ] APPLY permanece BLOCKED até autorização explícita separada
+
+================================================================================
+14. GIT
+================================================================================
+git status --short: DIRTY (evidências/migrations untracked; plan modified)
+pre-m1-checkpoint: aec1f5f2150633519b8a6136b9ddbff61bfed513 — NÃO movida
+Sem commit / push / tag / reset / clean.
+
+================================================================================
+15. RESULTADO
+================================================================================
+Escopo M4 suficientemente IDENTIFICADO (seed 1 org + 1 site).
+Porém decisões bloqueantes de valores/IDs/idempotência/rollback ABERTAS.
+
+M4 = NEEDS REVISION
+
+Significado:
+  - NÃO READY FOR SQL CREATION até fechar DR1–DR6
+  - NÃO APPROVED FOR APPLY
+  - M4 APPLY permanece BLOCKED
+  - Nenhum SQL M4 foi criado nesta etapa
+  - Nenhuma alteração de banco foi executada
+
+Próximo passo autorizável (quando solicitado):
+  fechar DRs em docs/evidence/results/M4-DECISIONS-….txt
+  → então nova avaliação READY FOR SQL CREATION

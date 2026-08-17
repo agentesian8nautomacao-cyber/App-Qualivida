@@ -1,0 +1,193 @@
+# M3 SQL — Deep Review (arquivo real)
+
+Data/hora UTC: 2026-08-14T10:57:53Z
+Modo: SOMENTE LEITURA / ANÁLISE
+Migration / rollback / pré-check LIVE / APPLY: NÃO EXECUTADOS
+SQL NÃO modificado nesta tarefa
+
+================================================================================
+1. Migration
+================================================================================
+Arquivo: supabase/migrations/20260814170000_003_tenant_memberships.sql
+Nome lógico: 003_tenant_memberships
+Status artefato: PREPARED / NOT EXECUTED
+Linhas: 1–130
+
+Fluxo executável:
+  L40 BEGIN
+  L43–49 DO $$ guard to_regclass → RAISE EXCEPTION
+  L55–93 CREATE TABLE public.tenant_memberships
+  L95–96 CREATE INDEX idx_tenant_memberships_condominium_id
+  L98–123 COMMENT ON TABLE/COLUMN
+  L130 COMMIT
+
+CREATE TABLE IF NOT EXISTS: AUSENTE
+Guard: PRESENTE (L43–49)
+
+================================================================================
+2. Rollback
+================================================================================
+Arquivo: …003_tenant_memberships.rollback.sql
+  BEGIN → DROP TABLE IF EXISTS public.tenant_memberships → COMMIT
+CASCADE: AUSENTE
+Outras tabelas: NÃO
+SAFE enquanto M11/M12+ não dependerem da tabela
+NÃO EXECUTADO
+
+================================================================================
+3. Tabela
+================================================================================
+Única criada: public.tenant_memberships — PASS
+
+================================================================================
+4–7. Campos / tipos / nullability / defaults
+================================================================================
+| Campo | SQL (linha) | Esperado | OK |
+|-------|-------------|----------|-----|
+| id | uuid PK DEFAULT gen_random_uuid() L56 | igual | SIM |
+| auth_user_id | uuid NOT NULL L57 | igual | SIM |
+| organization_id | uuid NOT NULL L58 | igual | SIM |
+| condominium_id | uuid NOT NULL L59 | igual | SIM |
+| role_id | uuid NOT NULL L60 | igual | SIM |
+| resident_id | uuid NULL L61 | igual | SIM |
+| staff_profile_id | uuid NULL L62 | igual | SIM |
+| status | text NOT NULL DEFAULT 'active' L63 | igual | SIM |
+| is_default | boolean NOT NULL DEFAULT false L64 | igual | SIM |
+| created_at | timestamptz NOT NULL DEFAULT now() L65 | igual | SIM |
+| updated_at | timestamptz NOT NULL DEFAULT now() L66 | igual | SIM |
+
+Campos extras/ausentes/renomeados: NENHUM
+ENUM type / CHECK status / trigger: AUSENTES
+(nota: palavra "ENUM" só em string COMMENT L120 — não é tipo ENUM)
+
+================================================================================
+8–10. FKs / ON DELETE
+================================================================================
+Todas ON DELETE RESTRICT (6):
+
+L67–70: auth_user_id → auth.users(id) ON DELETE RESTRICT
+L71–74: organization_id → public.organizations(id) ON DELETE RESTRICT
+L75–78: condominium_id → public.condominiums(id) ON DELETE RESTRICT
+L79–82: role_id → public.roles(id) ON DELETE RESTRICT
+L83–86: resident_id → public.residents(id) ON DELETE RESTRICT
+L87–90: staff_profile_id → public.staff(id) ON DELETE RESTRICT
+
+CASCADE: NÃO
+SET NULL: NÃO
+FK composta: NÃO
+ALTER em tabelas referenciadas: NÃO
+
+Resident FK (LIVE confirmado na criação): public.residents.id uuid — PASS
+Staff FK (LIVE confirmado na criação): public.staff.id uuid — PASS
+roles PK: public.roles.id — PASS (catálogo existente)
+
+================================================================================
+11. UNIQUE
+================================================================================
+L91–92: UNIQUE (auth_user_id, condominium_id) — exatamente 1
+UNIQUE(auth_user_id) global: AUSENTE
+UNIQUE(organization_id, auth_user_id): AUSENTE
+UNIQUE(resident_id/staff_profile_id): AUSENTE
+
+Teste conceitual:
+  A+CondoA → OK; A+CondoB → OK; B+CondoA → OK; A+CondoA 2× → DENY
+
+================================================================================
+12. Índices
+================================================================================
+UNIQUE (auth_user_id, condominium_id) → índice implícito
+idx_tenant_memberships_condominium_id (condominium_id) L95–96
+Duplicata CREATE INDEX (auth_user_id, condominium_id): AUSENTE
+Índices extras não aprovados: AUSENTES
+
+================================================================================
+13. DR7
+================================================================================
+Documentado: header L28–31 + COMMENT organization_id L104–105
+FK composta: AUSENTE
+ALTER condominiums: AUSENTE
+Classificação: RESIDUAL MEDIUM RISK — ACCEPTED FOR M3
+
+================================================================================
+14. RLS
+================================================================================
+ENABLE RLS / CREATE/ALTER/DROP POLICY: AUSENTES
+M3 pré-RLS — PASS
+Observação futura: flag relrowsecurity auto possível pós-CREATE (como M1/M2)
+
+================================================================================
+15–16. DML / seed / backfill
+================================================================================
+INSERT/UPDATE/DELETE/MERGE executáveis: ZERO
+Seed/backfill: ZERO
+
+================================================================================
+17. Legado
+================================================================================
+ALTER organizations/condominiums/residents/staff/roles: ZERO
+Somente CREATE tenant_memberships (+ index + comments)
+
+================================================================================
+18–20. Timestamps / status / is_default
+================================================================================
+Timestamps DEFAULT now(); sem trigger — PASS
+status text NOT NULL DEFAULT 'active'; sem ENUM/CHECK — PASS
+is_default boolean NOT NULL DEFAULT false; sem UNIQUE extra — PASS
+
+================================================================================
+21. Pré-check
+================================================================================
+docs/evidence/M3-PRECHECK-LIVE.sql
+READ-ONLY: SIM (apenas SELECT/to_regclass)
+Verifica: orgs, condos, roles, residents, staff, auth.users EXISTS;
+  tenant_memberships ABSENT → m3_create_safe
+CREATE/INSERT/UPDATE/DELETE/ALTER/DROP: AUSENTES no executável
+
+================================================================================
+22–25. Compatibilidade
+================================================================================
+M1: FKs organizations/condominiums — OK; units não referenciada — OK
+M2: sem dependência estrutural; sem unit_id — OK
+M4: sem seed; tabela inicia vazia — OK
+M11/M12+: resident_id/staff_profile_id nullable; status/role_id prontos — OK
+SECURITY DEFINER / GRANT / função / trigger: AUSENTES — PASS
+
+================================================================================
+26. Static validation
+================================================================================
+PASS (grep/estrutura/comparação decisões; SQL não aplicado)
+git status: artefatos M3 untracked
+pre-m1-checkpoint: aec1f5f… intacta
+
+================================================================================
+27. Divergências
+================================================================================
+Nenhuma divergência bloqueante vs M3-DECISIONS-2026-08-14.txt
+
+================================================================================
+28. Riscos
+================================================================================
+| Nível | Risco | Nota |
+|-------|-------|------|
+| MEDIUM | DR7 org↔condo inconsistente | Aceito; app/M4/M11; FK composta futura |
+| LOW | Flag RLS auto ON sem policies | Observação M12+ |
+| LOW | múltiplos is_default=true | App; sem UNIQUE parcial em M3 |
+
+CRITICAL/HIGH no artefato SQL: nenhum
+
+================================================================================
+29. Resultado final
+================================================================================
+
+M3 = APPROVED FOR LIVE PRE-CHECK
+
+Significado:
+  SQL revisado; próximo gate = M3-PRECHECK-LIVE.sql READ-ONLY
+  (autorização separada).
+
+NÃO autoriza APPLY.
+M3 APPLY permanece BLOCKED.
+
+NENHUMA alteração de banco foi executada.
+NENHUMA migration M3 foi aplicada.
+================================================================================

@@ -79,8 +79,8 @@ flowchart LR
 | **Impacto** | Schema vazio; app legado sem referência. |
 | **Risco** | 🟢 |
 | **Rollback** | `DROP TABLE IF EXISTS condominiums; DROP TABLE IF EXISTS organizations;` (só se M4 não rodou). |
-| **Testes** | INSERT org + site condo; UNIQUE slug; `vertical='condominium'`. |
-| **Critério de sucesso** | PK/FK `condominiums.organization_id`; contrato site documentado; legado intacto. |
+| **Testes** | INSERT org + site condo; `organizations` UNIQUE `(slug)`; `condominiums` UNIQUE `(organization_id, slug)`; `vertical='condominium'`. |
+| **Critério de sucesso** | PK/FK `condominiums.organization_id`; unicidade de site scoped por org; contrato site documentado; legado intacto. |
 
 ---
 

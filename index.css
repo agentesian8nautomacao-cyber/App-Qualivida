@@ -14,7 +14,307 @@ body {
   max-width: 100vw;
 }
 
-/* Additional styles if needed */
+/* SentinelaAUT — superfícies semânticas compartilhadas */
+.sentinela-page {
+  background:
+    radial-gradient(circle at 15% 15%, color-mix(in srgb, var(--sentinela-primary) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 85% 85%, color-mix(in srgb, var(--sentinela-accent) 10%, transparent), transparent 30%),
+    var(--sentinela-background);
+  color: var(--sentinela-text);
+}
+
+.sentinela-login-page {
+  isolation: isolate;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--sentinela-background);
+  color: var(--sentinela-text);
+}
+
+.sentinela-login-page.light-mode {
+  background-color: #0052ff;
+}
+
+.sentinela-login-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 72%,
+    color-mix(in srgb, #001a4d 28%, transparent) 100%
+  );
+}
+
+.sentinela-access-theme-toggle {
+  position: fixed;
+  top: max(4rem, calc(env(safe-area-inset-top) + 1rem));
+  right: max(1rem, env(safe-area-inset-right));
+  z-index: 30;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--sentinela-border);
+  border-radius: 1rem;
+  color: var(--sentinela-text);
+  background: color-mix(in srgb, var(--sentinela-surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.sentinela-access-theme-toggle:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--sentinela-surface-elevated) 82%, transparent);
+}
+
+.sentinela-access-theme-toggle:focus-visible,
+.sentinela-access-button:focus-visible,
+.sentinela-login-modal-close:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sentinela-focus) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.sentinela-access-stage {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100dvh;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  padding-bottom: clamp(1.25rem, 3.5vh, 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.85rem, 2vh, 1.25rem);
+  text-align: center;
+}
+
+.sentinela-access-art {
+  display: block;
+  width: 100%;
+  max-width: min(100vw, 100dvh);
+  height: auto;
+  max-height: calc(100dvh - 6.5rem);
+  object-fit: contain;
+  object-position: center;
+  filter: brightness(0.68) saturate(0.88) contrast(1.06);
+  transition: filter 260ms ease;
+}
+
+.sentinela-login-page.light-mode .sentinela-access-art {
+  filter: none;
+}
+
+.sentinela-access-button {
+  min-height: 3.5rem;
+  width: min(100%, 22rem);
+  padding: 0.9rem 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--sentinela-accent) 40%, transparent);
+  border-radius: 1rem;
+  color: white;
+  background: linear-gradient(135deg, var(--sentinela-primary), var(--sentinela-primary-hover));
+  box-shadow: 0 18px 42px color-mix(in srgb, var(--sentinela-primary) 34%, transparent);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.sentinela-access-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 22px 50px color-mix(in srgb, var(--sentinela-primary) 42%, transparent);
+}
+
+.sentinela-access-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.sentinela-login-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--sentinela-background) 68%, transparent);
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+  animation: sentinela-backdrop-in 180ms ease-out both;
+}
+
+.sentinela-login-modal {
+  width: min(100%, 30rem);
+  max-height: calc(100dvh - 2rem);
+  animation: sentinela-modal-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.sentinela-login-modal-backdrop.is-closing {
+  animation: sentinela-backdrop-out 160ms ease-in both;
+}
+
+.sentinela-login-modal.is-closing {
+  animation: sentinela-modal-out 160ms ease-in both;
+}
+
+.sentinela-login-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 20;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--sentinela-border);
+  border-radius: 0.9rem;
+  color: var(--sentinela-text);
+  background: color-mix(in srgb, var(--sentinela-surface-elevated) 72%, transparent);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.sentinela-login-modal-close:hover {
+  transform: scale(1.05);
+  background: color-mix(in srgb, var(--sentinela-surface-elevated) 94%, transparent);
+}
+
+.sentinela-card.sentinela-login-card {
+  width: 100%;
+  max-width: 30rem;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--sentinela-surface) 68%, transparent);
+  border-color: color-mix(in srgb, var(--sentinela-accent) 28%, transparent);
+  box-shadow:
+    0 30px 80px rgba(1, 8, 24, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(9px) saturate(125%);
+  backdrop-filter: blur(9px) saturate(125%);
+}
+
+.sentinela-login-page.light-mode .sentinela-login-overlay {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 72%,
+    color-mix(in srgb, #001a4d 18%, transparent) 100%
+  );
+}
+
+.sentinela-login-page.light-mode .sentinela-login-card {
+  background: color-mix(in srgb, var(--sentinela-surface) 78%, transparent);
+  border-color: color-mix(in srgb, var(--sentinela-primary) 22%, transparent);
+  box-shadow:
+    0 30px 80px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+@media (max-width: 640px) {
+  .sentinela-access-stage {
+    padding: 0.75rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    gap: 0.75rem;
+  }
+
+  .sentinela-access-art {
+    max-height: calc(100dvh - 5.75rem);
+  }
+
+  .sentinela-access-theme-toggle {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .sentinela-login-card {
+    -webkit-backdrop-filter: blur(7px) saturate(120%);
+    backdrop-filter: blur(7px) saturate(120%);
+  }
+}
+
+@keyframes sentinela-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sentinela-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sentinela-modal-in {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes sentinela-modal-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.98) translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sentinela-login-modal,
+  .sentinela-login-modal-backdrop,
+  .sentinela-access-button {
+    animation: none;
+    transition: none;
+  }
+}
+
+.sentinela-card {
+  background: color-mix(in srgb, var(--sentinela-surface) 88%, transparent);
+  border-color: var(--sentinela-border);
+  box-shadow: 0 28px 80px rgba(1, 8, 24, 0.34);
+}
+
+.sentinela-brand-logo {
+  display: block;
+  width: min(100%, 17rem);
+  height: auto;
+  object-fit: contain;
+  border-radius: 1.5rem;
+}
+
+.sentinela-input {
+  color: var(--sentinela-text);
+  border-color: var(--sentinela-border);
+}
+
+.sentinela-input:focus {
+  border-color: var(--sentinela-focus);
+  box-shadow: 0 1px 0 var(--sentinela-focus);
+}
+
+.sentinela-primary-action {
+  background: linear-gradient(135deg, var(--sentinela-primary), #0ea5e9);
+  color: white;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--sentinela-primary) 32%, transparent);
+}
+
+.sentinela-primary-action:hover {
+  background: linear-gradient(135deg, var(--sentinela-primary-hover), var(--sentinela-primary));
+}
+
+.sentinela-tenant {
+  color: var(--sentinela-text-muted);
+  border-color: var(--sentinela-border);
+}
 
 /* ========== Radar IA / Modo Sentinela ========== */
 @keyframes radar-sweep {

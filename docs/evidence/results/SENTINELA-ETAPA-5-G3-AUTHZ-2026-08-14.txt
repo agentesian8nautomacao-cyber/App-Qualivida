@@ -1,0 +1,143 @@
+SENTINELA AUT — ETAPA 5 / G3 — PROFILE + AUTHORIZATION
+Data: 2026-08-14
+Status: CLOSED / PASS
+
+Pré-requisitos:
+  G1 CLOSED / PASS
+  G2 CLOSED / PASS
+  MAP: docs/evidence/results/SENTINELA-G3-AUTHZ-MAP-2026-08-14.txt
+
+G4 = NOT STARTED (não avançado automaticamente)
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+CORE BUSINESS RULES = NÃO ALTERADAS
+UI = NÃO ALTERADA
+M1–M4 = INTACTOS
+BYPASS SINDICO/PORTEIRO NA API = NÃO
+
+============================================================
+ARQUIVOS CRIADOS
+============================================================
+docs/evidence/results/SENTINELA-G3-AUTHZ-MAP-2026-08-14.txt
+api/v1/_lib/authz/catalog.ts
+api/v1/_lib/authz/operations.ts
+api/v1/_lib/authz/permissionResolver.ts
+api/v1/_lib/authz/authorize.ts
+api/v1/_lib/authz/g3.authz.test.ts
+api/v1/authz-probe.ts
+
+============================================================
+ARQUIVOS MODIFICADOS
+============================================================
+api/v1/_lib/auth/credentials.ts     (+ role_name, permission_keys)
+api/v1/_lib/auth/testFixtures.ts
+api/v1/_lib/protectedHandler.ts     (withAuthorizedOperation)
+api/v1/_lib/gates.ts                (g3_authz_ops=true)
+api/v1/_lib/foundation.test.ts
+api/v1/health.ts
+api/v1/operations/packages/index.ts
+api/v1/operations/packages/pickup.ts
+api/v1/operations/occurrences.ts
+api/v1/operations/reservations.ts
+api/v1/residents/identify.ts
+api/v1/units/identify.ts
+api/v1/boletos.ts
+.env.example
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+docs/SENTINELA-AUT-API-ARCHITECTURE.md (via evidência/ponte)
+
+============================================================
+OPERAÇÕES MAPEADAS (RBAC EXISTENTE)
+============================================================
+identify_resident     → residents.view
+identify_unit         → residents.view
+create_package        → packages.create
+pickup_package        → packages.update
+create_occurrence     → occurrences.create
+update_occurrence     → occurrences.update
+create_reservation    → reservations.create
+cancel_reservation    → reservations.delete
+get_boleto            → boletos.view
+notify_resident       → DECISION REQUIRED (sem key) → DENY fail-closed
+
+============================================================
+FLUXO
+============================================================
+HMAC (G2) → Tenant fail-closed (G2) → authorizeOperation (G3)
+  → DENY: FORBIDDEN / TENANT_* / UNAUTHENTICATED
+  → ALLOW: contexto Core explícito + ainda GATE_PENDING (execução = G4+)
+
+Profile (env credential):
+  role_name e/ou permission_keys (subset catálogo RBAC)
+  sem profile → DENY
+  ambos → interseção (least privilege)
+  SINDICO/PORTEIRO sem permission na matriz → DENY (sem bypass)
+
+tenant_memberships:
+  reutilizado como modelo futuro; 0 rows; client_id bridge = FUTURE MIGRATION
+  G3 usa profile na credential scoped ao condominium (sem DDL)
+
+============================================================
+TESTES
+============================================================
+npm run test:run
+  ✓ 6 files / 68 tests passed
+  - g3.authz.test.ts (17)
+  - g2.auth.test.ts (18)
+  - foundation.test.ts (11)
+  - core.test.ts (14)
+  - unitFormatter (3)
+  - geminiHelpers (5)
+
+npm run build → OK
+
+Cobertura G3:
+  1 authorized PASS
+  2 missing permission DENY
+  3 cross-condo profile DENY
+  4 orgA+condoB mismatch DENY
+  5 no profile DENY
+  6 role empty DENY
+  7 notify DECISION REQUIRED DENY
+  8 no tenant DENY
+  9 no client DENY
+  10-12 no SINDICO/PORTEIRO bypass
+  HTTP authz-probe + packages GATE_PENDING after authz
+
+============================================================
+DECISÕES PENDENTES
+============================================================
+DECISION REQUIRED:
+  notify_resident permission key (ex. notifications.create)
+  → exige INSERT em permissions + role_permissions (migration)
+  → NÃO executado nesta etapa
+  → operação permanece DENY
+
+FUTURE MIGRATION (opcional):
+  api_integration_credentials
+  client_id ↔ tenant_memberships bridge
+  idempotency store (já G3+ gate anterior)
+
+============================================================
+RISCOS
+============================================================
+- Profile em env JSON (rotação manual) até tabela futura
+- Frontend ainda tem bypass SINDICO (UI) — API NÃO copia
+- identify_unit usa residents.view (sem units.view no catálogo)
+- AuthZ PASS ≠ execução (ainda GATE_PENDING)
+
+============================================================
+GATES
+============================================================
+G1 = CLOSED / PASS
+G2 = CLOSED / PASS
+G3 = CLOSED / PASS
+G4 = NOT STARTED
+
+FIM — PARAR (não iniciar G4 / n8n / WhatsApp)

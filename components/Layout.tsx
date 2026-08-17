@@ -20,11 +20,12 @@ import {
   ChevronRight,
   Receipt
 } from 'lucide-react';
-import { UserRole, Resident, Notification } from '../types';
+import { UserRole, Notification } from '../types';
 import { User as AdminUser } from '../services/userAuth';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useConnectivity } from '../contexts/ConnectivityContext';
+import { BRANDING } from '../config/branding';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -44,7 +45,6 @@ interface LayoutProps {
   /** Excluir uma notificação do sino (morador); as notificações permanecem até o usuário excluir ou clicar para ver */
   onDeleteNotification?: (notificationId: string) => void;
   currentAdminUser?: AdminUser | null;
-  currentResident?: Resident | null;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -61,8 +61,7 @@ const Layout: React.FC<LayoutProps> = ({
   notifications,
   onNotificationClick,
   onDeleteNotification,
-  currentAdminUser,
-  currentResident
+  currentAdminUser
 }) => {
   const { config } = useAppConfig();
   const { userPermissions, isAdminPrincipal } = useAuth();
@@ -128,21 +127,21 @@ const Layout: React.FC<LayoutProps> = ({
     touchStartYRef.current = null;
   };
 
-  const allRoles: UserRole[] = ['MORADOR', 'PORTEIRO', 'SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'];
-  const menuItems: { id: string; label: string; icon: typeof BarChart3; roles: UserRole[]; permission?: string }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, roles: allRoles, permission: 'dashboard.view' },
-    { id: 'notices', label: 'Mural de Avisos', icon: Bell, roles: allRoles, permission: 'notices.view' },
-    { id: 'financeiro', label: 'Financeiro', icon: Receipt, roles: allRoles, permission: 'boletos.view' },
-    { id: 'residentProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['MORADOR'] },
-    { id: 'sindicoProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['SINDICO', 'PORTEIRO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'] },
-    { id: 'reservations', label: 'Reservas', icon: Calendar, roles: allRoles, permission: 'reservations.view' },
-    { id: 'residents', label: 'Moradores', icon: Users, roles: allRoles, permission: 'residents.view' },
-    { id: 'occurrences', label: 'Ocorrências', icon: AlertCircle, roles: allRoles, permission: 'occurrences.view' },
-    { id: 'packages', label: 'Encomendas', icon: Package, roles: allRoles, permission: 'packages.view' },
-    { id: 'visitors', label: 'Visitantes', icon: UserCircle, roles: allRoles, permission: 'visitors.view' },
-    { id: 'staff', label: 'Funcionários', icon: ClipboardList, roles: allRoles, permission: 'staff.view' },
-    { id: 'sentinela', label: 'Sentinela AI', icon: ShieldCheck, roles: allRoles, permission: 'sentinela.view' },
-    { id: 'settings', label: 'Configurações', icon: Settings, roles: allRoles, permission: 'settings.view' },
+  const allRoles: UserRole[] = ['PORTEIRO', 'SINDICO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'];
+  /** Navegação preservada (sem remoção). Ordem prioriza operação de portaria; financeiro/admin ficam abaixo. */
+  const menuItems: { id: string; label: string; icon: typeof BarChart3; roles: UserRole[]; permission?: string; group?: 'ops' | 'base' | 'admin' | 'resident' }[] = [
+    { id: 'dashboard', label: 'Operação', icon: BarChart3, roles: allRoles, permission: 'dashboard.view', group: 'ops' },
+    { id: 'packages', label: 'Encomendas', icon: Package, roles: allRoles, permission: 'packages.view', group: 'ops' },
+    { id: 'visitors', label: 'Visitantes', icon: UserCircle, roles: allRoles, permission: 'visitors.view', group: 'ops' },
+    { id: 'occurrences', label: 'Ocorrências', icon: AlertCircle, roles: allRoles, permission: 'occurrences.view', group: 'ops' },
+    { id: 'reservations', label: 'Reservas', icon: Calendar, roles: allRoles, permission: 'reservations.view', group: 'ops' },
+    { id: 'sentinela', label: 'Sentinela', icon: ShieldCheck, roles: allRoles, permission: 'sentinela.view', group: 'ops' },
+    { id: 'residents', label: 'Moradores', icon: Users, roles: allRoles, permission: 'residents.view', group: 'base' },
+    { id: 'notices', label: 'Mural', icon: Bell, roles: allRoles, permission: 'notices.view', group: 'base' },
+    { id: 'financeiro', label: 'Financeiro', icon: Receipt, roles: allRoles, permission: 'boletos.view', group: 'base' },
+    { id: 'sindicoProfile', label: 'Meu Perfil', icon: UserCircle, roles: ['SINDICO', 'PORTEIRO', 'ADMIN', 'ADMINISTRADOR', 'ADMINISTRADORA', 'CABO_TURMA'], group: 'admin' },
+    { id: 'staff', label: 'Funcionários', icon: ClipboardList, roles: allRoles, permission: 'staff.view', group: 'admin' },
+    { id: 'settings', label: 'Configurações', icon: Settings, roles: allRoles, permission: 'settings.view', group: 'admin' },
   ];
 
   const filteredMenu = menuItems.filter(
@@ -152,15 +151,25 @@ const Layout: React.FC<LayoutProps> = ({
   const SidebarContent = () => (
     <div className="flex flex-col h-full min-h-0">
       <div className={`p-4 sm:p-6 lg:p-8 flex items-center transition-all duration-500 ${isDesktopCollapsed ? 'px-3 sm:px-4 justify-center' : 'justify-between'}`}>
-        <div 
-          className={`flex items-center gap-2 cursor-pointer active:scale-95 transition-transform ${isDesktopCollapsed ? 'flex-col' : ''}`}
+        <div
+          className={`flex items-center gap-3 cursor-pointer active:scale-95 transition-transform min-w-0 ${isDesktopCollapsed ? 'flex-col' : ''}`}
           onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
         >
-          <ShieldCheck className={`text-[var(--text-primary)] transition-all duration-500 ${isDesktopCollapsed ? 'w-10 h-10' : 'w-8 h-8'}`} />
+          <img
+            src={BRANDING.icon}
+            alt=""
+            aria-hidden="true"
+            className={`rounded-xl object-cover shadow-lg ring-1 ring-[var(--sentinela-border)] transition-all duration-500 ${isDesktopCollapsed ? 'w-11 h-11' : 'w-11 h-11'}`}
+          />
           {!isDesktopCollapsed && (
-            <div>
-              <h1 className="text-2xl font-black tracking-tighter shimmer-text leading-none">{config.condominiumName.toUpperCase()}</h1>
-              <p className="text-[10px] opacity-40 mt-1 uppercase tracking-[0.3em] font-black" style={{ color: 'var(--text-primary)' }}>Gestão</p>
+            <div className="min-w-0">
+              <h1 className="text-xl font-black tracking-tight shimmer-text leading-none">{BRANDING.name}</h1>
+              <p className="text-[8px] mt-1.5 uppercase tracking-[0.18em] font-black text-[var(--sentinela-text-muted)]">
+                {BRANDING.tagline}
+              </p>
+              <p className="sentinela-tenant mt-3 pt-2 border-t text-[9px] font-bold uppercase tracking-[0.16em] truncate">
+                {config.condominiumName}
+              </p>
             </div>
           )}
         </div>
@@ -181,26 +190,44 @@ const Layout: React.FC<LayoutProps> = ({
       </div>
 
       <nav className="flex-1 px-3 sm:px-4 space-y-1 overflow-y-auto pb-4 min-h-0 custom-scrollbar">
-        {filteredMenu.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => {
-              setActiveTab(item.id);
-              setIsMobileMenuOpen(false);
-            }}
-            title={isDesktopCollapsed ? item.label : ''}
-            className={`w-full flex items-center transition-all duration-300 rounded-xl group ${
-              isDesktopCollapsed ? 'justify-center p-3' : 'px-4 py-3 gap-3'
-            } ${
-              activeTab === item.id 
-              ? 'bg-[var(--text-primary)] text-[var(--bg-color)] shadow-xl' 
-              : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-color)]'
-            }`}
-          >
-            <item.icon className={`transition-all duration-300 ${isDesktopCollapsed ? 'w-6 h-6' : 'w-5 h-5'}`} />
-            {!isDesktopCollapsed && <span className="text-sm font-bold truncate">{item.label}</span>}
-          </button>
-        ))}
+        {filteredMenu.map((item, index) => {
+          const prev = filteredMenu[index - 1];
+          const showDivider =
+            !!prev &&
+            !!item.group &&
+            !!prev.group &&
+            item.group !== prev.group &&
+            !isDesktopCollapsed;
+          return (
+            <React.Fragment key={item.id}>
+              {showDivider && (
+                <div className="pt-3 pb-1 px-2">
+                  <div className="h-px bg-[var(--border-color)] opacity-60" />
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] opacity-30 mt-2">
+                    {item.group === 'base' ? 'Consulta / base' : item.group === 'admin' ? 'Administração' : item.group === 'resident' ? 'Morador' : ''}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setIsMobileMenuOpen(false);
+                }}
+                title={isDesktopCollapsed ? item.label : ''}
+                className={`w-full flex items-center transition-all duration-300 rounded-xl group ${
+                  isDesktopCollapsed ? 'justify-center p-3' : 'px-4 py-3 gap-3'
+                } ${
+                  activeTab === item.id
+                    ? 'bg-[var(--sentinela-primary)] text-white shadow-xl shadow-blue-950/20'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-color)]'
+                }`}
+              >
+                <item.icon className={`transition-all duration-300 ${isDesktopCollapsed ? 'w-6 h-6' : 'w-5 h-5'}`} />
+                {!isDesktopCollapsed && <span className="text-sm font-bold truncate">{item.label}</span>}
+              </button>
+            </React.Fragment>
+          );
+        })}
       </nav>
 
       <div className="px-3 sm:px-4 py-3 sm:py-4 flex justify-center shrink-0">
@@ -229,9 +256,7 @@ const Layout: React.FC<LayoutProps> = ({
             {(() => {
               // Determinar se há avatar disponível
               let userAvatar: string | null = null;
-              if (role === 'MORADOR' && currentResident) {
-                userAvatar = localStorage.getItem(`resident_avatar_${currentResident.id}`);
-              } else if (currentAdminUser) {
+              if (currentAdminUser) {
                 userAvatar = localStorage.getItem(`admin_avatar_${currentAdminUser.id}`);
               }
 
@@ -246,9 +271,7 @@ const Layout: React.FC<LayoutProps> = ({
               }
 
               // Fallback para inicial
-              if (role === 'MORADOR' && currentResident) {
-                return currentResident.name.substring(0, 1).toUpperCase();
-              } else if (currentAdminUser) {
+              if (currentAdminUser) {
                 return currentAdminUser.name?.substring(0, 1).toUpperCase() || role[0];
               }
               return role[0];
@@ -258,17 +281,13 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
                 {(() => {
-                  if (role === 'MORADOR' && currentResident) {
-                    // Mostrar o nome completo do morador exatamente como cadastrado
-                    return currentResident.name;
-                  } else if (currentAdminUser?.name) {
+                  if (currentAdminUser?.name) {
                     return currentAdminUser.name;
                   }
-                  // Fallback para os textos antigos
                   if (role === 'SINDICO' || role === 'ADMIN' || role === 'ADMINISTRADOR') return 'Admin';
                   if (role === 'ADMINISTRADORA') return 'Administradora';
                   if (role === 'CABO_TURMA') return 'Cabo de Turma';
-                  return role === 'MORADOR' ? 'Morador' : 'Portaria';
+                  return 'Portaria';
                 })()}
               </p>
             </div>
@@ -288,7 +307,7 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <div 
-      className="flex h-screen overflow-hidden select-none min-h-[100dvh]"
+      className={`flex h-screen overflow-hidden select-none min-h-[100dvh] ${theme === 'light' ? 'light-mode' : ''}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -356,7 +375,7 @@ const Layout: React.FC<LayoutProps> = ({
             </h2>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
-             {(role === 'PORTEIRO' || role === 'MORADOR' || role === 'SINDICO' || role === 'ADMIN' || role === 'ADMINISTRADOR' || role === 'ADMINISTRADORA' || role === 'CABO_TURMA') && notifications !== undefined && (
+             {(role === 'PORTEIRO' || role === 'SINDICO' || role === 'ADMIN' || role === 'ADMINISTRADOR' || role === 'ADMINISTRADORA' || role === 'CABO_TURMA') && notifications !== undefined && (
                <div className="flex items-center gap-2 relative" ref={notificationDropdownRef}>
                  <button 
                     onClick={() => setIsNotificationDropdownOpen(prev => !prev)}
@@ -377,7 +396,7 @@ const Layout: React.FC<LayoutProps> = ({
                      style={{ backgroundColor: 'var(--glass-bg)', borderColor: 'var(--border-color)' }}
                    >
                      <p className="px-4 py-2 text-[10px] font-black uppercase tracking-wider opacity-60 border-b" style={{ borderColor: 'var(--border-color)' }}>
-                       {role === 'MORADOR' ? 'Ocorrências e avisos' : 'Ocorrências abertas'}
+                       Ocorrências abertas
                      </p>
                      {notifications && notifications.length > 0 ? (
                        (notifications as Notification[]).slice(0, 30).map((n) => (

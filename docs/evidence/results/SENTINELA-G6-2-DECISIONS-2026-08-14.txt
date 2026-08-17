@@ -1,0 +1,198 @@
+SENTINELA AUT — G6-2 — CONFIRMATION STORE DECISIONS
+Data: 2026-08-14
+Status: G6-2 = READY FOR SQL CREATION
+
+Pré-requisito: G6-1 = CLOSED / PASS
+  evidência: SENTINELA-G6-1-CLOSEOUT-2026-08-14.txt
+
+Tipo desta etapa: DESIGN + DECISIONS ONLY
+SQL / migration / APPLY / wiring / n8n / WhatsApp = NÃO
+
+============================================================
+CONFIRMAÇÃO DE ESCOPO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE = 0
+G6-1 = CLOSED / PASS (intacta; não alterada)
+M1–M4 = INTACTOS
+N8N = 0
+WHATSAPP = 0
+
+Doc: docs/SENTINELA-AUT-G6-CONFIRMATIONS.md
+
+============================================================
+CONTRATO API ANALISADO (G4)
+============================================================
+Fonte: api/v1/_lib/confirmations/types.ts + service.ts
+
+Já existe:
+  confirmation_id, token_hash, org, condo, client_id,
+  operation, resource_id, prompt, requester_identity?,
+  expires_at, used_at, created_at
+  TTL default 300s (clamp 30–3600)
+  hash SHA-256 + timing-safe + markUsed single-use
+
+Lacuna a fechar no store persistente:
+  operation_fingerprint (DR5) — não persistido hoje
+
+============================================================
+DECISÕES DR1–DR20
+============================================================
+
+DR1 — Identificador da confirmação
+  CLOSED
+  confirmation_id text PRIMARY KEY
+  Formato compatível com API atual: cnf_ + hex (gerado na app)
+  Não usar uuid separado + alias (evita dual-id)
+
+DR2 — Token plaintext vs hash
+  CLOSED
+  Armazenar SOMENTE token_hash (SHA-256 hex)
+  Plaintext confirmation_token retornado UMA VEZ na create
+  Nunca logar plaintext em produção
+  Preferência de segurança ATENDIDA
+
+DR3 — Operações permitidas
+  CLOSED
+  pickup_package
+  cancel_reservation
+  Create rejeita outras ops (requiresConfirmation)
+
+DR4 — Tenant boundary
+  CLOSED
+  organization_id uuid NOT NULL + condominium_id uuid NOT NULL
+  FKs → organizations / condominiums
+  Sem tenant_id genérico / sem fallback global
+
+DR5 — Vinculação fingerprint
+  CLOSED
+  Coluna operation_fingerprint text NOT NULL
+  Canônico:
+    SHA-256("sentinela-confirm/v1\n" + org + "\n" + condo + "\n" + operation + "\n" + resource_id)
+  Validate exige match
+  ≠ Idempotency body fingerprint (G6-1)
+
+DR6 — Expiração / TTL
+  CLOSED
+  Default 300 segundos (5 min)
+  Clamp 30–3600 (já no serviço)
+  Justificativa: janela curta para ação sensível; alinhado G4 testado
+  Sem cron de purge nesta migration
+
+DR7 — Uso único
+  CLOSED
+  status pending → consumed
+  consumed_at NOT NULL quando consumed
+  Reuso → CONFIRMATION_ALREADY_USED
+  consumed_at mapeia used_at do TypeScript atual
+
+DR8 — Concorrência
+  CLOSED
+  Consume via UPDATE … WHERE status='pending' AND consumed_at IS NULL
+    AND expires_at > now() RETURNING
+  No máximo uma execução bem-sucedida por confirmation_id
+  PK impede rows duplicadas do mesmo id
+
+DR9 — Estados
+  CLOSED
+  pending | consumed (text + CHECK)
+  Expiração lógica por expires_at (sem status expired obrigatório)
+
+DR10 — ON DELETE
+  CLOSED
+  FKs ON DELETE RESTRICT (padrão G6-1 / M3)
+
+DR11 — Índices
+  CLOSED (mínimos)
+  PK confirmation_id
+  idx_api_confirmations_expires_at
+  idx_api_confirmations_tenant (organization_id, condominium_id)
+  Sem índice de lookup por token_hash
+
+DR12 — RLS
+  CLOSED
+  Fora de escopo da migration (não inventar policies)
+  Fail-closed na API; service-role server-side
+  Observação G6-1: plataforma pode habilitar relrowsecurity; 0 policies
+
+DR13 — Trigger
+  CLOSED — não utilizar
+
+DR14 — Cron
+  CLOSED — não utilizar nesta migration
+
+DR15 — DML/seed
+  CLOSED — zero INSERT/UPDATE/DELETE/seed/backfill na migration
+
+DR16 — Rollback
+  CLOSED
+  DROP TABLE public.api_confirmations;
+  sem CASCADE; falha se dependências inesperadas
+  Limite: só após APPLY e se nenhuma FK externa apontar para a tabela
+
+DR17 — Relação com G6-1
+  CLOSED
+  Não duplicar idempotência
+  Confirmation = intenção sensível
+  Idempotency = retry/mutação HTTP
+  Ambos podem aplicar a SENSITIVE no wiring futuro
+
+DR18 — Relação com n8n
+  CLOSED
+  n8n NÃO acessa banco
+  Fluxo: n8n → API HMAC → confirmation endpoints/ops
+
+DR19 — Segurança plaintext
+  CLOSED
+  Sem secret HMAC / confirmation_token / client secret na tabela
+  prompt = texto operacional (não secret); minimizar PII em requester_identity
+
+DR20 — Compatibilidade
+  CLOSED
+  G1–G5 contratos preservados
+  G6-1 api_idempotency_keys intocada
+  M1–M4 intocados
+  Campos novos (fingerprint, consumed_at naming) exigem wiring alinhado —
+  sem breaking do envelope HTTP de create/validate
+
+============================================================
+CAMPOS MÍNIMOS CONFIRMADOS PARA SQL FUTURO
+============================================================
+confirmation_id (PK text)
+token_hash
+organization_id
+condominium_id
+client_id
+operation
+resource_id
+operation_fingerprint
+status
+prompt
+requester_identity NULL
+created_request_id NULL
+created_at
+expires_at
+consumed_at NULL
+
+============================================================
+FASES (CRIAR / VALIDAR / CONSUMIR / EXECUTAR)
+============================================================
+CREATE   → INSERT pending (+ retorna token plaintext 1×)
+VALIDATE → bindings + hash + not expired + not consumed
+CONSUME  → UPDATE atômico pending→consumed
+EXECUTE  → Core (fora desta etapa de design; pós wiring)
+
+============================================================
+DECISÕES HUMANAS PENDENTES
+============================================================
+NENHUMA bloqueante.
+Todas DR1–DR20 = CLOSED.
+
+============================================================
+RESULTADO
+============================================================
+G6-2 = READY FOR SQL CREATION
+
+NÃO criar SQL nesta etapa.
+Próximo: autorização explícita para SQL Creation (migration + rollback + pre-check).

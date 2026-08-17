@@ -1,0 +1,136 @@
+SENTINELA AUT — G7-F — N8N READINESS (PREPARAÇÃO OPERACIONAL)
+Data: 2026-08-15
+Status: G7-F = PASS (STOP — não avançar para G7-G)
+
+Pré-requisitos:
+  M1–M4 CLOSED · G6-1/G6-2 CLOSED · G7-A/B/C/D/E PASS
+
+============================================================
+1. O QUE FOI AUDITADO (F)
+============================================================
+Arquivo:
+  docs/evidence/results/SENTINELA-G7-F-N8N-READINESS-AUDIT-2026-08-15.txt
+
+Itens A–Y: endpoints, métodos, headers, HMAC canonical,
+Idempotency-Key, tenant, authn/authz, payloads, respostas,
+request_id, erros, retry_hint, READ/WRITE/SENSITIVE,
+23P01→CONFLICT, INVALID_TIME_RANGE, CONFIRMATION_ALREADY_CONSUMED,
+IDEMPOTENCY_FINGERPRINT_MISMATCH, limits, input_type, multimídia,
+qrcode, barcode.
+
+Auditoria F = somente leitura (código não modificado na etapa F).
+
+============================================================
+2. O QUE FOI CRIADO
+============================================================
+DOCS:
+  docs/SENTINELA-AUT-N8N-CONTRACT.md
+    - envelope externo n8n
+    - router de intenções (F3)
+    - multimídia → create_package (F4)
+    - credencial n8n futura (F7)
+  docs/SENTINELA-AUT-OBSERVABILITY.md (F6)
+
+HARNESS (sem workflow n8n real):
+  scripts/n8n-harness/README.md
+  scripts/n8n-harness/sign.mjs
+  scripts/n8n-harness/fixtures/create_package_{text,voice,photo,qr,barcode}.json
+
+TESTES:
+  api/v1/_lib/execution/g7f.n8n-readiness.test.ts
+    F5: 20 cenários (package multimodal, identify, boleto,
+        occurrence, reservation/conflict, pickup/cancel confirmation,
+        idempotency, tenant/HMAC/timestamp, ambiguo/inexistente, body limit)
+    F8: fronteiras n8n→API permitido; Core/PG/SQL proibidos;
+        service-role no frontend proibido; sem tenant/HMAC/tenant
+        incorreto/permission = rejeitado
+
+EVIDÊNCIAS:
+  SENTINELA-G7-F-N8N-READINESS-AUDIT-2026-08-15.txt
+  SENTINELA-G7-F-N8N-READINESS-2026-08-15.txt (este arquivo)
+
+============================================================
+3. O QUE FOI MODIFICADO
+============================================================
+  api/v1/health.ts
+    stage → ETAPA_G7_F_N8N_READINESS
+  api/v1/_lib/foundation.test.ts
+    expect stage G7-F
+  .env.example
+    placeholders comentados SENTINELA_N8N_* (sem segredo real)
+
+NÃO modificado:
+  M1–M4 migrations · G6-1/G6-2 · G7-C constraint 007
+  Operational Core regras de negócio
+  RBAC/RLS · SPA · WhatsApp · workflow n8n
+
+============================================================
+4. TESTES
+============================================================
+npm run test:run
+  Test Files  15 passed
+  Tests       211 passed
+  (inclui 22 testes G7-F)
+
+============================================================
+5. BUILD
+============================================================
+npm run build → PASS (vite production)
+
+============================================================
+6. RISCOS ENCONTRADOS
+============================================================
+R1. Intenções STATUS / NOTIFICATION_QUERY sem endpoint v1
+    (PACKAGE_STATUS, OCCURRENCE_STATUS, RESERVATION_STATUS).
+    n8n NÃO deve inventar leitura via SQL.
+
+R2. notify_resident permanece AuthZ decision_required.
+
+R3. retry_hint ainda não é universal em todos os error codes
+    (presente em CONFLICT de reserva).
+
+R4. Dev API local (staff-invite script) vs handlers Vercel —
+    harness Vitest cobre contrato; deploy/runtime local HTTP
+    completo fica para gate de piloto.
+
+R5. cancel_reservation: comportamento de persistência
+    (delete vs soft canceled) — monitorar em gate posterior.
+
+============================================================
+7. DECISÕES PENDENTES
+============================================================
+D1. Operações READ de status (packages/occurrences/reservations)
+    — criar no Core/API ou responder só via painel?
+
+D2. Escopo mínimo de permission_keys da credential n8n piloto.
+
+D3. Formato canônico de Idempotency-Key
+    (sugerido: n8n:{external_message_id}:{intent}).
+
+D4. Quando abrir G7-G (piloto n8n local) vs Event Store.
+
+============================================================
+8. PRÓXIMOS GATES (NÃO EXECUTADOS)
+============================================================
+- G7-G (candidato): piloto n8n local apontando para API
+  (ainda sem WhatsApp real, se assim definido)
+- WhatsApp Cloud API / webhook / Evolution / Baileys
+- Workflow n8n definitivo
+- Event Store de produção
+- Novas migrations / tabelas / alteração RBAC-RLS
+
+============================================================
+FRONTEIRAS
+============================================================
+DATABASE CHANGES    = 0
+MIGRATIONS EXECUTED = 0
+LIVE WRITE          = 0
+N8N REAL            = 0
+WHATSAPP REAL       = 0
+M1–M4               = INTACTOS
+G6-1 / G6-2         = INTACTOS
+G7-A/B/C/D/E        = INTACTOS
+
+RESULTADO: G7-F = PASS
+
+STOP. Aguardando revisão humana. Não avançar automaticamente para G7-G.

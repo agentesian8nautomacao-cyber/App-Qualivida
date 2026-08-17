@@ -1,0 +1,112 @@
+SENTINELA AUT — ETAPA 6 / G4 — CONFIRMATION & SENSITIVE OPERATIONS
+Data: 2026-08-14
+Status: CLOSED / PASS
+
+Critério PASS respeitado:
+  - Memória NÃO é mecanismo definitivo de produção
+  - Default prod = ConfirmationStore unavailable (fail-closed)
+  - Memory store = TEST_ONLY
+  - Persistent store = FUTURE MIGRATION / DECISION REQUIRED
+  - Core NÃO executado (GATE_PENDING após confirmação válida)
+  - Sem bypass SINDICO/PORTEIRO
+
+Pré-requisitos: G1/G2/G3 CLOSED/PASS
+G5 = NOT STARTED
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+DATABASE CHANGES = 0
+MIGRATIONS EXECUTED = 0
+WHATSAPP = 0
+N8N = 0
+M1–M4 = INTACTOS
+CORE BUSINESS = NÃO ALTERADO
+UI = NÃO ALTERADA
+PUBLIC BUSINESS EXECUTION = 0
+
+============================================================
+ARQUIVOS CRIADOS
+============================================================
+api/v1/_lib/ops/classification.ts
+api/v1/_lib/confirmations/types.ts
+api/v1/_lib/confirmations/service.ts
+api/v1/_lib/confirmations/memoryStore.ts       (TEST_ONLY)
+api/v1/_lib/confirmations/unavailableStore.ts (prod default)
+api/v1/_lib/confirmations/g4.confirmation.test.ts
+api/v1/confirmation-probe.ts
+api/v1/operations/reservations/index.ts
+api/v1/operations/reservations/cancel.ts
+docs/SENTINELA-AUT-CONFIRMATIONS.md
+docs/evidence/results/SENTINELA-ETAPA-6-G4-CONFIRMATION-2026-08-14.txt
+
+============================================================
+ARQUIVOS MODIFICADOS
+============================================================
+api/v1/_lib/errors.ts
+api/v1/_lib/gates.ts
+api/v1/_lib/protectedHandler.ts   (withConfirmedOperation)
+api/v1/_lib/foundation.test.ts
+api/v1/_lib/auth/testFixtures.ts
+api/v1/health.ts
+api/v1/operations/packages/index.ts
+api/v1/operations/packages/pickup.ts
+docs/SENTINELA-AUT-TRANSFORMACAO.md
+(removed file) api/v1/operations/reservations.ts → pasta reservations/
+
+============================================================
+CLASSIFICAÇÃO
+============================================================
+READ: identify_resident, identify_unit, get_boleto
+WRITE: create_package, create_occurrence, update_occurrence, create_reservation
+SENSITIVE: pickup_package, cancel_reservation
+
+============================================================
+CONFIRMAÇÃO
+============================================================
+requiresConfirmation / createConfirmationRequest / validateConfirmation
+Bindings: tenant + client + operation + resource + expiry + single-use
+Token: retornado uma vez; store guarda hash; timing-safe compare
+
+Prod sem store:
+  CONFIRMATION_STORE_UNAVAILABLE (501)
+  FUTURE MIGRATION: api_confirmations (ou KV)
+
+SENSITIVE sem confirmação → CONFIRMATION_REQUIRED
+SENSITIVE com confirmação válida → GATE_PENDING (core_executed=false)
+WRITE/READ AuthZ → GATE_PENDING (sem Core)
+
+============================================================
+TESTES
+============================================================
+npm run test:run → 87 passed (7 files)
+  g4.confirmation.test.ts (19)
+  + G1–G3 + Core
+
+npm run build → OK
+
+============================================================
+GATES
+============================================================
+G1 = CLOSED / PASS
+G2 = CLOSED / PASS
+G3 = CLOSED / PASS
+G4 = CLOSED / PASS
+G5 = NOT STARTED
+
+============================================================
+DECISÕES PENDENTES
+============================================================
+DECISION REQUIRED / FUTURE MIGRATION:
+  - Persistent confirmation store (single-use, multi-instance safe)
+  - Idempotency store (já documentado)
+  - notify_resident permission (G3)
+
+============================================================
+RISCOS RESIDUAIS
+============================================================
+- Sem store persistente, sensíveis ficam bloqueados em prod (intencional)
+- Prompt genérico até canal WA/n8n
+- Frontend bypass SINDICO permanece (fora da API)
+
+FIM — PARAR (não iniciar G5 / n8n / WhatsApp)
