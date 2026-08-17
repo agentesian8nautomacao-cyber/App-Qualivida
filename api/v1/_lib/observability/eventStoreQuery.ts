@@ -142,7 +142,7 @@ export function parseEventsListParams(
   void searchParams.get('condominium_id');
 
   const limitParsed = parseEventsLimit(searchParams.get('limit'));
-  if (!limitParsed.ok) {
+  if (limitParsed.ok === false) {
     return { ok: false, code: 'INVALID_REQUEST', message: limitParsed.message };
   }
 
@@ -390,7 +390,7 @@ export function createSupabaseEventStoreQuery(client: SupabaseClient): EventStor
           };
         }
 
-        const rows = (data || []) as EventStoreRow[];
+        const rows = (data || []) as unknown as EventStoreRow[];
         const hasMore = rows.length > query.limit;
         const page = hasMore ? rows.slice(0, query.limit) : rows;
         const events = page.map(sanitizeDomainEvent);

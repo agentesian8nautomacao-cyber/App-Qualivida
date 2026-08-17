@@ -49,7 +49,7 @@ export function createAuthzProbeHandler(deps?: ApiHandlerDeps) {
             { permissionResolver: deps?.permissionResolver, env: deps?.env }
           );
 
-          if (!authz.ok) {
+          if (authz.ok === false) {
             return jsonError(ctx.request_id, authz.code, authz.message, {
               correlationId: ctx.correlation_id,
               operation,

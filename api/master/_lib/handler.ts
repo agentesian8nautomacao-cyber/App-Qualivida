@@ -92,7 +92,7 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
 
       const admin = await deps.store.getAdminByUserId(user.id);
       const authz = await authorizeMasterAction({ user, admin, action });
-      if (!authz.ok) {
+      if (authz.ok === false) {
         if (authz.status === 401) {
           return json({ error: 'Não autenticado', code: authz.code }, 401);
         }
@@ -194,7 +194,7 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
             admin: authz.admin,
             action: PLATFORM_ACTIONS.ORGANIZATIONS_SUSPEND
           });
-          if (!extra.ok) {
+          if (extra.ok === false) {
             await auditSafe(deps.store, user.id, 'MASTER_ACCESS_DENIED', 'organizations', id, {
               reason: extra.status === 403 ? extra.reason : 'ACTION_DENIED',
               action: PLATFORM_ACTIONS.ORGANIZATIONS_SUSPEND

@@ -111,7 +111,7 @@ export async function protectRequest(
   }
 
   const tsCheck = checkTimestamp(timestamp, nowMs, windowSeconds);
-  if (!tsCheck.ok) {
+  if (tsCheck.ok === false) {
     const code =
       tsCheck.reason === 'expired' || tsCheck.reason === 'future'
         ? ApiErrorCodes.TIMESTAMP_EXPIRED
@@ -167,7 +167,7 @@ export async function protectRequest(
   }
 
   const tenant = await validateTenantBinding(tenants, organizationId, condominiumId);
-  if (!tenant.ok) {
+  if (tenant.ok === false) {
     const code =
       tenant.code === 'TENANT_REQUIRED'
         ? ApiErrorCodes.TENANT_REQUIRED

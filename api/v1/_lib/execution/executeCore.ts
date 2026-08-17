@@ -89,15 +89,7 @@ function toOperationContext(authz: AuthorizedContext): OperationContext {
   };
 }
 
-function mapCoreFail(result: OperationResult): ExecutionFailure {
-  if (result.success) {
-    return {
-      ok: false,
-      code: ApiErrorCodes.INTERNAL_ERROR,
-      message: 'unexpected',
-      core_executed: false
-    };
-  }
+function mapCoreFail(result: Extract<OperationResult, { success: false }>): ExecutionFailure {
   const codeMap: Record<string, ApiErrorCode> = {
     VALIDATION_ERROR: ApiErrorCodes.INVALID_REQUEST,
     INVALID_TIME_RANGE: ApiErrorCodes.INVALID_TIME_RANGE,
@@ -184,7 +176,7 @@ export async function executeCoreOperation(opts: {
     organization_id: opts.authz.organization_id,
     condominium_id: opts.authz.condominium_id
   });
-  if (!validated.ok) {
+  if (validated.ok === false) {
     const detailCode = validated.details?.code;
     const tenantMismatch = detailCode === 'TENANT_MISMATCH';
     const invalidTime = detailCode === 'INVALID_TIME_RANGE';
@@ -466,7 +458,7 @@ export async function executeCoreOperation(opts: {
     };
   }
 
-  if (!result.success) {
+  if (result.success === false) {
     const failure = mapCoreFail(result);
     if (opClass === 'WRITE' && writeKey && idStore.fail && idStore.kind !== 'unavailable') {
       await idStore.fail({

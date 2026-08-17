@@ -125,7 +125,7 @@ export async function withProtectedHandler(
       ctx.correlation_id,
       deps
     );
-    if (!protectedResult.ok) {
+    if (protectedResult.ok === false) {
       await emitRejectFromResponse(
         ctx.request,
         ctx.request_id,
@@ -182,7 +182,7 @@ export async function withAuthorizedOperation(
         operation
       );
 
-      if (!authz.ok) {
+      if (authz.ok === false) {
         emitRequestDenied(base, authz.code);
         emitOperationFailed(base, authz.code, { core_executed: false });
         return jsonError(ctx.request_id, authz.code, authz.message, {
@@ -296,7 +296,7 @@ export async function withConfirmedOperation(
           confStore
         );
 
-        if (!created.ok) {
+        if (created.ok === false) {
           const code =
             created.code === 'CONFIRMATION_STORE_UNAVAILABLE'
               ? ApiErrorCodes.CONFIRMATION_STORE_UNAVAILABLE
@@ -351,7 +351,7 @@ export async function withConfirmedOperation(
         confStore
       );
 
-      if (!validated.ok) {
+      if (validated.ok === false) {
         emitOperationFailed(base, validated.code, { core_executed: false });
         return jsonError(ctx.request_id, ApiErrorCodes[validated.code], validated.message, {
           correlationId: ctx.correlation_id,

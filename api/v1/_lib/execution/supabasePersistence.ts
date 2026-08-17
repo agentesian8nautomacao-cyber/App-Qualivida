@@ -148,7 +148,7 @@ export async function createSupabaseCorePersistence(
       organizationId,
       condominiumId
     );
-    if (!binding.ok) {
+    if (binding.ok === false) {
       return { ok: false, code: binding.code, message: binding.message };
     }
   }
@@ -159,7 +159,7 @@ export async function createSupabaseCorePersistence(
 
   const guardTenant = (): string | null => {
     const check = requireBoundTenant(boundOrg, boundCondo);
-    return check.ok ? null : check.error;
+    return check.ok === true ? null : check.error;
   };
 
   const persistence: CorePersistence = {

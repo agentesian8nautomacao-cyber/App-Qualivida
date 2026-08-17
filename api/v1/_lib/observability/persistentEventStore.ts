@@ -192,14 +192,14 @@ export function queuePersistentPersist(event: OperationalEventEnvelope): void {
   void Promise.resolve()
     .then(() => fn(event))
     .then((result) => {
-      if (!result.ok) {
+      if (result.ok === false) {
         console.error(
           '[sentinela-obs] persistent sink failure (non-fatal)',
           event.request_id,
           event.event_name,
           result.reason
         );
-      } else if (result.skipped && result.reason === 'tenant_required') {
+      } else if (result.ok === true && result.skipped && result.reason === 'tenant_required') {
         console.error(
           '[sentinela-obs] persistent sink skipped (tenant fail-closed)',
           event.request_id,

@@ -275,7 +275,7 @@ export function validateOperationPayload(
         return { ok: false, message: 'create_reservation missing required fields' };
       }
       const range = validateReservationTimeRange(startTime, endTime);
-      if (!range.ok) {
+      if (range.ok === false) {
         return {
           ok: false,
           message: range.message,

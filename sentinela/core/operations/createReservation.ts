@@ -53,7 +53,7 @@ export async function createReservation(
   }
 
   const range = validateReservationTimeRange(input.startTime, input.endTime);
-  if (!range.ok) {
+  if (range.ok === false) {
     return fail('INVALID_TIME_RANGE', range.message, range.details);
   }
 

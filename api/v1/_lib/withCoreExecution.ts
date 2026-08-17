@@ -114,7 +114,7 @@ export async function withCoreExecution(
         operation
       );
 
-      if (!parsed.ok) {
+      if (parsed.ok === false) {
         emitOperationFailed(base, parsed.code, { core_executed: false });
         return jsonError(ctx.request_id, parsed.code, parsed.message, {
           correlationId: ctx.correlation_id,
@@ -145,7 +145,7 @@ export async function withCoreExecution(
 
       const duration_ms = Date.now() - startedAt;
 
-      if (!result.ok) {
+      if (result.ok === false) {
         const hint =
           typeof result.details?.retry_hint === 'string' ? result.details.retry_hint : null;
         emitOperationFailed(
