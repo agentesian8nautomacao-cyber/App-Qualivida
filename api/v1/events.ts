@@ -32,18 +32,18 @@ export function createEventsHandler(deps?: ApiHandlerDeps) {
             condominium_id: ctx.auth.condominium_id
           });
 
-          if (!parsed.ok) {
+          if (parsed.ok === false) {
             return jsonError(ctx.request_id, ApiErrorCodes.INVALID_REQUEST, parsed.message, {
               correlationId: ctx.correlation_id,
               operation: 'list_events',
-              details: parsed.details
+              ...(parsed.details ? { details: parsed.details } : {})
             });
           }
 
           const store = resolveEventStoreQuery(deps);
           const result = await store.listEvents(parsed.query);
 
-          if (!result.ok) {
+          if (result.ok === false) {
             const code =
               result.code === 'INVALID_REQUEST'
                 ? ApiErrorCodes.INVALID_REQUEST
@@ -51,7 +51,7 @@ export function createEventsHandler(deps?: ApiHandlerDeps) {
             return jsonError(ctx.request_id, code, result.message, {
               correlationId: ctx.correlation_id,
               operation: 'list_events',
-              details: result.details
+              ...(result.details ? { details: result.details } : {})
             });
           }
 
