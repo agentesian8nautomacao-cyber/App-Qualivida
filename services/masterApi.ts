@@ -55,6 +55,20 @@ function masterErrorMessage(
   rawText = '',
   contentType = ''
 ): string {
+  if (status >= 500) {
+    const parts: string[] = [];
+    if (typeof body.error === 'string' && body.error.trim()) parts.push(body.error);
+    if (typeof body.stage === 'string' && body.stage.trim()) parts.push(`etapa ${body.stage}`);
+    if (typeof body.exception === 'string' && body.exception.trim()) parts.push(body.exception);
+    if (
+      typeof body.message === 'string' &&
+      body.message.trim() &&
+      body.message !== body.error
+    ) {
+      parts.push(body.message);
+    }
+    if (parts.length) return parts.join(' — ');
+  }
   if (typeof body.error === 'string' && body.error.trim()) return body.error;
   const nested = body.error;
   if (nested && typeof nested === 'object' && typeof (nested as { message?: unknown }).message === 'string') {

@@ -79,4 +79,18 @@ describe('fromNodeRequest', () => {
     expect(request.headers.get('host')).toBeNull();
     expect(request.headers.get('connection')).toBeNull();
   });
+
+  it('copia Authorization quando headers é Web Headers (Object.entries vazio)', async () => {
+    const request = await fromNodeRequest({
+      method: 'GET',
+      url: '/api/master/session',
+      headers: new Headers({
+        host: 'app.example.vercel.app',
+        authorization: 'Bearer from-headers',
+        connection: 'keep-alive'
+      }) as unknown as Record<string, string | string[] | undefined>
+    });
+    expect(request.headers.get('authorization')).toBe('Bearer from-headers');
+    expect(request.url).toContain('/api/master/session');
+  });
 });

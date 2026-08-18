@@ -44,28 +44,57 @@ function isNodeRes(input: unknown): input is NodeRes {
   return typeof res.end === 'function';
 }
 
+function isHeadersLike(
+  raw: unknown
+): raw is { forEach: (cb: (value: string, key: string) => void) => void; get: (name: string) => string | null } {
+  return (
+    !!raw &&
+    typeof (raw as Headers).forEach === 'function' &&
+    typeof (raw as Headers).get === 'function'
+  );
+}
+
+function copyIncomingHeaders(raw: unknown): { headers: Headers; host: string; proto: string } {
+  const headers = new Headers();
+  let host = 'localhost';
+  let proto = 'https';
+
+  const setOne = (key: string, value: string) => {
+    const lower = key.toLowerCase();
+    if (lower === 'host' && value) host = value;
+    if (lower === 'x-forwarded-proto' && value) proto = value.split(',')[0].trim() || proto;
+    if (FORBIDDEN_REQUEST_HEADERS.has(lower)) return;
+    try {
+      headers.set(key, value);
+    } catch {
+      // header proibido pelo Fetch
+    }
+  };
+
+  if (isHeadersLike(raw)) {
+    raw.forEach((value, key) => setOne(key, value));
+  } else if (raw && typeof raw === 'object') {
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (value == null) continue;
+      setOne(key, Array.isArray(value) ? value.join(', ') : String(value));
+    }
+  }
+  return { headers, host, proto };
+}
+
 export async function fromNodeRequest(req: {
   method?: string;
   url?: string;
   headers?: Record<string, string | string[] | undefined>;
   [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>;
 }): Promise<Request> {
-  const rawHeaders = req.headers || {};
-  const host = String(rawHeaders.host || rawHeaders.Host || 'localhost');
-  const protoHeader = rawHeaders['x-forwarded-proto'];
-  const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https';
+  const copied = copyIncomingHeaders(req.headers || {});
   const rawUrl = String(req.url || '/');
-  const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `${proto}://${host}${rawUrl}`;
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(rawHeaders)) {
-    if (value == null) continue;
-    if (FORBIDDEN_REQUEST_HEADERS.has(key.toLowerCase())) continue;
-    try {
-      headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
-    } catch {
-      // header proibido pelo Fetch
-    }
-  }
+  const url =
+    rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+      ? rawUrl
+      : `${copied.proto}://${copied.host}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
+  const headers = copied.headers;
   const method = (req.method || 'GET').toUpperCase();
   const init: RequestInit = { method, headers };
   if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {

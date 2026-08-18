@@ -31,9 +31,22 @@ function json(body: unknown, status: number): Response {
 }
 
 function bearerToken(request: Request): string | null {
-  const h = request.headers.get('Authorization') || request.headers.get('authorization') || '';
-  const m = /^Bearer\s+(\S+)/i.exec(h.trim());
-  return m ? m[1] : null;
+  try {
+    const headers = request.headers as Headers & Record<string, string | string[] | undefined>;
+    let h = '';
+    if (headers && typeof headers.get === 'function') {
+      h = headers.get('Authorization') || headers.get('authorization') || '';
+    } else {
+      const direct = headers?.Authorization ?? headers?.authorization ?? '';
+      h = Array.isArray(direct) ? direct.join(', ') : String(direct || '');
+    }
+    const m = /^Bearer\s+(\S+)/i.exec(h.trim());
+    const token = m ? m[1] : '';
+    if (!token || /[\r\n\0]/.test(token)) return null;
+    return token;
+  } catch {
+    return null;
+  }
 }
 
 function pathOf(request: Request): string {
