@@ -1,23 +1,18 @@
 /**
- * Adapter Vercel.
+ * Adapter do runtime Node da Vercel: `export default async function (req, res)`.
  *
- * Rotas que funcionam neste projeto (staff-invite, etc.) exportam:
- *   export default { fetch(request: Request) { return new Response(...) } }
- *
- * Exportar uma função `(req, res)` faz o runtime clássico ignorar o `Response`
- * e responder HTTP 500 HTML — o frontend via isso como "erro interno".
+ * `{ fetch }` só funciona como módulo interno. Como export da Function, o runtime
+ * Node tenta invocar o default e quebra com FUNCTION_INVOCATION_FAILED.
  */
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
-export type VercelFetchExport = {
-  fetch: FetchHandler;
-};
-
 type NodeRes = {
   statusCode: number;
-  setHeader: (k: string, v: string) => void;
-  end: (b?: Buffer | string | Uint8Array) => void;
+  setHeader?: (k: string, v: string) => void;
+  end: (b?: string | Uint8Array) => void;
+  status?: (n: number) => NodeRes;
+  send?: (b: string) => void;
 };
 
 const FORBIDDEN_REQUEST_HEADERS = new Set([
@@ -46,28 +41,29 @@ export function isWebRequest(input: unknown): input is Request {
 function isNodeRes(input: unknown): input is NodeRes {
   if (!input || typeof input !== 'object') return false;
   const res = input as NodeRes;
-  return typeof res.end === 'function' && typeof res.setHeader === 'function';
+  return typeof res.end === 'function';
 }
 
 export async function fromNodeRequest(req: {
   method?: string;
   url?: string;
-  headers: Record<string, string | string[] | undefined>;
+  headers?: Record<string, string | string[] | undefined>;
   [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>;
 }): Promise<Request> {
-  const host = String(req.headers.host || req.headers.Host || 'localhost');
-  const protoHeader = req.headers['x-forwarded-proto'];
+  const rawHeaders = req.headers || {};
+  const host = String(rawHeaders.host || rawHeaders.Host || 'localhost');
+  const protoHeader = rawHeaders['x-forwarded-proto'];
   const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https';
   const rawUrl = String(req.url || '/');
   const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `${proto}://${host}${rawUrl}`;
   const headers = new Headers();
-  for (const [key, value] of Object.entries(req.headers)) {
+  for (const [key, value] of Object.entries(rawHeaders)) {
     if (value == null) continue;
     if (FORBIDDEN_REQUEST_HEADERS.has(key.toLowerCase())) continue;
     try {
       headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
     } catch {
-      // header proibido pelo Fetch — ignorar
+      // header proibido pelo Fetch
     }
   }
   const method = (req.method || 'GET').toUpperCase();
@@ -94,31 +90,37 @@ export async function fromNodeRequest(req: {
   return new Request(url, init);
 }
 
-export async function writeNodeResponse(res: NodeRes, response: Response): Promise<void> {
-  res.statusCode = response.status;
-  res.setHeader('Content-Type', response.headers.get('Content-Type') || 'application/json');
-  const origin = response.headers.get('Access-Control-Allow-Origin');
-  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
-  const methods = response.headers.get('Access-Control-Allow-Methods');
-  if (methods) res.setHeader('Access-Control-Allow-Methods', methods);
-  const allowHeaders = response.headers.get('Access-Control-Allow-Headers');
-  if (allowHeaders) res.setHeader('Access-Control-Allow-Headers', allowHeaders);
-  res.end(await response.text());
+function sendNode(res: NodeRes, status: number, text: string, contentType: string) {
+  res.statusCode = status;
+  try {
+    res.setHeader?.('Content-Type', contentType);
+    res.setHeader?.('Access-Control-Allow-Origin', '*');
+  } catch {
+    // ignore
+  }
+  if (typeof res.status === 'function' && typeof res.send === 'function') {
+    res.status(status).send(text);
+    return;
+  }
+  res.end(text);
 }
 
-/** Formato Web Handler (obrigatório nas rotas `/api` deste projeto). */
-export function asVercelFetchExport(fetchFn: FetchHandler): VercelFetchExport {
-  return { fetch: fetchFn };
+export async function writeNodeResponse(res: NodeRes, response: Response): Promise<void> {
+  const contentType = response.headers.get('Content-Type') || 'application/json';
+  sendNode(res, response.status, await response.text(), contentType);
+}
+
+function jsonErrorPayload(message: string) {
+  return JSON.stringify({ error: message, code: 'INTERNAL_ERROR' });
 }
 
 /**
- * Fallback do runtime Node clássico `(req, res)`.
- * Não usar como `export default` das rotas — o Vercel trata função como Node handler.
+ * Default export das Functions `/api`: função (req, res) que sempre chama res.end().
  */
 export function asVercelNodeHandler(fetchFn: FetchHandler) {
   return async function handler(req: unknown, res?: unknown): Promise<Response | void> {
     try {
-      const request = isWebRequest(req) ? req : await fromNodeRequest(req as Parameters<typeof fromNodeRequest>[0]);
+      const request = isWebRequest(req) ? req : await fromNodeRequest((req || {}) as Parameters<typeof fromNodeRequest>[0]);
       const response = await fetchFn(request);
       if (isNodeRes(res)) {
         await writeNodeResponse(res, response);
@@ -128,19 +130,18 @@ export function asVercelNodeHandler(fetchFn: FetchHandler) {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro interno na API';
       console.error('[vercel-handler]', message);
-      const response = new Response(JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
       if (isNodeRes(res)) {
         try {
-          await writeNodeResponse(res, response);
+          sendNode(res, 500, jsonErrorPayload(message), 'application/json');
           return;
         } catch (writeErr: unknown) {
           console.error('[vercel-handler] write failed', writeErr);
         }
       }
-      return response;
+      return new Response(jsonErrorPayload(message), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
   };
 }

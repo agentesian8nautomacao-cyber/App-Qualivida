@@ -43,9 +43,8 @@ describe('handleLiveMasterRequest', () => {
     expect(body.code).toBe('UNAUTHENTICATED');
   });
 
-  it('rotas Master exportam { fetch }', async () => {
-    const mod = await import('../session');
-    expect(typeof mod.default).toBe('object');
-    expect(typeof (mod.default as { fetch?: unknown }).fetch).toBe('function');
+  it('catch-all /api exporta função Node (req, res)', async () => {
+    const mod = await import('../../[...path]');
+    expect(typeof mod.default).toBe('function');
   });
 });

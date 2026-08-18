@@ -1,9 +1,11 @@
+/**
+ * Única Serverless Function (Hobby ≤ 12).
+ * URLs: /api/master/*, /api/v1/*, /api/staff-invite, etc.
+ * Import dinâmico: falha de módulo vira JSON 500, não FUNCTION_INVOCATION_FAILED.
+ */
 export const runtime = 'nodejs';
 
-import { asVercelFetchExport } from './_lib/vercelHandler';
-import { routeLegacyApiRequest } from './_lib/legacyRouter';
-import { handleLiveMasterRequest } from './master/_lib/live';
-import { routeV1Request } from './v1/_lib/router';
+import { asVercelNodeHandler } from './_lib/vercelHandler';
 
 function pathnameOf(request: Request): string {
   try {
@@ -17,12 +19,15 @@ async function dispatch(request: Request): Promise<Response> {
   const pathname = pathnameOf(request);
 
   if (pathname.startsWith('/api/master') || pathname.startsWith('/master/')) {
+    const { handleLiveMasterRequest } = await import('./master/_lib/live');
     return handleLiveMasterRequest(request);
   }
   if (pathname.startsWith('/api/v1') || pathname.startsWith('/v1/')) {
+    const { routeV1Request } = await import('./v1/_lib/router');
     return routeV1Request(request);
   }
+  const { routeLegacyApiRequest } = await import('./_lib/legacyRouter');
   return routeLegacyApiRequest(request);
 }
 
-export default asVercelFetchExport(dispatch);
+export default asVercelNodeHandler(dispatch);
