@@ -265,6 +265,73 @@ describe('/api/master HTTP', () => {
     expect(store.audits.some((a) => a.action === 'ORGANIZATION_UPDATE')).toBe(true);
   });
 
+  it('POST organização cria + ORGANIZATION_CREATE; user_id no body é ignorado', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    const res = await call(api, '/api/master/organizations', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Administradora XYZ', user_id: 'attacker-uuid' })
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.organization.name).toBe('Administradora XYZ');
+    expect(store.audits.some((a) => a.action === 'ORGANIZATION_CREATE')).toBe(true);
+  });
+
+  it('POST site + bloqueio manual + desbloqueio geram auditoria operacional', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    const siteRes = await call(api, `/api/master/organizations/${ORG_ID}/sites`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Condomínio Alpha' })
+    });
+    expect(siteRes.status).toBe(201);
+    const blockRes = await call(api, `/api/master/organizations/${ORG_ID}/block`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Inadimplência contratual', immediate: true })
+    });
+    expect(blockRes.status).toBe(200);
+    const blocked = await blockRes.json();
+    expect(blocked.organization.status).toBe('suspended');
+    const unRes = await call(api, `/api/master/organizations/${ORG_ID}/unblock`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Regularizado' })
+    });
+    expect(unRes.status).toBe(200);
+    expect(store.audits.some((a) => a.action === 'SITE_CREATE')).toBe(true);
+    expect(store.audits.some((a) => a.action === 'OPERATION_BLOCK')).toBe(true);
+    expect(store.audits.some((a) => a.action === 'OPERATION_UNBLOCK')).toBe(true);
+  });
+
+  it('GET dashboard aplica bloqueio programado já vencido', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    await store.updateOrganization(ORG_ID, {
+      scheduled_block_at: '2020-01-01T00:00:00.000Z',
+      block_reason: 'Inadimplência contratual',
+      block_source: 'automatic'
+    });
+    const res = await call(api, '/api/master/dashboard', {
+      headers: { Authorization: 'Bearer m' }
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.organizations.find((o: { id: string }) => o.id === ORG_ID);
+    expect(row.status).toBe('suspended');
+    expect(store.audits.some((a) => a.action === 'OPERATION_BLOCK')).toBe(true);
+  });
+
+  it('usuário comum não cria organização', async () => {
+    const { api } = handlerFor(async () => ({ id: 'user-comum' }));
+    const res = await call(api, '/api/master/organizations', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer op', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Não deve' })
+    });
+    expect(res.status).toBe(403);
+  });
+
   it('rota inexistente → 404 (não vaza como 200)', async () => {
     const { api } = handlerFor(async () => masterUser);
     const res = await call(api, '/api/master/plans', {

@@ -1,10 +1,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Lock, Eye, EyeOff, Sun, Moon, Building2, Briefcase, ChevronRight, LogIn, X, Shield } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Sun, Moon, Briefcase, ChevronRight, LogIn, X, Shield } from 'lucide-react';
 import { UserRole } from '../types';
 import { loginUser, saveUserSession } from '../services/userAuth';
+import { loginMasterWithPassword } from '../services/masterAuth';
 import ForgotPassword from './ForgotPassword';
 import { BRANDING } from '../config/branding';
+
+/** Perfis visuais do modal. ADM não é role de segurança: cobre síndico e administradora. */
+type LoginProfile = 'PORTEIRO' | 'ADM' | 'MASTER';
 
 export interface LoginProps {
   onLogin: (role: UserRole, options?: { mustChangePassword?: boolean }) => void;
@@ -13,7 +17,7 @@ export interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) => {
-  const [selectedRole, setSelectedRole] = useState<UserRole>('PORTEIRO');
+  const [selectedRole, setSelectedRole] = useState<LoginProfile>('PORTEIRO');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -114,7 +118,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
     };
   }, [theme]);
 
-  const handleRoleChange = (role: UserRole) => {
+  const handleRoleChange = (role: LoginProfile) => {
     setSelectedRole(role);
     setUsername('');
     setPassword('');
@@ -176,7 +180,22 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
     setLoading(true);
     
     try {
-      const result = await loginUser(username.trim(), password, selectedRole);
+      if (selectedRole === 'MASTER') {
+        const master = await loginMasterWithPassword(username.trim(), password);
+        if (!master.ok) {
+          setError(master.error);
+          setLoading(false);
+          return;
+        }
+        window.location.assign('/master');
+        return;
+      }
+
+      const result = await loginUser(
+        username.trim(),
+        password,
+        selectedRole === 'PORTEIRO' ? 'PORTEIRO' : undefined
+      );
       
       if (!result.user) {
         // Verificar se está bloqueado
@@ -192,11 +211,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
         return;
       }
 
-      // Não exigir correspondência entre selectedRole e role retornado.
-      // Adotar o papel retornado pelo perfil do usuário e prosseguir.
-      try { setSelectedRole(result.user.role as UserRole); } catch {}
-
-      // Salvar sessão
+      // ADM é só entrada visual: o role efetivo (SINDICO / ADMINISTRADORA) vem do backend.
       saveUserSession(result.user);
 
       // Delay para feedback visual — informar papel real do usuário ao onLogin
@@ -301,23 +316,31 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
           <div className="relative z-10">
             <header className="mb-7 pr-14">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--sentinela-accent)] mb-2">
-                Sistema operacional
+                {selectedRole === 'MASTER'
+                  ? 'Acesso Master'
+                  : selectedRole === 'ADM'
+                    ? 'Acesso ADM'
+                    : 'Acesso Portaria'}
               </p>
               <h1 id="operational-login-title" className="text-2xl sm:text-3xl font-black tracking-tight text-[var(--sentinela-text)]">
                 {BRANDING.name}
               </h1>
               <p className="text-sm font-semibold text-[var(--sentinela-text-muted)] mt-1">
-                Acesso ao Painel Operacional
+                {selectedRole === 'MASTER'
+                  ? 'Central de Administração da Plataforma'
+                  : selectedRole === 'ADM'
+                    ? 'Administração Operacional'
+                    : 'Central de Operações'}
               </p>
             </header>
 
-            {/* Perfis operacionais existentes; o papel efetivo continua vindo da autenticação. */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-7" aria-label="Perfil de acesso">
+            {/* PORTARIA | ADM | MASTER — ADM é camada visual; roles reais seguem no backend. */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-7" aria-label="Perfil de acesso">
               <button 
                 type="button"
                 onClick={() => handleRoleChange('PORTEIRO')}
                 aria-pressed={selectedRole === 'PORTEIRO'}
-                className={`p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                className={`min-w-0 p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
                   selectedRole === 'PORTEIRO'
                     ? theme === 'light'
                       ? 'bg-blue-500/10 border-blue-500 text-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.15)]'
@@ -330,12 +353,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                 <User size={24} className={selectedRole === 'PORTEIRO' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
                 <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Portaria</span>
               </button>
-              <button 
+              <button
                 type="button"
-                onClick={() => handleRoleChange('SINDICO')}
-                aria-pressed={selectedRole === 'SINDICO'}
-                className={`p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
-                  selectedRole === 'SINDICO'
+                onClick={() => handleRoleChange('ADM')}
+                aria-pressed={selectedRole === 'ADM'}
+                className={`min-w-0 p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  selectedRole === 'ADM'
                     ? theme === 'light'
                       ? 'bg-blue-500/10 border-blue-500 text-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.15)]'
                       : 'bg-cyan-500/10 border-cyan-400 text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
@@ -344,15 +367,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                       : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
-                <Briefcase size={24} className={selectedRole === 'SINDICO' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Síndico</span>
+                <Briefcase size={24} className={selectedRole === 'ADM' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">ADM</span>
               </button>
               <button
                 type="button"
-                onClick={() => handleRoleChange('ADMINISTRADORA')}
-                aria-pressed={selectedRole === 'ADMINISTRADORA'}
-                className={`p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
-                  selectedRole === 'ADMINISTRADORA'
+                onClick={() => handleRoleChange('MASTER')}
+                aria-pressed={selectedRole === 'MASTER'}
+                className={`min-w-0 p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  selectedRole === 'MASTER'
                     ? theme === 'light'
                       ? 'bg-blue-500/10 border-blue-500 text-blue-700 shadow-[0_0_20px_rgba(37,99,235,0.15)]'
                       : 'bg-cyan-500/10 border-cyan-400 text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
@@ -361,26 +384,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                       : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
-                <Building2 size={24} className={selectedRole === 'ADMINISTRADORA' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
-                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-center leading-tight">
-                  Administradora
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.assign('/master/login');
-                }}
-                className={`p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
-                  theme === 'light'
-                    ? 'bg-gray-100/80 border-gray-200/50 text-gray-500 hover:bg-gray-200/80'
-                    : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
-                }`}
-              >
-                <Shield size={24} className="group-hover:scale-110 transition-transform" />
-                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-center leading-tight">
-                  Master
-                </span>
+                <Shield size={24} className={selectedRole === 'MASTER' ? 'scale-110' : 'group-hover:scale-110 transition-transform'} />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Master</span>
               </button>
             </div>
 
@@ -398,15 +403,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
               
               <div className="space-y-4">
                 <div className="relative">
-                  <label htmlFor="operational-username" className="sr-only">Usuário</label>
+                  <label htmlFor="operational-username" className="sr-only">
+                    {selectedRole === 'MASTER' ? 'E-mail Master' : 'Usuário ou e-mail'}
+                  </label>
                   <User className={`absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 ${
                     theme === 'light' ? 'text-gray-400' : 'text-zinc-600'
                   }`} />
                   <input 
                     ref={usernameInputRef}
                     id="operational-username"
-                    type="text" 
-                    placeholder="Usuário ou e-mail"
+                    type={selectedRole === 'MASTER' ? 'email' : 'text'}
+                    placeholder={selectedRole === 'MASTER' ? 'E-mail Master' : 'Usuário ou e-mail'}
                     value={username}
                     onChange={(e) => {
                       setUsername(e.target.value);

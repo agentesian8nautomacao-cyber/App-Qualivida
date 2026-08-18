@@ -7,7 +7,8 @@ export default defineConfig({
       'api/**/*.test.ts',
       'sentinela/**/*.test.ts',
       'services/**/*.test.ts',
-      'utils/**/*.test.ts'
+      'utils/**/*.test.ts',
+      'components/**/*.test.ts'
     ],
     exclude: [
       '**/node_modules/**',

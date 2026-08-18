@@ -4,13 +4,11 @@ import { getMasterSession } from '../../services/masterApi';
 import MasterDenied from './MasterDenied';
 import MasterDashboard from './MasterDashboard';
 import MasterLayout, { type MasterPage } from './MasterLayout';
-import MasterLogin from './MasterLogin';
 import MasterOrganizationDetail from './MasterOrganizationDetail';
 import MasterOrganizations from './MasterOrganizations';
 
 function normalizePath(raw: string): string {
-  const path = raw.replace(/\/$/, '') || '/';
-  return path;
+  return raw.replace(/\/$/, '') || '/';
 }
 
 function pageFromPath(path: string): MasterPage {
@@ -22,6 +20,10 @@ function pageFromPath(path: string): MasterPage {
 function orgIdFromPath(path: string): string | null {
   const m = path.match(/^\/master\/organizations\/([0-9a-f-]{36})$/i);
   return m ? m[1] : null;
+}
+
+function goToOperationalLogin() {
+  window.location.assign('/');
 }
 
 export default function MasterApp() {
@@ -60,7 +62,7 @@ export default function MasterApp() {
           setDenied(res.error.error);
         } else {
           setDenied(null);
-          navigate('/master/login');
+          goToOperationalLogin();
         }
         return false;
       }
@@ -72,26 +74,22 @@ export default function MasterApp() {
       setDenied('API Master indisponível.');
       return false;
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (normalizePath(window.location.pathname) === '/master/login') {
+        goToOperationalLogin();
+        return;
+      }
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       const token = data.session?.access_token || null;
       setEmail(data.session?.user.email || null);
-      if (normalizePath(window.location.pathname) === '/master/login') {
-        setChecking(false);
-        if (token) {
-          const ok = await validateServer(token);
-          if (ok) navigate('/master');
-        }
-        return;
-      }
       if (!token) {
         setChecking(false);
-        navigate('/master/login');
+        goToOperationalLogin();
         return;
       }
       await validateServer(token);
@@ -100,20 +98,20 @@ export default function MasterApp() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, validateServer]);
+  }, [validateServer]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setAccessToken(null);
     setEmail(null);
     setDenied(null);
-    navigate('/master/login');
-  }, [navigate]);
+    goToOperationalLogin();
+  }, []);
 
   const onUnauthorized = useCallback(() => {
     setAccessToken(null);
-    navigate('/master/login');
-  }, [navigate]);
+    goToOperationalLogin();
+  }, []);
 
   const onForbidden = useCallback((message: string) => {
     setDenied(message);
@@ -123,25 +121,9 @@ export default function MasterApp() {
   const page = useMemo(() => pageFromPath(path), [path]);
   const orgId = useMemo(() => orgIdFromPath(path), [path]);
 
-  if (path === '/master/login') {
-    return (
-      <MasterLogin
-        onSuccess={() => {
-          void (async () => {
-            const { data } = await supabase.auth.getSession();
-            setEmail(data.session?.user.email || null);
-            setAccessToken(data.session?.access_token || null);
-            setDenied(null);
-            navigate('/master');
-          })();
-        }}
-      />
-    );
-  }
-
   if (checking) {
     return (
-      <div className="min-h-screen bg-[#06101f] text-slate-400 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--sentinela-bg,#06101f)] text-slate-400 flex items-center justify-center">
         Validando autorização Master…
       </div>
     );
@@ -163,8 +145,8 @@ export default function MasterApp() {
     return (
       <MasterDenied
         title="Sessão expirada"
-        message="Faça login novamente. Uma sessão operacional antiga não autoriza o Master."
-        onBackToLogin={() => navigate('/master/login')}
+        message="Faça login novamente pelo perfil MASTER no painel de acesso."
+        onBackToLogin={goToOperationalLogin}
       />
     );
   }
@@ -174,6 +156,7 @@ export default function MasterApp() {
       {page === 'dashboard' && (
         <MasterDashboard
           accessToken={accessToken}
+          onOpenOrg={(id) => navigate(`/master/organizations/${id}`)}
           onUnauthorized={onUnauthorized}
           onForbidden={onForbidden}
         />

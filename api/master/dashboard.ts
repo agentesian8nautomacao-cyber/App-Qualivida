@@ -94,22 +94,184 @@ export default async function handler(req: unknown, res?: unknown) {
     }
 
     if (path.endsWith('/dashboard') && method === 'GET') {
-      const orgs = await fetchOrganizations(cfg, token);
-      const sites = await fetchSitesCount(cfg, token);
+      let orgs = await fetchOrganizations(cfg, token);
+      const now = Date.now();
+      for (const org of orgs) {
+        if (
+          org.status === 'active' &&
+          org.scheduled_block_at &&
+          Date.parse(String(org.scheduled_block_at)) <= now
+        ) {
+          await patchOrganization(cfg, token, org.id, {
+            status: 'suspended',
+            blocked_at: new Date().toISOString(),
+            block_source: 'automatic',
+            scheduled_block_at: null
+          });
+          await auditSafe(cfg, token, user.id, 'OPERATION_BLOCK', 'organizations', org.id, {
+            source: 'automatic',
+            previous_status: 'active',
+            new_status: 'suspended'
+          });
+        }
+      }
+      orgs = await fetchOrganizations(cfg, token);
+      const siteRows = await fetchAllSites(cfg, token);
       return send(200, {
         ok: true,
         metrics: {
           organizations_total: orgs.length,
           organizations_active: orgs.filter((o) => o.status === 'active').length,
           organizations_suspended: orgs.filter((o) => o.status === 'suspended').length,
-          sites_operational: sites,
+          sites_operational: siteRows.filter((s) => s.status === 'active').length,
+          sites_blocked: siteRows.filter((s) => s.status === 'suspended').length,
+          operations_active: siteRows.filter((s) => s.status === 'active').length,
+          scheduled_blocks: orgs.filter((o) => o.scheduled_block_at).length,
           subscriptions_active: null,
           subscriptions_expired: null,
           trial: null,
           mrr: null
         },
+        organizations: orgs.map((o) => ({
+          id: o.id,
+          name: o.name,
+          status: o.status,
+          scheduled_block_at: o.scheduled_block_at || null,
+          blocked_at: o.blocked_at || null,
+          sites_count: siteRows.filter((s) => s.organization_id === o.id).length
+        })),
         billing: 'Não configurado'
       });
+    }
+
+    if (path.endsWith('/organizations') && method === 'POST') {
+      const body = await readJsonBody(req);
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) return send(400, { error: 'Nome obrigatório', code: 'BAD_REQUEST' });
+      const created = await postOrganization(cfg, token, {
+        name,
+        slug: typeof body.slug === 'string' && body.slug.trim() ? slugify(body.slug) : slugify(name),
+        status: 'active',
+        profile: asProfile(body.profile),
+        contract_starts_at: typeof body.contract_starts_at === 'string' ? body.contract_starts_at : null,
+        contract_ends_at: typeof body.contract_ends_at === 'string' ? body.contract_ends_at : null
+      });
+      if (!created) {
+        return send(503, {
+          error:
+            'Não foi possível criar a organização. Aplique a migration Master ops quando aprovada.',
+          code: 'SCHEMA_PENDING'
+        });
+      }
+      await auditSafe(cfg, token, user.id, 'ORGANIZATION_CREATE', 'organizations', created.id, { name });
+      return send(201, { ok: true, organization: created });
+    }
+
+    const siteCreate = path.match(/\/organizations\/([0-9a-f-]{36})\/sites$/i);
+    if (siteCreate && method === 'POST') {
+      const body = await readJsonBody(req);
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) return send(400, { error: 'Nome do site obrigatório', code: 'BAD_REQUEST' });
+      const created = await postSite(cfg, token, {
+        organization_id: siteCreate[1],
+        name,
+        slug: typeof body.slug === 'string' && body.slug.trim() ? slugify(body.slug) : slugify(name),
+        status: 'active',
+        profile: asProfile(body.profile)
+      });
+      if (!created) {
+        return send(503, {
+          error: 'Não foi possível criar o site. Aplique a migration Master ops quando aprovada.',
+          code: 'SCHEMA_PENDING'
+        });
+      }
+      await auditSafe(cfg, token, user.id, 'SITE_CREATE', 'condominiums', created.id, {
+        organization_id: siteCreate[1],
+        name
+      });
+      return send(201, { ok: true, site: created });
+    }
+
+    const sitePatch = path.match(/\/sites\/([0-9a-f-]{36})$/i);
+    if (sitePatch && method === 'PATCH') {
+      const body = await readJsonBody(req);
+      const patch: Record<string, unknown> = {};
+      if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim();
+      if (typeof body.slug === 'string' && body.slug.trim()) patch.slug = slugify(body.slug);
+      if (typeof body.status === 'string') {
+        const st = body.status.trim().toLowerCase();
+        if (st !== 'active' && st !== 'suspended') {
+          return send(400, { error: 'Status inválido', code: 'BAD_REQUEST' });
+        }
+        patch.status = st;
+      }
+      const profile = asProfile(body.profile);
+      if (profile) patch.profile = profile;
+      if (Object.keys(patch).length === 0) {
+        return send(400, { error: 'Nenhum campo para atualizar', code: 'BAD_REQUEST' });
+      }
+      const updated = await patchSite(cfg, token, sitePatch[1], patch);
+      if (!updated) return send(404, { error: 'Site não encontrado', code: 'NOT_FOUND' });
+      await auditSafe(cfg, token, user.id, 'SITE_UPDATE', 'condominiums', sitePatch[1], {
+        fields: Object.keys(patch),
+        organization_id: updated.organization_id
+      });
+      return send(200, { ok: true, site: updated });
+    }
+
+    const blockMatch = path.match(/\/organizations\/([0-9a-f-]{36})\/(block|unblock)$/i);
+    if (blockMatch && method === 'POST') {
+      const org = await fetchOrganization(cfg, token, blockMatch[1]);
+      if (!org) return send(404, { error: 'Organização não encontrada', code: 'NOT_FOUND' });
+      const body = await readJsonBody(req);
+      const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
+      if (!reason) return send(400, { error: 'Motivo obrigatório', code: 'BAD_REQUEST' });
+      const kind = blockMatch[2].toLowerCase();
+      const immediate = body.immediate !== false;
+      const scheduledAt =
+        typeof body.scheduled_at === 'string' && body.scheduled_at.trim() ? body.scheduled_at : null;
+      if (kind === 'block' && !immediate && scheduledAt) {
+        const updated = await patchOrganization(cfg, token, org.id, {
+          scheduled_block_at: scheduledAt,
+          block_reason: reason,
+          block_source: 'automatic'
+        });
+        await auditSafe(cfg, token, user.id, 'OPERATION_BLOCK_SCHEDULED', 'organizations', org.id, {
+          reason,
+          scheduled_at: scheduledAt,
+          previous_status: org.status
+        });
+        return send(200, { ok: true, organization: updated || org });
+      }
+      if (kind === 'block') {
+        const updated = await patchOrganization(cfg, token, org.id, {
+          status: 'suspended',
+          blocked_at: new Date().toISOString(),
+          block_reason: reason,
+          block_source: 'manual',
+          scheduled_block_at: null
+        });
+        await auditSafe(cfg, token, user.id, 'OPERATION_BLOCK', 'organizations', org.id, {
+          reason,
+          source: 'manual',
+          previous_status: org.status,
+          new_status: 'suspended'
+        });
+        return send(200, { ok: true, organization: updated || org });
+      }
+      const updated = await patchOrganization(cfg, token, org.id, {
+        status: 'active',
+        blocked_at: null,
+        block_reason: null,
+        block_source: null,
+        scheduled_block_at: null
+      });
+      await auditSafe(cfg, token, user.id, 'OPERATION_UNBLOCK', 'organizations', org.id, {
+        reason,
+        previous_status: org.status,
+        new_status: 'active'
+      });
+      return send(200, { ok: true, organization: updated || org });
     }
 
     const orgMatch = path.match(/\/organizations\/([0-9a-f-]{36})$/i);
@@ -117,23 +279,21 @@ export default async function handler(req: unknown, res?: unknown) {
       const org = await fetchOrganization(cfg, token, orgMatch[1]);
       if (!org) return send(404, { error: 'Organização não encontrada', code: 'NOT_FOUND' });
       const sites = await fetchSitesByOrg(cfg, token, orgMatch[1]);
+      const audit = await fetchAudit(cfg, token, orgMatch[1]);
       await auditSafe(cfg, token, user.id, 'ORGANIZATION_VIEW', 'organizations', orgMatch[1]);
       return send(200, {
         ok: true,
         organization: org,
         sites,
+        audit,
         subscription: 'Não configurado',
-        users: 'Não configurado',
-        audit: []
+        users: 'Não configurado'
       });
     }
 
     if (orgMatch && method === 'PATCH') {
-      if (admin.role !== 'platform_owner' && admin.role !== 'platform_admin') {
-        return send(403, { error: 'Acesso Master negado', code: 'FORBIDDEN' });
-      }
       const body = await readJsonBody(req);
-      const patch: { name?: string; slug?: string; status?: string } = {};
+      const patch: Record<string, unknown> = {};
       if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim();
       if (typeof body.slug === 'string' && body.slug.trim()) patch.slug = body.slug.trim();
       if (typeof body.status === 'string') {
@@ -142,6 +302,12 @@ export default async function handler(req: unknown, res?: unknown) {
           return send(400, { error: 'Status inválido', code: 'BAD_REQUEST' });
         }
         patch.status = st;
+      }
+      const profile = asProfile(body.profile);
+      if (profile) patch.profile = profile;
+      if (typeof body.contract_starts_at === 'string') patch.contract_starts_at = body.contract_starts_at;
+      if (typeof body.contract_ends_at === 'string' || body.contract_ends_at === null) {
+        patch.contract_ends_at = body.contract_ends_at;
       }
       if (Object.keys(patch).length === 0) {
         return send(400, { error: 'Nenhum campo para atualizar', code: 'BAD_REQUEST' });
@@ -209,7 +375,43 @@ type OrgRow = {
   status: string;
   created_at: string;
   updated_at?: string | null;
+  profile?: Record<string, unknown> | null;
+  blocked_at?: string | null;
+  block_reason?: string | null;
+  block_source?: string | null;
+  scheduled_block_at?: string | null;
+  contract_starts_at?: string | null;
+  contract_ends_at?: string | null;
 };
+
+type SiteRow = {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  vertical: string;
+  status: string;
+};
+
+function slugify(raw: string): string {
+  const s = String(raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return s || `item-${Date.now().toString(36)}`;
+}
+
+function asProfile(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'string' || typeof v === 'number' || v === null) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 function sanitize(raw: string): string {
   return String(raw || '')
@@ -333,20 +535,36 @@ async function fetchPlatformAdmin(
 
 async function fetchOrganizations(cfg: Cfg, token: string): Promise<OrgRow[]> {
   const res = await fetch(
-    `${cfg.url}/rest/v1/organizations?select=id,name,slug,status,created_at,updated_at&order=created_at.desc`,
+    `${cfg.url}/rest/v1/organizations?select=id,name,slug,status,created_at,updated_at,profile,blocked_at,block_reason,block_source,scheduled_block_at,contract_starts_at,contract_ends_at&order=created_at.desc`,
     { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
   );
+  if (!res.ok) {
+    const fallback = await fetch(
+      `${cfg.url}/rest/v1/organizations?select=id,name,slug,status,created_at,updated_at&order=created_at.desc`,
+      { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
+    );
+    const data = await parseJson<OrgRow[]>(fallback);
+    return Array.isArray(data) ? data : [];
+  }
   const data = await parseJson<OrgRow[]>(res);
   return Array.isArray(data) ? data : [];
 }
 
 async function fetchOrganization(cfg: Cfg, token: string, id: string): Promise<OrgRow | null> {
   const res = await fetch(
-    `${cfg.url}/rest/v1/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at`,
+    `${cfg.url}/rest/v1/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at,profile,blocked_at,block_reason,block_source,scheduled_block_at,contract_starts_at,contract_ends_at`,
     { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
   );
   const data = await parseJson<OrgRow[] | OrgRow>(res);
-  if (!data) return null;
+  if (!data) {
+    const fallback = await fetch(
+      `${cfg.url}/rest/v1/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at`,
+      { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
+    );
+    const core = await parseJson<OrgRow[] | OrgRow>(fallback);
+    if (!core) return null;
+    return Array.isArray(core) ? core[0] ?? null : core;
+  }
   return Array.isArray(data) ? data[0] ?? null : data;
 }
 
@@ -354,7 +572,7 @@ async function patchOrganization(
   cfg: Cfg,
   token: string,
   id: string,
-  patch: { name?: string; slug?: string; status?: string }
+  patch: Record<string, unknown>
 ): Promise<OrgRow | null> {
   const res = await fetch(`${cfg.url}/rest/v1/organizations?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -362,26 +580,125 @@ async function patchOrganization(
     body: JSON.stringify(patch)
   });
   const data = await parseJson<OrgRow[] | OrgRow>(res);
+  if (!data) {
+    const core: Record<string, unknown> = {};
+    if (typeof patch.name === 'string') core.name = patch.name;
+    if (typeof patch.slug === 'string') core.slug = patch.slug;
+    if (typeof patch.status === 'string') core.status = patch.status;
+    if (!Object.keys(core).length) return null;
+    const retry = await fetch(`${cfg.url}/rest/v1/organizations?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...restHeaders(cfg.anonKey, token, true), Prefer: 'return=representation' },
+      body: JSON.stringify(core)
+    });
+    const again = await parseJson<OrgRow[] | OrgRow>(retry);
+    if (!again) return null;
+    return Array.isArray(again) ? again[0] ?? null : again;
+  }
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+async function postOrganization(
+  cfg: Cfg,
+  token: string,
+  input: {
+    name: string;
+    slug: string;
+    status: string;
+    profile?: Record<string, unknown>;
+    contract_starts_at?: string | null;
+    contract_ends_at?: string | null;
+  }
+): Promise<OrgRow | null> {
+  const payload: Record<string, unknown> = { name: input.name, slug: input.slug, status: input.status };
+  if (input.profile) payload.profile = input.profile;
+  if (input.contract_starts_at) payload.contract_starts_at = input.contract_starts_at;
+  if (input.contract_ends_at) payload.contract_ends_at = input.contract_ends_at;
+  const res = await fetch(`${cfg.url}/rest/v1/organizations`, {
+    method: 'POST',
+    headers: { ...restHeaders(cfg.anonKey, token, true), Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJson<OrgRow[] | OrgRow>(res);
+  if (!data && input.profile) {
+    delete payload.profile;
+    const retry = await fetch(`${cfg.url}/rest/v1/organizations`, {
+      method: 'POST',
+      headers: { ...restHeaders(cfg.anonKey, token, true), Prefer: 'return=representation' },
+      body: JSON.stringify(payload)
+    });
+    const again = await parseJson<OrgRow[] | OrgRow>(retry);
+    if (!again) return null;
+    return Array.isArray(again) ? again[0] ?? null : again;
+  }
   if (!data) return null;
   return Array.isArray(data) ? data[0] ?? null : data;
 }
 
-async function fetchSitesByOrg(cfg: Cfg, token: string, organizationId: string) {
+async function fetchSitesByOrg(cfg: Cfg, token: string, organizationId: string): Promise<SiteRow[]> {
   const res = await fetch(
     `${cfg.url}/rest/v1/condominiums?organization_id=eq.${encodeURIComponent(organizationId)}&select=id,organization_id,name,slug,vertical,status`,
     { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
   );
-  const data = await parseJson<Array<Record<string, unknown>>>(res);
+  const data = await parseJson<SiteRow[]>(res);
   return Array.isArray(data) ? data : [];
 }
 
-async function fetchSitesCount(cfg: Cfg, token: string): Promise<number> {
-  const res = await fetch(`${cfg.url}/rest/v1/condominiums?select=id`, {
+async function fetchAllSites(cfg: Cfg, token: string): Promise<SiteRow[]> {
+  const res = await fetch(`${cfg.url}/rest/v1/condominiums?select=id,organization_id,name,slug,vertical,status`, {
     method: 'GET',
     headers: restHeaders(cfg.anonKey, token)
   });
-  const data = await parseJson<{ id: string }[]>(res);
-  return Array.isArray(data) ? data.length : 0;
+  const data = await parseJson<SiteRow[]>(res);
+  return Array.isArray(data) ? data : [];
+}
+
+async function postSite(
+  cfg: Cfg,
+  token: string,
+  input: { organization_id: string; name: string; slug: string; status: string; profile?: Record<string, unknown> }
+): Promise<SiteRow | null> {
+  const payload: Record<string, unknown> = {
+    organization_id: input.organization_id,
+    name: input.name,
+    slug: input.slug,
+    vertical: 'condominium',
+    status: input.status
+  };
+  if (input.profile) payload.profile = input.profile;
+  const res = await fetch(`${cfg.url}/rest/v1/condominiums`, {
+    method: 'POST',
+    headers: { ...restHeaders(cfg.anonKey, token, true), Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  const data = await parseJson<SiteRow[] | SiteRow>(res);
+  if (!data) return null;
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+async function patchSite(
+  cfg: Cfg,
+  token: string,
+  id: string,
+  patch: Record<string, unknown>
+): Promise<SiteRow | null> {
+  const res = await fetch(`${cfg.url}/rest/v1/condominiums?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { ...restHeaders(cfg.anonKey, token, true), Prefer: 'return=representation' },
+    body: JSON.stringify(patch)
+  });
+  const data = await parseJson<SiteRow[] | SiteRow>(res);
+  if (!data) return null;
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+async function fetchAudit(cfg: Cfg, token: string, resourceId: string) {
+  const res = await fetch(
+    `${cfg.url}/rest/v1/platform_audit_events?resource_id=eq.${encodeURIComponent(resourceId)}&select=actor_user_id,action,resource_type,resource_id,metadata,occurred_at&order=occurred_at.desc&limit=80`,
+    { method: 'GET', headers: restHeaders(cfg.anonKey, token) }
+  );
+  const data = await parseJson<Array<Record<string, unknown>>>(res);
+  return Array.isArray(data) ? data : [];
 }
 
 async function auditSafe(

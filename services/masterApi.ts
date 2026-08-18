@@ -17,6 +17,13 @@ export type MasterOrganization = {
   created_at: string;
   updated_at?: string | null;
   sites_count?: number;
+  profile?: Record<string, unknown> | null;
+  blocked_at?: string | null;
+  block_reason?: string | null;
+  block_source?: string | null;
+  scheduled_block_at?: string | null;
+  contract_starts_at?: string | null;
+  contract_ends_at?: string | null;
 };
 
 export type MasterSite = {
@@ -26,6 +33,16 @@ export type MasterSite = {
   slug: string;
   vertical: string;
   status: string;
+  profile?: Record<string, unknown> | null;
+};
+
+export type MasterAuditEvent = {
+  actor_user_id?: string;
+  action: string;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  metadata?: Record<string, unknown>;
+  occurred_at?: string;
 };
 
 export type MasterDashboard = {
@@ -34,11 +51,22 @@ export type MasterDashboard = {
     organizations_active: number;
     organizations_suspended: number;
     sites_operational: number;
+    sites_blocked?: number;
+    operations_active?: number;
+    scheduled_blocks?: number;
     subscriptions_active: null;
     subscriptions_expired: null;
     trial: null;
     mrr: null;
   };
+  organizations?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    scheduled_block_at?: string | null;
+    blocked_at?: string | null;
+    sites_count?: number;
+  }>;
   billing: string;
 };
 
@@ -162,17 +190,66 @@ export function getMasterOrganization(accessToken: string, id: string) {
     sites: MasterSite[];
     subscription: string;
     users: string;
+    audit?: MasterAuditEvent[];
   }>(`/api/master/organizations/${id}`, accessToken);
 }
 
 export function updateMasterOrganization(
   accessToken: string,
   id: string,
-  patch: { name?: string; slug?: string; status?: string }
+  patch: Record<string, unknown>
 ) {
   return masterFetch<{ ok: true; organization: MasterOrganization }>(
     `/api/master/organizations/${id}`,
     accessToken,
     { method: 'PATCH', body: JSON.stringify(patch) }
+  );
+}
+
+export function createMasterOrganization(accessToken: string, body: Record<string, unknown>) {
+  return masterFetch<{ ok: true; organization: MasterOrganization }>(
+    '/api/master/organizations',
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function createMasterSite(
+  accessToken: string,
+  organizationId: string,
+  body: Record<string, unknown>
+) {
+  return masterFetch<{ ok: true; site: MasterSite }>(
+    `/api/master/organizations/${organizationId}/sites`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function updateMasterSite(accessToken: string, siteId: string, patch: Record<string, unknown>) {
+  return masterFetch<{ ok: true; site: MasterSite }>(
+    `/api/master/sites/${siteId}`,
+    accessToken,
+    { method: 'PATCH', body: JSON.stringify(patch) }
+  );
+}
+
+export function blockMasterOrganization(
+  accessToken: string,
+  id: string,
+  body: { reason: string; immediate?: boolean; scheduled_at?: string }
+) {
+  return masterFetch<{ ok: true; organization: MasterOrganization }>(
+    `/api/master/organizations/${id}/block`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function unblockMasterOrganization(accessToken: string, id: string, reason: string) {
+  return masterFetch<{ ok: true; organization: MasterOrganization }>(
+    `/api/master/organizations/${id}/unblock`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify({ reason }) }
   );
 }

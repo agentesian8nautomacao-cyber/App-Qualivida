@@ -7,6 +7,13 @@ export type OrganizationRow = {
   status: string;
   created_at: string;
   updated_at?: string | null;
+  profile?: Record<string, unknown> | null;
+  blocked_at?: string | null;
+  block_reason?: string | null;
+  block_source?: string | null;
+  scheduled_block_at?: string | null;
+  contract_starts_at?: string | null;
+  contract_ends_at?: string | null;
 };
 
 export type SiteRow = {
@@ -16,6 +23,11 @@ export type SiteRow = {
   slug: string;
   vertical: string;
   status: string;
+  profile?: Record<string, unknown> | null;
+  blocked_at?: string | null;
+  block_reason?: string | null;
+  block_source?: string | null;
+  scheduled_block_at?: string | null;
 };
 
 export type AuditInsert = {
@@ -30,13 +42,34 @@ export type MasterStore = {
   getAdminByUserId(userId: string): Promise<PlatformAdminRow | null>;
   listOrganizations(): Promise<OrganizationRow[]>;
   getOrganization(id: string): Promise<OrganizationRow | null>;
+  createOrganization(input: {
+    name: string;
+    slug: string;
+    status?: string;
+    profile?: Record<string, unknown>;
+    contract_starts_at?: string | null;
+    contract_ends_at?: string | null;
+  }): Promise<OrganizationRow | null>;
   updateOrganization(
     id: string,
-    patch: { name?: string; slug?: string; status?: string }
+    patch: Partial<OrganizationRow> & { name?: string; slug?: string; status?: string }
   ): Promise<OrganizationRow | null>;
   listSitesByOrg(organizationId: string): Promise<SiteRow[]>;
+  createSite(input: {
+    organization_id: string;
+    name: string;
+    slug: string;
+    status?: string;
+    profile?: Record<string, unknown>;
+  }): Promise<SiteRow | null>;
+  updateSite(
+    id: string,
+    patch: Partial<SiteRow> & { name?: string; slug?: string; status?: string }
+  ): Promise<SiteRow | null>;
   countOrganizationsByStatus(): Promise<{ total: number; active: number; suspended: number }>;
   countSites(): Promise<number>;
+  countSitesByStatus(): Promise<{ active: number; suspended: number }>;
+  listAudit(resourceId?: string | null): Promise<AuditInsert[]>;
   insertAudit(event: AuditInsert): Promise<void>;
 };
 
@@ -61,16 +94,63 @@ export function createMemoryMasterStore(seed?: {
     async getOrganization(id) {
       return organizations.find((o) => o.id === id) || null;
     },
+    async createOrganization(input) {
+      const row: OrganizationRow = {
+        id: crypto.randomUUID(),
+        name: input.name,
+        slug: input.slug,
+        status: input.status || 'active',
+        created_at: new Date().toISOString(),
+        profile: input.profile || {},
+        contract_starts_at: input.contract_starts_at || null,
+        contract_ends_at: input.contract_ends_at || null
+      };
+      organizations.push(row);
+      return { ...row };
+    },
     async updateOrganization(id, patch) {
       const row = organizations.find((o) => o.id === id);
       if (!row) return null;
       if (patch.name !== undefined) row.name = patch.name;
       if (patch.slug !== undefined) row.slug = patch.slug;
       if (patch.status !== undefined) row.status = patch.status;
+      if (patch.profile !== undefined) row.profile = patch.profile;
+      if (patch.blocked_at !== undefined) row.blocked_at = patch.blocked_at;
+      if (patch.block_reason !== undefined) row.block_reason = patch.block_reason;
+      if (patch.block_source !== undefined) row.block_source = patch.block_source;
+      if (patch.scheduled_block_at !== undefined) row.scheduled_block_at = patch.scheduled_block_at;
+      if (patch.contract_starts_at !== undefined) row.contract_starts_at = patch.contract_starts_at;
+      if (patch.contract_ends_at !== undefined) row.contract_ends_at = patch.contract_ends_at;
       return { ...row };
     },
     async listSitesByOrg(organizationId) {
       return sites.filter((s) => s.organization_id === organizationId);
+    },
+    async createSite(input) {
+      const row: SiteRow = {
+        id: crypto.randomUUID(),
+        organization_id: input.organization_id,
+        name: input.name,
+        slug: input.slug,
+        vertical: 'condominium',
+        status: input.status || 'active',
+        profile: input.profile || {}
+      };
+      sites.push(row);
+      return { ...row };
+    },
+    async updateSite(id, patch) {
+      const row = sites.find((s) => s.id === id);
+      if (!row) return null;
+      if (patch.name !== undefined) row.name = patch.name;
+      if (patch.slug !== undefined) row.slug = patch.slug;
+      if (patch.status !== undefined) row.status = patch.status;
+      if (patch.profile !== undefined) row.profile = patch.profile;
+      if (patch.blocked_at !== undefined) row.blocked_at = patch.blocked_at;
+      if (patch.block_reason !== undefined) row.block_reason = patch.block_reason;
+      if (patch.block_source !== undefined) row.block_source = patch.block_source;
+      if (patch.scheduled_block_at !== undefined) row.scheduled_block_at = patch.scheduled_block_at;
+      return { ...row };
     },
     async countOrganizationsByStatus() {
       const total = organizations.length;
@@ -80,6 +160,16 @@ export function createMemoryMasterStore(seed?: {
     },
     async countSites() {
       return sites.length;
+    },
+    async countSitesByStatus() {
+      return {
+        active: sites.filter((s) => s.status === 'active').length,
+        suspended: sites.filter((s) => s.status === 'suspended').length
+      };
+    },
+    async listAudit(resourceId) {
+      if (!resourceId) return [...audits];
+      return audits.filter((a) => a.resource_id === resourceId);
     },
     async insertAudit(event) {
       audits.push(event);

@@ -86,7 +86,7 @@ export async function handleLiveMasterRequest(request: Request): Promise<Respons
         status: 204,
         headers: {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization'
         }
       });

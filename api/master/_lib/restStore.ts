@@ -6,7 +6,7 @@
 
 import { sanitizeMasterLog } from './env';
 import type { PlatformAdminRow } from './authorize';
-import type { MasterStore, OrganizationRow, SiteRow } from './store';
+import type { AuditInsert, MasterStore, OrganizationRow, SiteRow } from './store';
 
 export type AuthUserRow = { id: string; email?: string | null };
 
@@ -89,19 +89,65 @@ export function createRestMasterStore(
     },
     async listOrganizations() {
       const res = await safeFetch(
-        `${rest}/organizations?select=id,name,slug,status,created_at,updated_at&order=created_at.desc`,
+        `${rest}/organizations?select=id,name,slug,status,created_at,updated_at,profile,blocked_at,block_reason,block_source,scheduled_block_at,contract_starts_at,contract_ends_at&order=created_at.desc`,
         { method: 'GET', headers },
         'ORGANIZATIONS_LIST'
       );
+      if (!res.ok) {
+        const fallback = await safeFetch(
+          `${rest}/organizations?select=id,name,slug,status,created_at,updated_at&order=created_at.desc`,
+          { method: 'GET', headers },
+          'ORGANIZATIONS_LIST'
+        );
+        const data = await parseJson<OrganizationRow[]>(fallback);
+        return Array.isArray(data) ? data : [];
+      }
       const data = await parseJson<OrganizationRow[]>(res);
       return Array.isArray(data) ? data : [];
     },
     async getOrganization(id) {
-      const res = await safeFetch(
-        `${rest}/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at`,
-        { method: 'GET', headers },
-        'ORGANIZATION_GET'
+      const urlFull = `${rest}/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at,profile,blocked_at,block_reason,block_source,scheduled_block_at,contract_starts_at,contract_ends_at`;
+      let res = await safeFetch(urlFull, { method: 'GET', headers }, 'ORGANIZATION_GET');
+      if (!res.ok) {
+        res = await safeFetch(
+          `${rest}/organizations?id=eq.${encodeURIComponent(id)}&select=id,name,slug,status,created_at,updated_at`,
+          { method: 'GET', headers },
+          'ORGANIZATION_GET'
+        );
+      }
+      const data = await parseJson<OrganizationRow[] | OrganizationRow>(res);
+      return firstOrNull(data);
+    },
+    async createOrganization(input) {
+      const payload: Record<string, unknown> = {
+        name: input.name,
+        slug: input.slug,
+        status: input.status || 'active'
+      };
+      if (input.profile) payload.profile = input.profile;
+      if (input.contract_starts_at) payload.contract_starts_at = input.contract_starts_at;
+      if (input.contract_ends_at) payload.contract_ends_at = input.contract_ends_at;
+      let res = await safeFetch(
+        `${rest}/organizations`,
+        {
+          method: 'POST',
+          headers: { ...jsonHeaders, Prefer: 'return=representation' },
+          body: JSON.stringify(payload)
+        },
+        'ORGANIZATION_CREATE'
       );
+      if (!res.ok && input.profile) {
+        delete payload.profile;
+        res = await safeFetch(
+          `${rest}/organizations`,
+          {
+            method: 'POST',
+            headers: { ...jsonHeaders, Prefer: 'return=representation' },
+            body: JSON.stringify(payload)
+          },
+          'ORGANIZATION_CREATE'
+        );
+      }
       const data = await parseJson<OrganizationRow[] | OrganizationRow>(res);
       return firstOrNull(data);
     },
@@ -120,12 +166,63 @@ export function createRestMasterStore(
     },
     async listSitesByOrg(organizationId) {
       const res = await safeFetch(
-        `${rest}/condominiums?organization_id=eq.${encodeURIComponent(organizationId)}&select=id,organization_id,name,slug,vertical,status`,
+        `${rest}/condominiums?organization_id=eq.${encodeURIComponent(organizationId)}&select=id,organization_id,name,slug,vertical,status,profile,blocked_at,block_reason,block_source,scheduled_block_at`,
         { method: 'GET', headers },
         'SITES_LIST'
       );
+      if (!res.ok) {
+        const fallback = await safeFetch(
+          `${rest}/condominiums?organization_id=eq.${encodeURIComponent(organizationId)}&select=id,organization_id,name,slug,vertical,status`,
+          { method: 'GET', headers },
+          'SITES_LIST'
+        );
+        const data = await parseJson<SiteRow[]>(fallback);
+        return Array.isArray(data) ? data : [];
+      }
       const data = await parseJson<SiteRow[]>(res);
       return Array.isArray(data) ? data : [];
+    },
+    async createSite(input) {
+      const payload: Record<string, unknown> = {
+        organization_id: input.organization_id,
+        name: input.name,
+        slug: input.slug,
+        vertical: 'condominium',
+        status: input.status || 'active'
+      };
+      if (input.profile) payload.profile = input.profile;
+      let res = await safeFetch(
+        `${rest}/condominiums`,
+        {
+          method: 'POST',
+          headers: { ...jsonHeaders, Prefer: 'return=representation' },
+          body: JSON.stringify(payload)
+        },
+        'SITE_CREATE'
+      );
+      if (!res.ok && input.profile) {
+        delete payload.profile;
+        res = await safeFetch(
+          `${rest}/condominiums`,
+          {
+            method: 'POST',
+            headers: { ...jsonHeaders, Prefer: 'return=representation' },
+            body: JSON.stringify(payload)
+          },
+          'SITE_CREATE'
+        );
+      }
+      const data = await parseJson<SiteRow[] | SiteRow>(res);
+      return firstOrNull(data);
+    },
+    async updateSite(id, patch) {
+      const res = await safeFetch(`${rest}/condominiums?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { ...jsonHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify(patch)
+      }, 'SITE_UPDATE');
+      const data = await parseJson<SiteRow[] | SiteRow>(res);
+      return firstOrNull(data);
     },
     async countOrganizationsByStatus() {
       const list = await this.listOrganizations();
@@ -136,9 +233,26 @@ export function createRestMasterStore(
       };
     },
     async countSites() {
-      const res = await safeFetch(`${rest}/condominiums?select=id`, { method: 'GET', headers }, 'SITES_COUNT');
-      const data = await parseJson<{ id: string }[]>(res);
+      const res = await safeFetch(`${rest}/condominiums?select=id,status`, { method: 'GET', headers }, 'SITES_COUNT');
+      const data = await parseJson<{ id: string; status?: string }[]>(res);
       return Array.isArray(data) ? data.length : 0;
+    },
+    async countSitesByStatus() {
+      const res = await safeFetch(`${rest}/condominiums?select=id,status`, { method: 'GET', headers }, 'SITES_COUNT');
+      const data = await parseJson<{ id: string; status?: string }[]>(res);
+      const list = Array.isArray(data) ? data : [];
+      return {
+        active: list.filter((s) => s.status === 'active').length,
+        suspended: list.filter((s) => s.status === 'suspended').length
+      };
+    },
+    async listAudit(resourceId) {
+      const q = resourceId
+        ? `${rest}/platform_audit_events?resource_id=eq.${encodeURIComponent(resourceId)}&select=actor_user_id,action,resource_type,resource_id,metadata,occurred_at&order=occurred_at.desc&limit=80`
+        : `${rest}/platform_audit_events?select=actor_user_id,action,resource_type,resource_id,metadata,occurred_at&order=occurred_at.desc&limit=80`;
+      const res = await safeFetch(q, { method: 'GET', headers }, 'AUDIT_LIST');
+      const data = await parseJson<AuditInsert[]>(res);
+      return Array.isArray(data) ? data : [];
     },
     async insertAudit(event) {
       try {
