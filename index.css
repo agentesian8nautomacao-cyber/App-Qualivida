@@ -28,12 +28,20 @@ body {
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
+  height: 100dvh;
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--sentinela-background);
+  background-color: #0052ff;
+  background-image: url("/Logo login.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: var(--sentinela-text);
+  transition: background-color 320ms ease;
 }
 
 .sentinela-login-page.light-mode {
@@ -47,10 +55,17 @@ body {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    transparent 0%,
-    transparent 72%,
-    color-mix(in srgb, #001a4d 28%, transparent) 100%
+    rgba(6, 16, 31, 0.42) 0%,
+    rgba(6, 16, 31, 0.58) 55%,
+    rgba(6, 16, 31, 0.72) 100%
   );
+  opacity: 1;
+  transition: opacity 320ms ease, background-color 320ms ease;
+}
+
+.sentinela-login-page.light-mode .sentinela-login-overlay {
+  opacity: 0;
+  background: transparent;
 }
 
 .sentinela-access-theme-toggle {
@@ -66,10 +81,11 @@ body {
   border: 1px solid var(--sentinela-border);
   border-radius: 1rem;
   color: var(--sentinela-text);
-  background: color-mix(in srgb, var(--sentinela-surface) 72%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  transition: transform 160ms ease, background-color 160ms ease;
+  background: color-mix(in srgb, var(--sentinela-surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(1, 8, 24, 0.28);
+  transition: transform 160ms ease, background-color 320ms ease, color 320ms ease, border-color 320ms ease;
 }
 
 .sentinela-access-theme-toggle:hover {
@@ -88,32 +104,16 @@ body {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 100vw;
+  max-width: 100%;
   min-height: 100dvh;
   padding: clamp(0.75rem, 2vw, 1.5rem);
-  padding-bottom: clamp(1.25rem, 3.5vh, 2rem);
+  padding-bottom: max(clamp(1.5rem, 4vh, 2.5rem), env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: clamp(0.85rem, 2vh, 1.25rem);
   text-align: center;
-}
-
-.sentinela-access-art {
-  display: block;
-  width: 100%;
-  max-width: min(100vw, 100dvh);
-  height: auto;
-  max-height: calc(100dvh - 6.5rem);
-  object-fit: contain;
-  object-position: center;
-  filter: brightness(0.68) saturate(0.88) contrast(1.06);
-  transition: filter 260ms ease;
-}
-
-.sentinela-login-page.light-mode .sentinela-access-art {
-  filter: none;
 }
 
 .sentinela-access-button {
@@ -209,18 +209,10 @@ body {
   backdrop-filter: blur(9px) saturate(125%);
 }
 
-.sentinela-login-page.light-mode .sentinela-login-overlay {
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    transparent 72%,
-    color-mix(in srgb, #001a4d 18%, transparent) 100%
-  );
-}
-
 .sentinela-login-page.light-mode .sentinela-login-card {
-  background: color-mix(in srgb, var(--sentinela-surface) 78%, transparent);
+  background: color-mix(in srgb, var(--sentinela-surface) 86%, transparent);
   border-color: color-mix(in srgb, var(--sentinela-primary) 22%, transparent);
+  color: var(--sentinela-text);
   box-shadow:
     0 30px 80px rgba(15, 23, 42, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
@@ -229,12 +221,8 @@ body {
 @media (max-width: 640px) {
   .sentinela-access-stage {
     padding: 0.75rem;
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
     gap: 0.75rem;
-  }
-
-  .sentinela-access-art {
-    max-height: calc(100dvh - 5.75rem);
   }
 
   .sentinela-access-theme-toggle {
@@ -271,7 +259,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .sentinela-login-modal,
   .sentinela-login-modal-backdrop,
-  .sentinela-access-button {
+  .sentinela-access-button,
+  .sentinela-login-overlay,
+  .sentinela-access-theme-toggle {
     animation: none;
     transition: none;
   }

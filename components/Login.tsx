@@ -224,6 +224,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
     return (
       <div className={`sentinela-login-page relative min-h-screen w-full flex items-center justify-center overflow-hidden transition-colors duration-500 ${theme === 'light' ? 'light-mode' : ''}`}>
         <div className="sentinela-login-overlay" aria-hidden="true" />
+        {toggleTheme && (
+          <button
+            onClick={toggleTheme}
+            className="sentinela-access-theme-toggle"
+            title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+            aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        )}
         <ForgotPassword
           onBack={() => { setShowForgotPassword(false); setRecoveryLinkExpired(false); }}
           theme={theme}
@@ -248,11 +258,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
       )}
 
       <main className="sentinela-access-stage relative z-10">
-        <img
-          src={BRANDING.logo}
-          alt={`Logo ${BRANDING.name}`}
-          className="sentinela-access-art"
-        />
         <button
           ref={accessButtonRef}
           type="button"
