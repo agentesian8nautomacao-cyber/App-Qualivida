@@ -151,14 +151,16 @@ describe('handleLiveMasterRequest', () => {
     expect(body.reason).toBe('SUSPENDED');
   });
 
-  it('rota /api/master/session é função Node sem import estático', async () => {
+  it('rota /api/master/session é função Node com import estático (sem .fetch)', async () => {
     const { readFileSync } = await import('node:fs');
     const { dirname, join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(here, '../session.ts'), 'utf8');
-    expect(src).not.toMatch(/^import /m);
+    expect(src).toMatch(/from '\.\/_lib\/nodeEntry'/);
+    expect(src).not.toMatch(/await import\(/);
     expect(src).toMatch(/export default async function handler/);
+    expect(src).not.toMatch(/@supabase\/supabase-js/);
     const mod = await import('../session');
     expect(typeof mod.default).toBe('function');
     expect((mod.default as { fetch?: unknown }).fetch).toBeUndefined();
@@ -244,5 +246,7 @@ describe('handleLiveMasterRequest', () => {
     expect(live).not.toMatch(/@supabase\/supabase-js/);
     expect(handler).not.toMatch(/@supabase\/supabase-js/);
     expect(rest).not.toMatch(/@supabase\/supabase-js/);
+    const nodeEntry = readFileSync(join(here, 'nodeEntry.ts'), 'utf8');
+    expect(nodeEntry).not.toMatch(/@supabase\/supabase-js/);
   });
 });

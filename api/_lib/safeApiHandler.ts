@@ -1,5 +1,5 @@
 /**
- * Runner da Function — importado só de dentro do handler (depois do cold start).
+ * Runner da Function catch-all (legacy / v1).
  * Diagnóstico sem secrets / JWT / cookies.
  */
 
