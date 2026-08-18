@@ -1,7 +1,7 @@
 /**
- * Única Serverless Function (Hobby ≤ 12).
- * URLs: /api/master/*, /api/v1/*, /api/staff-invite, etc.
- * Import dinâmico: falha de módulo vira JSON 500, não FUNCTION_INVOCATION_FAILED.
+ * Catch-all de /api/* sem pasta própria (staff-invite, etc.).
+ * /api/master/* e /api/v1/* têm Functions explícitas: pastas _lib
+ * impedem este catch-all de receber esses prefixos no Vercel.
  */
 export const runtime = 'nodejs';
 

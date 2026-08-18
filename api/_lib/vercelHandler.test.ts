@@ -3,11 +3,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { asVercelNodeHandler, fromNodeRequest } from './vercelHandler';
+import { asVercelNodeHandler, createLazyFetchHandler, fromNodeRequest } from './vercelHandler';
 
 describe('asVercelNodeHandler', () => {
-  it('exporta função (req, res), não objeto { fetch }', () => {
-    const handler = asVercelNodeHandler(async () => new Response('ok'));
+  it('createLazyFetchHandler exporta função Node', () => {
+    const handler = createLazyFetchHandler(async () => async () => new Response('ok'));
     expect(typeof handler).toBe('function');
   });
 

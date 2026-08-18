@@ -43,8 +43,8 @@ describe('handleLiveMasterRequest', () => {
     expect(body.code).toBe('UNAUTHENTICATED');
   });
 
-  it('catch-all /api exporta função Node (req, res)', async () => {
-    const mod = await import('../../[...path]');
+  it('rota /api/master/session exporta função Node (req, res)', async () => {
+    const mod = await import('../session');
     expect(typeof mod.default).toBe('function');
   });
 });

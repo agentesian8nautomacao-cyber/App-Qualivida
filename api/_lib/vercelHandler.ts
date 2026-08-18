@@ -114,6 +114,13 @@ function jsonErrorPayload(message: string) {
   return JSON.stringify({ error: message, code: 'INTERNAL_ERROR' });
 }
 
+export function createLazyFetchHandler(load: () => Promise<FetchHandler>) {
+  return asVercelNodeHandler(async (request) => {
+    const fetchFn = await load();
+    return fetchFn(request);
+  });
+}
+
 /**
  * Default export das Functions `/api`: função (req, res) que sempre chama res.end().
  */
