@@ -57,10 +57,10 @@ function masterErrorMessage(body: Record<string, unknown>, status: number): stri
   }
   if (typeof body.message === 'string' && body.message.trim()) return body.message;
   if (status === 404) {
-    return 'API Master não encontrada. Faça o deploy com a rota /api/master.';
+    return 'API Master não encontrada. Confirme o deploy da rota /api/master.';
   }
   if (status === 500) {
-    return 'Erro interno na API Master. No Vercel, defina SUPABASE_URL e SUPABASE_ANON_KEY (cópia de VITE_SUPABASE_*) e faça Redeploy.';
+    return 'API Master retornou HTTP 500. Veja o log da função no Vercel (não é 401/403).';
   }
   return `Falha Master (HTTP ${status})`;
 }

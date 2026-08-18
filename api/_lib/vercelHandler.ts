@@ -1,29 +1,23 @@
 /**
- * Adapter Vercel: aceita Web Request (fetch) e Node (req, res).
- * Evita 500 HTML quando o runtime Node não chama `export default { fetch }`.
+ * Adapter Vercel Node (req, res) + Web Request.
+ * No Vercel, o runtime clássico de /api exige res.end(); devolver só Response
+ * gera HTTP 500 HTML sem JSON — o frontend mascarava isso como falta de env.
  */
-
-import type { IncomingMessage, ServerResponse } from 'node:http';
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
 function isWebRequest(input: unknown): input is Request {
-  return (
-    typeof Request !== 'undefined' &&
-    input instanceof Request
-  );
+  if (!input || typeof input !== 'object') return false;
+  const req = input as Request;
+  return typeof req.headers?.get === 'function' && typeof req.clone === 'function';
 }
 
-function isNodeResponse(input: unknown): input is ServerResponse {
-  return (
-    typeof input === 'object' &&
-    input !== null &&
-    typeof (input as ServerResponse).end === 'function' &&
-    typeof (input as ServerResponse).setHeader === 'function'
-  );
-}
-
-async function fromNodeRequest(req: IncomingMessage): Promise<Request> {
+async function fromNodeRequest(req: {
+  method?: string;
+  url?: string;
+  headers: Record<string, string | string[] | undefined>;
+  [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>;
+}): Promise<Request> {
   const host = String(req.headers.host || 'localhost');
   const protoHeader = req.headers['x-forwarded-proto'];
   const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https';
@@ -34,22 +28,37 @@ async function fromNodeRequest(req: IncomingMessage): Promise<Request> {
     headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
   }
   const method = (req.method || 'GET').toUpperCase();
-  let body: Uint8Array | undefined;
+  const init: RequestInit = { method, headers };
   if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const chunks: Uint8Array[] = [];
+    if (typeof req[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of req as AsyncIterable<Uint8Array | string | Buffer>) {
+        if (typeof chunk === 'string') chunks.push(new TextEncoder().encode(chunk));
+        else chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+      }
     }
-    if (chunks.length) body = new Uint8Array(Buffer.concat(chunks));
+    if (chunks.length) {
+      const total = chunks.reduce((n, c) => n + c.byteLength, 0);
+      const body = new Uint8Array(total);
+      let offset = 0;
+      for (const c of chunks) {
+        body.set(c, offset);
+        offset += c.byteLength;
+      }
+      init.body = body;
+    }
   }
-  return new Request(url, {
-    method,
-    headers,
-    body: body ? body : undefined
-  });
+  return new Request(url, init);
 }
 
-async function writeNodeResponse(res: ServerResponse, response: Response): Promise<void> {
+async function writeNodeResponse(
+  res: {
+    statusCode: number;
+    setHeader: (k: string, v: string) => void;
+    end: (b?: Buffer | string) => void;
+  },
+  response: Response
+): Promise<void> {
   res.statusCode = response.status;
   response.headers.forEach((value, key) => {
     res.setHeader(key, value);
@@ -69,12 +78,12 @@ function jsonError(message: string, status = 500): Response {
 }
 
 export function asVercelNodeHandler(fetchFn: FetchHandler) {
-  const handler = async (req: Request | IncomingMessage, res?: ServerResponse): Promise<Response | void> => {
+  return async function handler(req: unknown, res?: unknown): Promise<Response | void> {
     try {
-      const request = isWebRequest(req) ? req : await fromNodeRequest(req as IncomingMessage);
+      const request = isWebRequest(req) ? req : await fromNodeRequest(req as Parameters<typeof fromNodeRequest>[0]);
       const response = await fetchFn(request);
-      if (isNodeResponse(res)) {
-        await writeNodeResponse(res, response);
+      if (res && typeof (res as { end?: unknown }).end === 'function') {
+        await writeNodeResponse(res as Parameters<typeof writeNodeResponse>[0], response);
         return;
       }
       return response;
@@ -82,12 +91,11 @@ export function asVercelNodeHandler(fetchFn: FetchHandler) {
       const message = err instanceof Error ? err.message : 'Erro interno na API';
       console.error('[vercel-handler]', message);
       const response = jsonError(message);
-      if (isNodeResponse(res)) {
-        await writeNodeResponse(res, response);
+      if (res && typeof (res as { end?: unknown }).end === 'function') {
+        await writeNodeResponse(res as Parameters<typeof writeNodeResponse>[0], response);
         return;
       }
       return response;
     }
   };
-  return handler;
 }

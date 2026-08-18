@@ -223,6 +223,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
   if (showForgotPassword) {
     return (
       <div className={`sentinela-login-page relative min-h-screen w-full flex items-center justify-center overflow-hidden transition-colors duration-500 ${theme === 'light' ? 'light-mode' : ''}`}>
+        <div className="sentinela-login-backdrop" aria-hidden="true">
+          <img src={BRANDING.logo} alt="" className="sentinela-login-backdrop-img" />
+        </div>
         <div className="sentinela-login-overlay" aria-hidden="true" />
         {toggleTheme && (
           <button
@@ -245,6 +248,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
 
   return (
     <div className={`sentinela-login-page relative min-h-screen w-full overflow-hidden transition-colors duration-500 ${theme === 'light' ? 'light-mode' : ''}`}>
+      <div className="sentinela-login-backdrop" aria-hidden="true">
+        <img src={BRANDING.logo} alt="" className="sentinela-login-backdrop-img" />
+      </div>
       <div className="sentinela-login-overlay" aria-hidden="true" />
       {toggleTheme && (
         <button
