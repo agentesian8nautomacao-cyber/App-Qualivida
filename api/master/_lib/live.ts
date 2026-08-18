@@ -83,8 +83,25 @@ export async function handleLiveMasterRequest(request: Request): Promise<Respons
     });
     return handler.fetch(request);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[master/live]', message);
-    return json({ error: `Erro interno na API Master: ${message}`, code: 'INTERNAL_ERROR' }, 500);
+    const exception = err instanceof Error ? err.name : 'Error';
+    console.error(
+      JSON.stringify({
+        src: 'master/live',
+        stage: 'live',
+        exception,
+        has_SUPABASE_URL: Boolean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        has_ANON_KEY: Boolean(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)
+      })
+    );
+    return json(
+      {
+        error: 'MASTER_API_ERROR',
+        message: 'Falha na API Master',
+        code: 'INTERNAL_ERROR',
+        stage: 'live',
+        exception
+      },
+      500
+    );
   }
 }

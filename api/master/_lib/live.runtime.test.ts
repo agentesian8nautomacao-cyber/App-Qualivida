@@ -43,10 +43,48 @@ describe('handleLiveMasterRequest', () => {
     expect(body.code).toBe('UNAUTHENTICATED');
   });
 
-  it('rota /api/master/session exporta função Node com .fetch', async () => {
+  it('rota /api/master/session é função Node sem import estático', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(here, '../session.ts'), 'utf8');
+    expect(src).not.toMatch(/^import /m);
+    expect(src).toMatch(/export default async function handler/);
     const mod = await import('../session');
     expect(typeof mod.default).toBe('function');
-    expect(typeof (mod.default as { fetch?: unknown }).fetch).toBe('function');
+    expect((mod.default as { fetch?: unknown }).fetch).toBeUndefined();
+  });
+
+  it('handler Node sem Bearer devolve JSON 401, não throw', async () => {
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'anon-test-key-not-a-secret';
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.VITE_SUPABASE_ANON_KEY;
+    const mod = await import('../session');
+    const res = {
+      statusCode: 0,
+      body: '',
+      setHeader() {},
+      end(b?: string) {
+        this.body = typeof b === 'string' ? b : '';
+      }
+    };
+    await mod.default({ method: 'GET', url: '/api/master/session', headers: { host: 'localhost' } }, res);
+    expect(res.statusCode).toBe(401);
+    const body = JSON.parse(res.body) as { code?: string };
+    expect(body.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('URL Supabase inválida + token não derruba a Function', async () => {
+    process.env.SUPABASE_URL = 'not-a-valid-url';
+    process.env.SUPABASE_ANON_KEY = 'anon-test-key-not-a-secret';
+    const res = await handleLiveMasterRequest(
+      new Request('https://x/api/master/session', { headers: { Authorization: 'Bearer abc' } })
+    );
+    expect([401, 500]).toContain(res.status);
+    const body = (await res.json()) as { error?: string };
+    expect(typeof body.error).toBe('string');
   });
 
   it('live/handler Master não importam @supabase/supabase-js', async () => {

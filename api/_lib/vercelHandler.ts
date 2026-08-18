@@ -151,16 +151,5 @@ export function asVercelNodeHandler(fetchFn: FetchHandler) {
       });
     }
   };
-  (handler as { fetch: FetchHandler }).fetch = async (request: Request) => {
-    try {
-      return await fetchFn(request);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro interno na API';
-      return new Response(jsonErrorPayload(message), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-  };
   return handler;
 }

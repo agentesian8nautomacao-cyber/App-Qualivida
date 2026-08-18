@@ -6,14 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { asVercelNodeHandler, fromNodeRequest } from './vercelHandler';
 
 describe('asVercelNodeHandler', () => {
-  it('função Node também expõe .fetch para o runtime Web da Vercel', async () => {
+  it('exporta função Node (req, res), sem propriedade fetch', () => {
     const handler = asVercelNodeHandler(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     expect(typeof handler).toBe('function');
-    expect(typeof (handler as { fetch?: unknown }).fetch).toBe('function');
-    const web = await (handler as { fetch: (r: Request) => Promise<Response> }).fetch(
-      new Request('https://x/api/master/session')
-    );
-    expect(web.status).toBe(200);
+    expect((handler as { fetch?: unknown }).fetch).toBeUndefined();
   });
 
   it('escreve JSON no res.end quando o runtime passa (req, res) Node', async () => {
