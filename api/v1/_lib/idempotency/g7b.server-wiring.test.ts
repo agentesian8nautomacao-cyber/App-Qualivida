@@ -25,10 +25,10 @@ import { createSupabaseIdempotencyStore } from '../idempotency/supabaseStore';
 import { createSupabaseConfirmationStore } from '../confirmations/supabaseStore';
 import { createUnavailableIdempotencyStore } from '../idempotency/store';
 import { createUnavailableConfirmationStore } from '../confirmations/unavailableStore';
-import { createIdentifyResidentHandler } from '../../residents/identify';
-import { createPackagesHandler } from '../../operations/packages/index';
-import { createPickupHandler } from '../../operations/packages/pickup';
-import { createCancelReservationHandler } from '../../operations/reservations/cancel';
+import { createIdentifyResidentHandler } from '../handlers/residents/identify';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
+import { createPickupHandler } from '../handlers/operations/packages/pickup';
+import { createCancelReservationHandler } from '../handlers/operations/reservations/cancel';
 import { sha256Hex } from '../auth/hmac';
 
 const tenants = createMemoryTenantDirectory([

@@ -6,13 +6,13 @@
 
 export const runtime = 'nodejs';
 
-import { FOUNDATION_GATES, API_VERSION } from './_lib/gates';
-import { withProtectedHandler, type ApiHandlerDeps } from './_lib/protectedHandler';
-import { jsonSuccess, jsonError } from './_lib/response';
-import { ApiErrorCodes } from './_lib/errors';
-import { createEnvCredentialStore } from './_lib/auth/credentials';
-import { authorizeOperation } from './_lib/authz/authorize';
-import { isCoreOperationName } from './_lib/authz/operations';
+import { FOUNDATION_GATES, API_VERSION } from '../gates';
+import { withProtectedHandler, type ApiHandlerDeps } from '../protectedHandler';
+import { jsonSuccess, jsonError } from '../response';
+import { ApiErrorCodes } from '../errors';
+import { createEnvCredentialStore } from '../auth/credentials';
+import { authorizeOperation } from '../authz/authorize';
+import { isCoreOperationName } from '../authz/operations';
 
 export function createAuthzProbeHandler(deps?: ApiHandlerDeps) {
   return {

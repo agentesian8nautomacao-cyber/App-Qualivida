@@ -8,16 +8,16 @@
 
 export const runtime = 'nodejs';
 
-import { FOUNDATION_GATES, API_VERSION } from './_lib/gates';
+import { FOUNDATION_GATES, API_VERSION } from '../gates';
 import {
   withAuthorizedOperation,
   withConfirmedOperation,
   type ApiHandlerDeps
-} from './_lib/protectedHandler';
-import { jsonSuccess, jsonError } from './_lib/response';
-import { ApiErrorCodes } from './_lib/errors';
-import { classifyOperation, requiresConfirmation } from './_lib/ops/classification';
-import { isCoreOperationName } from './_lib/authz/operations';
+} from '../protectedHandler';
+import { jsonSuccess, jsonError } from '../response';
+import { ApiErrorCodes } from '../errors';
+import { classifyOperation, requiresConfirmation } from '../ops/classification';
+import { isCoreOperationName } from '../authz/operations';
 
 export function createConfirmationProbeHandler(deps?: ApiHandlerDeps) {
   return {

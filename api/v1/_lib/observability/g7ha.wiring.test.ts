@@ -27,10 +27,10 @@ import { createFakePersistenceDb } from '../execution/fakePersistenceDb';
 import { createSupabaseCorePersistence } from '../execution/supabasePersistence';
 import { createSupabaseIdempotencyStore } from '../idempotency/supabaseStore';
 import { createSupabaseConfirmationStore } from '../confirmations/supabaseStore';
-import { createPackagesHandler } from '../../operations/packages/index';
-import { createPickupHandler } from '../../operations/packages/pickup';
-import { createReservationsHandler } from '../../operations/reservations/index';
-import { createIdentifyResidentHandler } from '../../residents/identify';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
+import { createPickupHandler } from '../handlers/operations/packages/pickup';
+import { createReservationsHandler } from '../handlers/operations/reservations/index';
+import { createIdentifyResidentHandler } from '../handlers/residents/identify';
 
 const tenantsOk = createMemoryTenantDirectory([
   { organization_id: FIXTURE_ORG_A, condominium_id: FIXTURE_CONDO_A },

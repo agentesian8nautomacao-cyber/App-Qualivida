@@ -19,10 +19,10 @@ import { createUnavailableConfirmationStore } from './unavailableStore';
 import { createMemoryCredentialStore } from '../auth/credentials';
 import { createMemoryTenantDirectory } from '../auth/tenant';
 import { createMemoryPermissionResolver } from '../authz/permissionResolver';
-import { createPickupHandler } from '../../operations/packages/pickup';
-import { createCancelReservationHandler } from '../../operations/reservations/cancel';
-import { createPackagesHandler } from '../../operations/packages/index';
-import { createConfirmationProbeHandler } from '../../confirmation-probe';
+import { createPickupHandler } from '../handlers/operations/packages/pickup';
+import { createCancelReservationHandler } from '../handlers/operations/reservations/cancel';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
+import { createConfirmationProbeHandler } from '../handlers/confirmation-probe';
 import {
   FIXTURE_CLIENT,
   FIXTURE_CONDO_A,

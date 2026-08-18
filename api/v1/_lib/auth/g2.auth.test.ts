@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryCredentialStore } from './credentials';
 import { createMemoryTenantDirectory } from './tenant';
-import { createProtectedProbeHandler } from '../../protected-probe';
-import { createPackagesHandler } from '../../operations/packages/index';
-import health from '../../health';
+import { createProtectedProbeHandler } from '../handlers/protected-probe';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
+import health from '../handlers/health';
 import {
   FIXTURE_CLIENT,
   FIXTURE_CONDO_A,

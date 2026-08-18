@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { withCoreExecution, type ExecuteHandlerDeps } from '../../_lib/withCoreExecution';
+import { withCoreExecution, type ExecuteHandlerDeps } from '../../../withCoreExecution';
 
 export function createPackagesHandler(deps?: ExecuteHandlerDeps) {
   return {

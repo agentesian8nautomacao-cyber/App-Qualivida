@@ -12,11 +12,11 @@ import {
   withAuthorizedOperation,
   resolveEventStoreQuery,
   type ApiHandlerDeps
-} from './_lib/protectedHandler';
-import { jsonSuccess, jsonError } from './_lib/response';
-import { ApiErrorCodes } from './_lib/errors';
-import { parseEventsListParams } from './_lib/observability/eventStoreQuery';
-import { assertNoSensitiveLeak } from './_lib/observability/redact';
+} from '../protectedHandler';
+import { jsonSuccess, jsonError } from '../response';
+import { ApiErrorCodes } from '../errors';
+import { parseEventsListParams } from '../observability/eventStoreQuery';
+import { assertNoSensitiveLeak } from '../observability/redact';
 
 export function createEventsHandler(deps?: ApiHandlerDeps) {
   return {

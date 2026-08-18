@@ -5,10 +5,10 @@
 
 export const runtime = 'nodejs';
 
-import { FOUNDATION_GATES, API_VERSION } from './_lib/gates';
-import { withProtectedHandler } from './_lib/protectedHandler';
-import { jsonSuccess } from './_lib/response';
-import type { ProtectDeps } from './_lib/auth/protect';
+import { FOUNDATION_GATES, API_VERSION } from '../gates';
+import { withProtectedHandler } from '../protectedHandler';
+import { jsonSuccess } from '../response';
+import type { ProtectDeps } from '../auth/protect';
 
 export function createProtectedProbeHandler(deps?: ProtectDeps) {
   return {

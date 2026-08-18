@@ -1,23 +1,23 @@
 export const runtime = 'nodejs';
 
 /**
- * POST /api/v1/operations/reservations/cancel
- * SENSITIVE — confirmation then Core (G7-B).
+ * SENSITIVE — confirmation gate then Core (G7-B).
+ * Fail-closed if confirmation store unavailable.
  */
 
-import { withConfirmedOperation } from '../../_lib/protectedHandler';
-import { withCoreExecution, type ExecuteHandlerDeps } from '../../_lib/withCoreExecution';
-import { jsonError } from '../../_lib/response';
-import { ApiErrorCodes } from '../../_lib/errors';
-import { resolveConfirmationStore } from '../../_lib/confirmations/service';
+import { withConfirmedOperation } from '../../../protectedHandler';
+import { withCoreExecution, type ExecuteHandlerDeps } from '../../../withCoreExecution';
+import { jsonError } from '../../../response';
+import { ApiErrorCodes } from '../../../errors';
+import { resolveConfirmationStore } from '../../../confirmations/service';
 
-export function createCancelReservationHandler(deps?: ExecuteHandlerDeps) {
+export function createPickupHandler(deps?: ExecuteHandlerDeps) {
   return {
     async fetch(request: Request): Promise<Response> {
       return withConfirmedOperation(
         request,
         ['POST'],
-        'cancel_reservation',
+        'pickup_package',
         async (ctx) => {
           const store = resolveConfirmationStore(deps?.confirmationStore);
           if (store.kind === 'unavailable') {
@@ -27,7 +27,7 @@ export function createCancelReservationHandler(deps?: ExecuteHandlerDeps) {
               'Persistent confirmation store not configured. Core not executed.',
               {
                 correlationId: ctx.correlation_id,
-                operation: 'cancel_reservation',
+                operation: 'pickup_package',
                 details: {
                   classification: 'SENSITIVE',
                   confirmation_id: ctx.confirmation_id,
@@ -36,10 +36,11 @@ export function createCancelReservationHandler(deps?: ExecuteHandlerDeps) {
               }
             );
           }
+          // Re-enter via withCoreExecution with confirmation already consumed
           return withCoreExecution(
             ctx.request,
             ['POST'],
-            'cancel_reservation',
+            'pickup_package',
             { ...deps, skipProductionComposition: deps?.skipProductionComposition },
             { sensitiveConfirmed: true }
           );
@@ -50,4 +51,4 @@ export function createCancelReservationHandler(deps?: ExecuteHandlerDeps) {
   };
 }
 
-export default createCancelReservationHandler();
+export default createPickupHandler();

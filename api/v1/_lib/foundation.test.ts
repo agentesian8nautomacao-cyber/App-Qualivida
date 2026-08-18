@@ -8,9 +8,9 @@ import { FOUNDATION_GATES, isWriteEnabled, isAuthnEnabled } from './gates';
 import { probeOperationalCore } from './coreProbe';
 import { extractRequestIds, newRequestId } from './requestIds';
 import { jsonError, jsonSuccess } from './response';
-import health from '../health';
-import packagesCreate from '../operations/packages/index';
-import packagesPickup from '../operations/packages/pickup';
+import health from './handlers/health';
+import packagesCreate from './handlers/operations/packages/index';
+import packagesPickup from './handlers/operations/packages/pickup';
 
 describe('sentinela api v1 foundation gates', () => {
   it('keeps G2–G5 flags; G7-B store wiring flags true; n8n/whatsapp false', () => {

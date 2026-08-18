@@ -4,10 +4,10 @@
 
 export const runtime = 'nodejs';
 
-import { FOUNDATION_GATES, API_VERSION } from './_lib/gates';
-import { probeOperationalCore } from './_lib/coreProbe';
-import { withFoundationHandler } from './_lib/handler';
-import { jsonSuccess } from './_lib/response';
+import { FOUNDATION_GATES, API_VERSION } from '../gates';
+import { probeOperationalCore } from '../coreProbe';
+import { withFoundationHandler } from '../handler';
+import { jsonSuccess } from '../response';
 
 export default {
   async fetch(request: Request): Promise<Response> {

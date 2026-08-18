@@ -7,8 +7,8 @@ import { authorizeOperation } from './authorize';
 import { createMemoryPermissionResolver } from './permissionResolver';
 import { createMemoryCredentialStore } from '../auth/credentials';
 import { createMemoryTenantDirectory } from '../auth/tenant';
-import { createAuthzProbeHandler } from '../../authz-probe';
-import { createPackagesHandler } from '../../operations/packages/index';
+import { createAuthzProbeHandler } from '../handlers/authz-probe';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
 import {
   FIXTURE_CLIENT,
   FIXTURE_CONDO_A,

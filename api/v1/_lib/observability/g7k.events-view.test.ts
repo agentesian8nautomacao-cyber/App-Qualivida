@@ -16,7 +16,7 @@ import {
   FIXTURE_ORG_B,
   authHeaders
 } from '../auth/testFixtures';
-import { createEventsHandler } from '../../events';
+import { createEventsHandler } from '../handlers/events';
 import {
   createMemoryEventStoreQuery,
   EVENTS_PAGE_DEFAULT,

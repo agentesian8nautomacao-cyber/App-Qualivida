@@ -22,9 +22,9 @@ import { authHeaders, FIXTURE_CLIENT, FIXTURE_ORG_A, FIXTURE_CONDO_A } from '../
 import { createMemoryCredentialStore } from '../auth/credentials';
 import { createMemoryTenantDirectory } from '../auth/tenant';
 import { createMemoryPermissionResolver } from '../authz/permissionResolver';
-import { createIdentifyResidentHandler } from '../../residents/identify';
-import { createPackagesHandler } from '../../operations/packages/index';
-import { createPickupHandler } from '../../operations/packages/pickup';
+import { createIdentifyResidentHandler } from '../handlers/residents/identify';
+import { createPackagesHandler } from '../handlers/operations/packages/index';
+import { createPickupHandler } from '../handlers/operations/packages/pickup';
 import { createFakePersistenceDb } from './fakePersistenceDb';
 import { createSupabaseCorePersistence } from './supabasePersistence';
 import { createSupabaseIdempotencyStore } from '../idempotency/supabaseStore';

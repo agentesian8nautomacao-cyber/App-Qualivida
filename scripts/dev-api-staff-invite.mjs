@@ -80,7 +80,7 @@ const server = createServer(async (req, res) => {
   // SENTINELA API v1 foundation (Etapa 4 / G1) — health via dynamic import when available
   if (path === '/api/v1/health' && req.method === 'GET') {
     try {
-      const healthUrl = pathToFileURL(join(root, 'api', 'v1', 'health.ts')).href;
+      const healthUrl = pathToFileURL(join(root, 'api', 'v1', '_lib', 'handlers', 'health.ts')).href;
       const mod = await import(healthUrl);
       const handler = mod.default;
       const incoming = new Request(`http://localhost:${PORT}${req.url}`, { method: 'GET', headers: req.headers });
