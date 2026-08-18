@@ -2,23 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/master/session.ts": {
-      "includeFiles": "api/master/_lib/**"
-    },
-    "api/master/dashboard.ts": {
-      "includeFiles": "api/master/_lib/**"
-    },
-    "api/master/organizations.ts": {
-      "includeFiles": "api/master/_lib/**"
-    },
-    "api/master/organizations/[id].ts": {
-      "includeFiles": "api/master/_lib/**"
-    },
-    "api/master/[...path].ts": {
-      "includeFiles": "api/master/_lib/**"
-    }
-  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",

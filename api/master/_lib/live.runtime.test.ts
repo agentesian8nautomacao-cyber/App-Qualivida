@@ -151,14 +151,15 @@ describe('handleLiveMasterRequest', () => {
     expect(body.reason).toBe('SUSPENDED');
   });
 
-  it('rota /api/master/session é função Node com import estático (sem .fetch)', async () => {
+  it('rota /api/master/session é Function Node sem import (evita FUNCTION_INVOCATION_FAILED)', async () => {
     const { readFileSync } = await import('node:fs');
     const { dirname, join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
     const here = dirname(fileURLToPath(import.meta.url));
     const src = readFileSync(join(here, '../session.ts'), 'utf8');
-    expect(src).toMatch(/from '\.\/_lib\/nodeEntry'/);
+    expect(src).not.toMatch(/^import /m);
     expect(src).not.toMatch(/await import\(/);
+    expect(src).not.toMatch(/from ['"]\./);
     expect(src).toMatch(/export default async function handler/);
     expect(src).not.toMatch(/@supabase\/supabase-js/);
     const mod = await import('../session');
@@ -181,6 +182,75 @@ describe('handleLiveMasterRequest', () => {
     expect(res.statusCode).toBe(401);
     const body = JSON.parse(res.body) as { code?: string };
     expect(body.code).toBe('UNAUTHENTICATED');
+  });
+
+  it('Function session: JWT inválido → 401; comum → 403; Master ativo → 200', async () => {
+    setServerEnv();
+    const mod = await import('../session');
+    async function call(headers: Record<string, string>) {
+      const res = {
+        statusCode: 0,
+        body: '',
+        setHeader() {},
+        end(b?: string) {
+          this.body = typeof b === 'string' ? b : '';
+        }
+      };
+      await mod.default(
+        { method: 'GET', url: '/api/master/session', headers: { host: 'localhost', ...headers } },
+        res
+      );
+      return { status: res.statusCode, body: JSON.parse(res.body || '{}') as Record<string, unknown> };
+    }
+
+    mockSupabase({ user: null });
+    const invalid = await call({ authorization: 'Bearer not-a-real-jwt' });
+    expect(invalid.status).toBe(401);
+
+    mockSupabase({ user: { id: 'user-common-1', email: 'user@example.com' }, admin: null });
+    const common = await call({ authorization: 'Bearer user-jwt' });
+    expect(common.status).toBe(403);
+    expect(common.body.reason).toBe('NOT_MASTER');
+
+    mockSupabase({
+      user: { id: 'user-master-1', email: 'master@example.com' },
+      admin: {
+        id: '11111111-1111-4111-8111-111111111111',
+        user_id: 'user-master-1',
+        role: 'platform_owner',
+        status: 'active'
+      }
+    });
+    const master = await call({ authorization: 'Bearer master-jwt' });
+    expect(master.status).toBe(200);
+    expect(master.body.ok).toBe(true);
+  });
+
+  it('Function session: fetch Auth falha → 500 GET_AUTH_USER', async () => {
+    setServerEnv();
+    mockSupabase({ throwAuth: true });
+    const mod = await import('../session');
+    const res = {
+      statusCode: 0,
+      body: '',
+      setHeader() {},
+      end(b?: string) {
+        this.body = typeof b === 'string' ? b : '';
+      }
+    };
+    await mod.default(
+      {
+        method: 'GET',
+        url: '/api/master/session',
+        headers: { host: 'localhost', authorization: 'Bearer abc' }
+      },
+      res
+    );
+    expect(res.statusCode).toBe(500);
+    const body = JSON.parse(res.body) as { error?: string; stage?: string; exception?: string };
+    expect(body.error).toBe('MASTER_API_ERROR');
+    expect(body.stage).toBe('GET_AUTH_USER');
+    expect(body.exception).toBe('TypeError');
   });
 
   it('URL Supabase inválida não chama fetch e retorna CONFIG_MISSING', async () => {
@@ -246,7 +316,5 @@ describe('handleLiveMasterRequest', () => {
     expect(live).not.toMatch(/@supabase\/supabase-js/);
     expect(handler).not.toMatch(/@supabase\/supabase-js/);
     expect(rest).not.toMatch(/@supabase\/supabase-js/);
-    const nodeEntry = readFileSync(join(here, 'nodeEntry.ts'), 'utf8');
-    expect(nodeEntry).not.toMatch(/@supabase\/supabase-js/);
   });
 });
