@@ -1,31 +1,74 @@
 /**
- * Adapter Vercel Node (req, res) + Web Request.
- * No Vercel, o runtime clássico de /api exige res.end(); devolver só Response
- * gera HTTP 500 HTML sem JSON — o frontend mascarava isso como falta de env.
+ * Adapter Vercel.
+ *
+ * Rotas que funcionam neste projeto (staff-invite, etc.) exportam:
+ *   export default { fetch(request: Request) { return new Response(...) } }
+ *
+ * Exportar uma função `(req, res)` faz o runtime clássico ignorar o `Response`
+ * e responder HTTP 500 HTML — o frontend via isso como "erro interno".
  */
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
-function isWebRequest(input: unknown): input is Request {
+export type VercelFetchExport = {
+  fetch: FetchHandler;
+};
+
+type NodeRes = {
+  statusCode: number;
+  setHeader: (k: string, v: string) => void;
+  end: (b?: Buffer | string | Uint8Array) => void;
+};
+
+const FORBIDDEN_REQUEST_HEADERS = new Set([
+  'accept-encoding',
+  'connection',
+  'content-length',
+  'host',
+  'keep-alive',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
+]);
+
+export function isWebRequest(input: unknown): input is Request {
   if (!input || typeof input !== 'object') return false;
   const req = input as Request;
-  return typeof req.headers?.get === 'function' && typeof req.clone === 'function';
+  return (
+    typeof req.headers?.get === 'function' &&
+    typeof req.clone === 'function' &&
+    typeof req.method === 'string' &&
+    typeof req.url === 'string'
+  );
 }
 
-async function fromNodeRequest(req: {
+function isNodeRes(input: unknown): input is NodeRes {
+  if (!input || typeof input !== 'object') return false;
+  const res = input as NodeRes;
+  return typeof res.end === 'function' && typeof res.setHeader === 'function';
+}
+
+export async function fromNodeRequest(req: {
   method?: string;
   url?: string;
   headers: Record<string, string | string[] | undefined>;
   [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>;
 }): Promise<Request> {
-  const host = String(req.headers.host || 'localhost');
+  const host = String(req.headers.host || req.headers.Host || 'localhost');
   const protoHeader = req.headers['x-forwarded-proto'];
   const proto = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || 'https';
-  const url = `${proto}://${host}${req.url || '/'}`;
+  const rawUrl = String(req.url || '/');
+  const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `${proto}://${host}${rawUrl}`;
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
     if (value == null) continue;
-    headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
+    if (FORBIDDEN_REQUEST_HEADERS.has(key.toLowerCase())) continue;
+    try {
+      headers.set(key, Array.isArray(value) ? value.join(', ') : String(value));
+    } catch {
+      // header proibido pelo Fetch — ignorar
+    }
   }
   const method = (req.method || 'GET').toUpperCase();
   const init: RequestInit = { method, headers };
@@ -51,49 +94,51 @@ async function fromNodeRequest(req: {
   return new Request(url, init);
 }
 
-async function writeNodeResponse(
-  res: {
-    statusCode: number;
-    setHeader: (k: string, v: string) => void;
-    end: (b?: Buffer | string) => void;
-  },
-  response: Response
-): Promise<void> {
+export async function writeNodeResponse(res: NodeRes, response: Response): Promise<void> {
   res.statusCode = response.status;
-  response.headers.forEach((value, key) => {
-    res.setHeader(key, value);
-  });
-  const buf = Buffer.from(await response.arrayBuffer());
-  res.end(buf);
+  res.setHeader('Content-Type', response.headers.get('Content-Type') || 'application/json');
+  const origin = response.headers.get('Access-Control-Allow-Origin');
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+  const methods = response.headers.get('Access-Control-Allow-Methods');
+  if (methods) res.setHeader('Access-Control-Allow-Methods', methods);
+  const allowHeaders = response.headers.get('Access-Control-Allow-Headers');
+  if (allowHeaders) res.setHeader('Access-Control-Allow-Headers', allowHeaders);
+  res.end(await response.text());
 }
 
-function jsonError(message: string, status = 500): Response {
-  return new Response(JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
-    }
-  });
+/** Formato Web Handler (obrigatório nas rotas `/api` deste projeto). */
+export function asVercelFetchExport(fetchFn: FetchHandler): VercelFetchExport {
+  return { fetch: fetchFn };
 }
 
+/**
+ * Fallback do runtime Node clássico `(req, res)`.
+ * Não usar como `export default` das rotas — o Vercel trata função como Node handler.
+ */
 export function asVercelNodeHandler(fetchFn: FetchHandler) {
   return async function handler(req: unknown, res?: unknown): Promise<Response | void> {
     try {
       const request = isWebRequest(req) ? req : await fromNodeRequest(req as Parameters<typeof fromNodeRequest>[0]);
       const response = await fetchFn(request);
-      if (res && typeof (res as { end?: unknown }).end === 'function') {
-        await writeNodeResponse(res as Parameters<typeof writeNodeResponse>[0], response);
+      if (isNodeRes(res)) {
+        await writeNodeResponse(res, response);
         return;
       }
       return response;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro interno na API';
       console.error('[vercel-handler]', message);
-      const response = jsonError(message);
-      if (res && typeof (res as { end?: unknown }).end === 'function') {
-        await writeNodeResponse(res as Parameters<typeof writeNodeResponse>[0], response);
-        return;
+      const response = new Response(JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+      if (isNodeRes(res)) {
+        try {
+          await writeNodeResponse(res, response);
+          return;
+        } catch (writeErr: unknown) {
+          console.error('[vercel-handler] write failed', writeErr);
+        }
       }
       return response;
     }

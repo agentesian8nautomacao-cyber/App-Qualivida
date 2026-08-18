@@ -16,6 +16,16 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+function getHeader(request: Request, name: string): string {
+  const headers = request.headers as Headers & Record<string, string | string[] | undefined>;
+  if (typeof headers?.get === 'function') {
+    return headers.get(name) || headers.get(name.toLowerCase()) || '';
+  }
+  const direct = headers?.[name] ?? headers?.[name.toLowerCase()];
+  if (Array.isArray(direct)) return direct.join(', ');
+  return direct ? String(direct) : '';
+}
+
 export async function handleLiveMasterRequest(request: Request): Promise<Response> {
   try {
     if (request.method === 'OPTIONS') {
@@ -54,8 +64,7 @@ export async function handleLiveMasterRequest(request: Request): Promise<Respons
       );
     }
 
-    const auth =
-      request.headers.get('Authorization') || request.headers.get('authorization') || '';
+    const auth = getHeader(request, 'Authorization');
     const token = /^Bearer\s+(\S+)/i.exec(auth.trim())?.[1] || '';
     if (!token) {
       return json({ error: 'Não autenticado', code: 'UNAUTHENTICATED' }, 401);

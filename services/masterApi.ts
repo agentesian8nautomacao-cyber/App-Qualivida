@@ -49,7 +49,12 @@ export type MasterApiError = {
   reason?: string;
 };
 
-function masterErrorMessage(body: Record<string, unknown>, status: number): string {
+function masterErrorMessage(
+  body: Record<string, unknown>,
+  status: number,
+  rawText = '',
+  contentType = ''
+): string {
   if (typeof body.error === 'string' && body.error.trim()) return body.error;
   const nested = body.error;
   if (nested && typeof nested === 'object' && typeof (nested as { message?: unknown }).message === 'string') {
@@ -59,9 +64,12 @@ function masterErrorMessage(body: Record<string, unknown>, status: number): stri
   if (status === 404) {
     return 'API Master não encontrada. Confirme o deploy da rota /api/master.';
   }
+  const preview = rawText.replace(/\s+/g, ' ').trim().slice(0, 180);
   if (status === 500) {
-    return 'API Master retornou HTTP 500. Veja o log da função no Vercel (não é 401/403).';
+    if (preview) return `API Master HTTP 500: ${preview}`;
+    return `API Master HTTP 500 (${contentType || 'sem corpo'}). Crash da função no Vercel — não é 401/403.`;
   }
+  if (preview) return `Falha Master (HTTP ${status}): ${preview}`;
   return `Falha Master (HTTP ${status})`;
 }
 
@@ -90,9 +98,12 @@ async function masterFetch<T>(
       }
     };
   }
+  const contentType = res.headers.get('content-type') || '';
+  let rawText = '';
   let body: Record<string, unknown> = {};
   try {
-    body = (await res.json()) as Record<string, unknown>;
+    rawText = await res.text();
+    body = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
   } catch {
     body = {};
   }
@@ -102,7 +113,7 @@ async function masterFetch<T>(
       error: {
         status: res.status,
         code: typeof body.code === 'string' ? body.code : undefined,
-        error: masterErrorMessage(body, res.status),
+        error: masterErrorMessage(body, res.status, rawText, contentType),
         reason: typeof body.reason === 'string' ? body.reason : undefined
       }
     };
