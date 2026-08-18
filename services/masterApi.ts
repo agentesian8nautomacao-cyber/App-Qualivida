@@ -49,6 +49,22 @@ export type MasterApiError = {
   reason?: string;
 };
 
+function masterErrorMessage(body: Record<string, unknown>, status: number): string {
+  if (typeof body.error === 'string' && body.error.trim()) return body.error;
+  const nested = body.error;
+  if (nested && typeof nested === 'object' && typeof (nested as { message?: unknown }).message === 'string') {
+    return (nested as { message: string }).message;
+  }
+  if (typeof body.message === 'string' && body.message.trim()) return body.message;
+  if (status === 404) {
+    return 'API Master não encontrada. Faça o deploy com a rota /api/master.';
+  }
+  if (status === 500) {
+    return 'Erro interno na API Master. Confira SUPABASE_URL e SUPABASE_ANON_KEY no Vercel.';
+  }
+  return `Falha Master (HTTP ${status})`;
+}
+
 async function masterFetch<T>(
   path: string,
   accessToken: string,
@@ -86,7 +102,7 @@ async function masterFetch<T>(
       error: {
         status: res.status,
         code: typeof body.code === 'string' ? body.code : undefined,
-        error: typeof body.error === 'string' ? body.error : 'Falha Master',
+        error: masterErrorMessage(body, res.status),
         reason: typeof body.reason === 'string' ? body.reason : undefined
       }
     };

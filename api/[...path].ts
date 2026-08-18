@@ -4,13 +4,21 @@ import { routeLegacyApiRequest } from './_lib/legacyRouter';
 import { handleLiveMasterRequest } from './master/_lib/live';
 import { routeV1Request } from './v1/_lib/router';
 
-async function dispatch(request: Request): Promise<Response> {
-  const { pathname } = new URL(request.url);
+function pathnameOf(request: Request): string {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return '/';
+  }
+}
 
-  if (pathname.startsWith('/api/master')) {
+async function dispatch(request: Request): Promise<Response> {
+  const pathname = pathnameOf(request);
+
+  if (pathname.startsWith('/api/master') || pathname.startsWith('/master/')) {
     return handleLiveMasterRequest(request);
   }
-  if (pathname.startsWith('/api/v1')) {
+  if (pathname.startsWith('/api/v1') || pathname.startsWith('/v1/')) {
     return routeV1Request(request);
   }
   return routeLegacyApiRequest(request);
