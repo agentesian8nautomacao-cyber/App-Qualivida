@@ -251,7 +251,7 @@ describe('/api/master HTTP', () => {
     });
     expect(getRes.status).toBe(200);
     const getBody = await getRes.json();
-    expect(getBody.subscription).toBe('Não configurado');
+    expect(getBody.subscription).toBe('active');
     expect(getBody.sites).toHaveLength(1);
 
     const patchRes = await call(api, `/api/master/organizations/${ORG_ID}`, {
@@ -322,6 +322,86 @@ describe('/api/master HTTP', () => {
     expect(store.audits.some((a) => a.action === 'OPERATION_BLOCK')).toBe(true);
   });
 
+  it('Master registra atraso sem bloquear operação e sem dado financeiro', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    const res = await call(api, `/api/master/organizations/${ORG_ID}/delay`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Atraso identificado fora da plataforma', user_id: 'attacker', payment_amount: 99 })
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.organization.subscription_status).toBe('overdue');
+    expect(body.organization.status).toBe('active');
+    expect(JSON.stringify(body)).not.toMatch(/payment_amount|pix_key|amount_due/);
+    expect(store.audits.some((a) => a.action === 'SUBSCRIPTION_STATUS_CHANGED')).toBe(true);
+  });
+
+  it('Master inicia tolerância, regulariza sem desbloquear, e comum recebe 403', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    await call(api, `/api/master/organizations/${ORG_ID}/delay`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Atraso' })
+    });
+    const grace = await call(api, `/api/master/organizations/${ORG_ID}/grace`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grace_days: 10 })
+    });
+    expect(grace.status).toBe(200);
+    expect((await grace.json()).organization.subscription_status).toBe('grace');
+    expect(store.audits.some((a) => a.action === 'GRACE_PERIOD_STARTED')).toBe(true);
+    const reg = await call(api, `/api/master/organizations/${ORG_ID}/regularize`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer m', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Pagamento externo confirmado pelo admin' })
+    });
+    expect(reg.status).toBe(200);
+    const regularized = await reg.json();
+    expect(regularized.organization.subscription_status).toBe('active');
+    expect(regularized.organization.status).toBe('active');
+    expect(store.audits.some((a) => a.action === 'SUBSCRIPTION_REGULARIZED')).toBe(true);
+    const denied = await handlerFor(async () => ({ id: 'user-comum' })).api.fetch(
+      new Request(`http://localhost/api/master/organizations/${ORG_ID}/delay`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer op', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'não' })
+      })
+    );
+    expect(denied.status).toBe(403);
+  });
+
+  it('GET dashboard aplica bloqueio automático só com auto_block após tolerância vencida', async () => {
+    const { api, store } = handlerFor(async () => masterUser);
+    await store.updateOrganization(ORG_ID, {
+      subscription_status: 'overdue',
+      auto_block_enabled: true,
+      grace_ends_at: '2020-01-01',
+      status: 'active'
+    });
+    const res = await call(api, '/api/master/dashboard', {
+      headers: { Authorization: 'Bearer m' }
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.metrics.mrr).toBeNull();
+    expect(body.metrics.trial).toBeNull();
+    const row = body.organizations.find((o: { id: string }) => o.id === ORG_ID);
+    expect(row.status).toBe('suspended');
+    expect(store.audits.some((a) => a.action === 'GRACE_PERIOD_EXPIRED')).toBe(true);
+    expect(store.audits.some((a) => a.action === 'OPERATION_BLOCK')).toBe(true);
+  });
+
+  it('sem Bearer nas novas rotas administrativas → 401', async () => {
+    const { api } = handlerFor(async () => masterUser);
+    const res = await call(api, `/api/master/organizations/${ORG_ID}/regularize`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'x' })
+    });
+    expect(res.status).toBe(401);
+  });
+
   it('usuário comum não cria organização', async () => {
     const { api } = handlerFor(async () => ({ id: 'user-comum' }));
     const res = await call(api, '/api/master/organizations', {
@@ -370,5 +450,17 @@ describe('FASE C regressão de superfície', () => {
     const plan = readFileSync(join(root, 'docs/FASE-1-MIGRATION-PLAN.md'), 'utf8');
     expect(plan).toMatch(/## M5 — `005_residents_condo_id`/);
     expect(plan).toMatch(/## M8 /);
+  });
+
+  it('012 não cria módulo financeiro nem altera M5', () => {
+    const sql = readFileSync(
+      join(root, 'supabase/migrations/20260818190000_012_master_subscription_admin.sql'),
+      'utf8'
+    );
+    expect(sql).not.toMatch(/ADD COLUMN IF NOT EXISTS (pix_|payment_|amount_|gateway_|boleto_|mrr)/i);
+    expect(sql).not.toMatch(/CREATE TABLE public\.(invoices|payments|subscriptions_billing)/i);
+    expect(sql).not.toMatch(/residents|tenant_memberships|public\.roles/i);
+    expect(sql).toMatch(/subscription_status/);
+    expect(sql).toMatch(/NOT EXECUTED/);
   });
 });

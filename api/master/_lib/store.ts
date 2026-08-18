@@ -14,6 +14,16 @@ export type OrganizationRow = {
   scheduled_block_at?: string | null;
   contract_starts_at?: string | null;
   contract_ends_at?: string | null;
+  subscription_status?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  renewal_at?: string | null;
+  grace_started_at?: string | null;
+  grace_ends_at?: string | null;
+  auto_block_enabled?: boolean | null;
+  regularized_at?: string | null;
+  regularized_by?: string | null;
+  administrative_notes?: string | null;
 };
 
 export type SiteRow = {
@@ -121,6 +131,16 @@ export function createMemoryMasterStore(seed?: {
       if (patch.scheduled_block_at !== undefined) row.scheduled_block_at = patch.scheduled_block_at;
       if (patch.contract_starts_at !== undefined) row.contract_starts_at = patch.contract_starts_at;
       if (patch.contract_ends_at !== undefined) row.contract_ends_at = patch.contract_ends_at;
+      if (patch.subscription_status !== undefined) row.subscription_status = patch.subscription_status;
+      if (patch.current_period_start !== undefined) row.current_period_start = patch.current_period_start;
+      if (patch.current_period_end !== undefined) row.current_period_end = patch.current_period_end;
+      if (patch.renewal_at !== undefined) row.renewal_at = patch.renewal_at;
+      if (patch.grace_started_at !== undefined) row.grace_started_at = patch.grace_started_at;
+      if (patch.grace_ends_at !== undefined) row.grace_ends_at = patch.grace_ends_at;
+      if (patch.auto_block_enabled !== undefined) row.auto_block_enabled = patch.auto_block_enabled;
+      if (patch.regularized_at !== undefined) row.regularized_at = patch.regularized_at;
+      if (patch.regularized_by !== undefined) row.regularized_by = patch.regularized_by;
+      if (patch.administrative_notes !== undefined) row.administrative_notes = patch.administrative_notes;
       return { ...row };
     },
     async listSitesByOrg(organizationId) {

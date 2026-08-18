@@ -152,7 +152,7 @@ export function createRestMasterStore(
       return firstOrNull(data);
     },
     async updateOrganization(id, patch) {
-      const res = await safeFetch(
+      let res = await safeFetch(
         `${rest}/organizations?id=eq.${encodeURIComponent(id)}`,
         {
           method: 'PATCH',
@@ -161,8 +161,50 @@ export function createRestMasterStore(
         },
         'ORGANIZATION_UPDATE'
       );
-      const data = await parseJson<OrganizationRow[] | OrganizationRow>(res);
-      return firstOrNull(data);
+      let data = await parseJson<OrganizationRow[] | OrganizationRow>(res);
+      let row = firstOrNull(data);
+      if (!row) {
+        const core: Record<string, unknown> = {};
+        const profileExtra: Record<string, unknown> = {};
+        const profileKeys = [
+          'subscription_status',
+          'current_period_start',
+          'current_period_end',
+          'renewal_at',
+          'grace_started_at',
+          'grace_ends_at',
+          'auto_block_enabled',
+          'regularized_at',
+          'regularized_by',
+          'administrative_notes'
+        ];
+        for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
+          if (k === 'profile' && v && typeof v === 'object') {
+            Object.assign(profileExtra, v as Record<string, unknown>);
+          } else if (profileKeys.includes(k)) {
+            profileExtra[k] = v;
+          } else {
+            core[k] = v;
+          }
+        }
+        const current = await this.getOrganization(id);
+        if (Object.keys(profileExtra).length) {
+          core.profile = { ...(current?.profile || {}), ...profileExtra };
+        }
+        if (!Object.keys(core).length) return current;
+        res = await safeFetch(
+          `${rest}/organizations?id=eq.${encodeURIComponent(id)}`,
+          {
+            method: 'PATCH',
+            headers: { ...jsonHeaders, Prefer: 'return=representation' },
+            body: JSON.stringify(core)
+          },
+          'ORGANIZATION_UPDATE'
+        );
+        data = await parseJson<OrganizationRow[] | OrganizationRow>(res);
+        row = firstOrNull(data);
+      }
+      return row;
     },
     async listSitesByOrg(organizationId) {
       const res = await safeFetch(

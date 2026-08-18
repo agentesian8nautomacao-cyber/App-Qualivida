@@ -24,6 +24,16 @@ export type MasterOrganization = {
   scheduled_block_at?: string | null;
   contract_starts_at?: string | null;
   contract_ends_at?: string | null;
+  subscription_status?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  renewal_at?: string | null;
+  grace_started_at?: string | null;
+  grace_ends_at?: string | null;
+  auto_block_enabled?: boolean | null;
+  regularized_at?: string | null;
+  regularized_by?: string | null;
+  administrative_notes?: string | null;
 };
 
 export type MasterSite = {
@@ -54,18 +64,34 @@ export type MasterDashboard = {
     sites_blocked?: number;
     operations_active?: number;
     scheduled_blocks?: number;
-    subscriptions_active: null;
+    subscriptions_active: number | null;
+    subscriptions_overdue?: number;
+    subscriptions_grace?: number;
+    subscriptions_suspended?: number;
+    contracts_near_expiry?: number;
     subscriptions_expired: null;
     trial: null;
     mrr: null;
   };
+  alerts?: Array<{
+    level: 'red' | 'orange' | 'yellow';
+    code: string;
+    title: string;
+    organization_id: string;
+    organization_name: string;
+  }>;
   organizations?: Array<{
     id: string;
     name: string;
     status: string;
+    subscription_status?: string | null;
     scheduled_block_at?: string | null;
     blocked_at?: string | null;
     sites_count?: number;
+    profile?: Record<string, unknown> | null;
+    contract_ends_at?: string | null;
+    grace_ends_at?: string | null;
+    auto_block_enabled?: boolean | null;
   }>;
   billing: string;
 };
@@ -252,4 +278,36 @@ export function unblockMasterOrganization(accessToken: string, id: string, reaso
     accessToken,
     { method: 'POST', body: JSON.stringify({ reason }) }
   );
+}
+
+function postAdminAction(accessToken: string, id: string, action: string, body: Record<string, unknown>) {
+  return masterFetch<{ ok: true; organization: MasterOrganization }>(
+    `/api/master/organizations/${id}/${action}`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function registerMasterDelay(accessToken: string, id: string, body: Record<string, unknown>) {
+  return postAdminAction(accessToken, id, 'delay', body);
+}
+
+export function startMasterGrace(accessToken: string, id: string, body: Record<string, unknown>) {
+  return postAdminAction(accessToken, id, 'grace', body);
+}
+
+export function regularizeMasterOrganization(accessToken: string, id: string, body: Record<string, unknown>) {
+  return postAdminAction(accessToken, id, 'regularize', body);
+}
+
+export function suspendMasterContract(accessToken: string, id: string, reason: string) {
+  return postAdminAction(accessToken, id, 'contract-suspend', { reason });
+}
+
+export function terminateMasterContract(accessToken: string, id: string, reason: string) {
+  return postAdminAction(accessToken, id, 'contract-terminate', { reason });
+}
+
+export function setMasterAutoBlock(accessToken: string, id: string, enabled: boolean) {
+  return postAdminAction(accessToken, id, 'auto-block', { enabled });
 }

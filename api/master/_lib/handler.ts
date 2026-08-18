@@ -11,6 +11,17 @@ import {
   type PlatformAction
 } from './authorize';
 import type { MasterStore, OrganizationRow } from './store';
+import {
+  adminAlerts,
+  adminMetrics,
+  hydrateAdminOrg,
+  patchAutoBlock,
+  patchContractStatus,
+  patchRegisterDelay,
+  patchRegularize,
+  patchStartGrace,
+  shouldAutoBlockAfterGrace
+} from './subscription';
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -72,7 +83,8 @@ function asProfile(raw: unknown): Record<string, unknown> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v === 'string' || typeof v === 'number' || v === null) out[k] = v;
+    if (/pix|boleto|gateway|stripe|asaas|payment|amount|invoice|bank_|card_|mrr|receita/i.test(k)) continue;
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null) out[k] = v;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -162,6 +174,7 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
         const list = await deps.store.listOrganizations();
         const now = Date.now();
         for (const org of list) {
+          const hydrated = hydrateAdminOrg(org);
           if (
             org.status === 'active' &&
             org.scheduled_block_at &&
@@ -178,9 +191,27 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
               previous_status: 'active',
               new_status: 'suspended'
             });
+          } else if (shouldAutoBlockAfterGrace(hydrated, now)) {
+            await deps.store.updateOrganization(org.id, {
+              status: 'suspended',
+              blocked_at: new Date().toISOString(),
+              block_reason: 'Período de tolerância encerrado',
+              block_source: 'automatic',
+              scheduled_block_at: null,
+              subscription_status: 'overdue'
+            });
+            await auditSafe(deps.store, user.id, 'GRACE_PERIOD_EXPIRED', 'organizations', org.id, {
+              auto_block: true
+            });
+            await auditSafe(deps.store, user.id, 'OPERATION_BLOCK', 'organizations', org.id, {
+              source: 'automatic',
+              previous_status: 'active',
+              new_status: 'suspended',
+              reason: 'Período de tolerância encerrado'
+            });
           }
         }
-        const refreshed = await deps.store.listOrganizations();
+        const refreshed = (await deps.store.listOrganizations()).map(hydrateAdminOrg);
         const orgs = await deps.store.countOrganizationsByStatus();
         const siteStatus = await deps.store.countSitesByStatus();
         const scheduled = refreshed.filter((o) => o.scheduled_block_at).length;
@@ -188,14 +219,11 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
         for (const o of refreshed) {
           const sites = await deps.store.listSitesByOrg(o.id);
           withSites.push({
-            id: o.id,
-            name: o.name,
-            status: o.status,
-            scheduled_block_at: o.scheduled_block_at || null,
-            blocked_at: o.blocked_at || null,
+            ...o,
             sites_count: sites.length
           });
         }
+        const admin = adminMetrics(refreshed, now);
         return json(
           {
             ok: true,
@@ -207,11 +235,16 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
               sites_blocked: siteStatus.suspended,
               operations_active: siteStatus.active,
               scheduled_blocks: scheduled,
-              subscriptions_active: null,
+              subscriptions_active: admin.subscriptions_active,
+              subscriptions_overdue: admin.subscriptions_overdue,
+              subscriptions_grace: admin.subscriptions_grace,
+              subscriptions_suspended: admin.subscriptions_suspended,
+              contracts_near_expiry: admin.contracts_near_expiry,
               subscriptions_expired: null,
               trial: null,
               mrr: null
             },
+            alerts: adminAlerts(refreshed, now),
             organizations: withSites,
             billing: 'Não configurado'
           },
@@ -230,10 +263,10 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
         return json(
           {
             ok: true,
-            organization: org,
+            organization: hydrateAdminOrg(org),
             sites,
             audit,
-            subscription: 'Não configurado',
+            subscription: hydrateAdminOrg(org).subscription_status,
             users: 'Não configurado'
           },
           200
@@ -265,6 +298,12 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
         if (typeof body.contract_ends_at === 'string' || body.contract_ends_at === null) {
           patch.contract_ends_at = body.contract_ends_at;
         }
+        if (typeof body.current_period_start === 'string') patch.current_period_start = body.current_period_start;
+        if (typeof body.current_period_end === 'string') patch.current_period_end = body.current_period_end;
+        if (typeof body.renewal_at === 'string') patch.renewal_at = body.renewal_at;
+        if (typeof body.administrative_notes === 'string') patch.administrative_notes = body.administrative_notes;
+        if (typeof body.auto_block_enabled === 'boolean') patch.auto_block_enabled = body.auto_block_enabled;
+        void body.user_id;
         if (patch.status === 'suspended') {
           const extra = await authorizeMasterAction({
             user,
@@ -462,12 +501,46 @@ export function createMasterApiHandler(deps: MasterHandlerDeps) {
         return json({ ok: true, organization: updated || org }, 200);
       }
 
+      const adminAct = path.match(
+        /\/organizations\/([0-9a-f-]{36})\/(delay|grace|regularize|contract-suspend|contract-terminate|auto-block)$/i
+      );
+      if (adminAct && request.method === 'POST') {
+        const id = adminAct[1];
+        const kind = adminAct[2].toLowerCase();
+        const org = await deps.store.getOrganization(id);
+        if (!org) return json({ error: 'Organização não encontrada', code: 'NOT_FOUND' }, 404);
+        let body: Record<string, unknown> = {};
+        try {
+          const raw = await request.json();
+          body = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+        } catch {
+          body = {};
+        }
+        void body.user_id;
+        const hydrated = hydrateAdminOrg(org);
+        let built:
+          | { patch: Record<string, unknown>; audit: string; meta: Record<string, unknown> }
+          | { error: string };
+        if (kind === 'delay') built = patchRegisterDelay(hydrated, body, user.id);
+        else if (kind === 'grace') built = patchStartGrace(hydrated, body);
+        else if (kind === 'regularize') built = patchRegularize(hydrated, body, user.id);
+        else if (kind === 'contract-suspend') built = patchContractStatus(hydrated, 'suspended', body);
+        else if (kind === 'contract-terminate') built = patchContractStatus(hydrated, 'terminated', body);
+        else {
+          built = patchAutoBlock(hydrated, body.enabled !== false);
+        }
+        if ('error' in built) return json({ error: built.error, code: 'BAD_REQUEST' }, 400);
+        const updated = await deps.store.updateOrganization(id, built.patch);
+        await auditSafe(deps.store, user.id, built.audit, 'organizations', id, built.meta);
+        return json({ ok: true, organization: hydrateAdminOrg(updated || org) }, 200);
+      }
+
       if (path.endsWith('/organizations') && request.method === 'GET') {
         const list = await deps.store.listOrganizations();
         const withSites: Array<OrganizationRow & { sites_count: number }> = [];
         for (const org of list) {
           const s = await deps.store.listSitesByOrg(org.id);
-          withSites.push({ ...org, sites_count: s.length });
+          withSites.push({ ...hydrateAdminOrg(org), sites_count: s.length });
         }
         await auditSafe(deps.store, user.id, 'ORGANIZATION_VIEW', 'organizations', null, {
           count: withSites.length
@@ -515,6 +588,14 @@ function actionFor(method: string, path: string, request: Request): PlatformActi
     return PLATFORM_ACTIONS.ORGANIZATIONS_SUSPEND;
   }
   if (/\/organizations\/[0-9a-f-]{36}\/unblock$/i.test(path) && method === 'POST') {
+    return PLATFORM_ACTIONS.ORGANIZATIONS_UPDATE;
+  }
+  if (
+    /\/organizations\/[0-9a-f-]{36}\/(delay|grace|regularize|contract-suspend|contract-terminate|auto-block)$/i.test(
+      path
+    ) &&
+    method === 'POST'
+  ) {
     return PLATFORM_ACTIONS.ORGANIZATIONS_UPDATE;
   }
   void request;

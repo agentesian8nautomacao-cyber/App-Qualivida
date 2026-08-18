@@ -97,6 +97,10 @@ export default async function handler(req: unknown, res?: unknown) {
       let orgs = await fetchOrganizations(cfg, token);
       const now = Date.now();
       for (const org of orgs) {
+        const p = org.profile && typeof org.profile === 'object' ? org.profile : {};
+        const graceEnd = org.grace_ends_at || (typeof p.grace_ends_at === 'string' ? p.grace_ends_at : null);
+        const autoBlock = org.auto_block_enabled === true || p.auto_block_enabled === true;
+        const sub = String(org.subscription_status || p.subscription_status || 'active');
         if (
           org.status === 'active' &&
           org.scheduled_block_at &&
@@ -113,10 +117,51 @@ export default async function handler(req: unknown, res?: unknown) {
             previous_status: 'active',
             new_status: 'suspended'
           });
+        } else if (
+          org.status === 'active' &&
+          autoBlock &&
+          graceEnd &&
+          Date.parse(String(graceEnd)) < now &&
+          (sub === 'overdue' || sub === 'grace')
+        ) {
+          await patchOrganization(cfg, token, org.id, {
+            status: 'suspended',
+            blocked_at: new Date().toISOString(),
+            block_reason: 'Período de tolerância encerrado',
+            block_source: 'automatic',
+            scheduled_block_at: null,
+            profile: { ...p, subscription_status: 'overdue' }
+          });
+          await auditSafe(cfg, token, user.id, 'GRACE_PERIOD_EXPIRED', 'organizations', org.id, {
+            auto_block: true
+          });
+          await auditSafe(cfg, token, user.id, 'OPERATION_BLOCK', 'organizations', org.id, {
+            source: 'automatic',
+            reason: 'Período de tolerância encerrado'
+          });
         }
       }
       orgs = await fetchOrganizations(cfg, token);
       const siteRows = await fetchAllSites(cfg, token);
+      const subOf = (o: OrgRow) => {
+        const p = o.profile && typeof o.profile === 'object' ? o.profile : {};
+        return String(o.subscription_status || p.subscription_status || 'active');
+      };
+      const alerts = orgs.flatMap((o) => {
+        const p = o.profile && typeof o.profile === 'object' ? o.profile : {};
+        const items: Array<Record<string, string>> = [];
+        const graceEnd = o.grace_ends_at || (typeof p.grace_ends_at === 'string' ? p.grace_ends_at : '');
+        if (graceEnd && Date.parse(graceEnd) < now && o.status !== 'suspended') {
+          items.push({
+            level: 'red',
+            code: 'GRACE_EXPIRED',
+            title: 'Organização com tolerância vencida',
+            organization_id: o.id,
+            organization_name: o.name
+          });
+        }
+        return items;
+      });
       return send(200, {
         ok: true,
         metrics: {
@@ -127,18 +172,26 @@ export default async function handler(req: unknown, res?: unknown) {
           sites_blocked: siteRows.filter((s) => s.status === 'suspended').length,
           operations_active: siteRows.filter((s) => s.status === 'active').length,
           scheduled_blocks: orgs.filter((o) => o.scheduled_block_at).length,
-          subscriptions_active: null,
+          subscriptions_active: orgs.filter((o) => subOf(o) === 'active').length,
+          subscriptions_overdue: orgs.filter((o) => subOf(o) === 'overdue').length,
+          subscriptions_grace: orgs.filter((o) => subOf(o) === 'grace').length,
+          subscriptions_suspended: orgs.filter((o) => subOf(o) === 'suspended').length,
+          contracts_near_expiry: 0,
           subscriptions_expired: null,
           trial: null,
           mrr: null
         },
+        alerts,
         organizations: orgs.map((o) => ({
           id: o.id,
           name: o.name,
           status: o.status,
+          subscription_status: subOf(o),
           scheduled_block_at: o.scheduled_block_at || null,
           blocked_at: o.blocked_at || null,
-          sites_count: siteRows.filter((s) => s.organization_id === o.id).length
+          sites_count: siteRows.filter((s) => s.organization_id === o.id).length,
+          profile: o.profile || null,
+          contract_ends_at: o.contract_ends_at || null
         })),
         billing: 'Não configurado'
       });
@@ -274,6 +327,77 @@ export default async function handler(req: unknown, res?: unknown) {
       return send(200, { ok: true, organization: updated || org });
     }
 
+    const adminAct = path.match(
+      /\/organizations\/([0-9a-f-]{36})\/(delay|grace|regularize|contract-suspend|contract-terminate|auto-block)$/i
+    );
+    if (adminAct && method === 'POST') {
+      const org = await fetchOrganization(cfg, token, adminAct[1]);
+      if (!org) return send(404, { error: 'Organização não encontrada', code: 'NOT_FOUND' });
+      const body = await readJsonBody(req);
+      void body.user_id;
+      const p = org.profile && typeof org.profile === 'object' ? { ...org.profile } : {};
+      const kind = adminAct[2].toLowerCase();
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+      const nowIso = new Date().toISOString();
+      let auditAction = 'CONTRACT_UPDATED';
+      const extra: Record<string, unknown> = {};
+      if (kind === 'delay') {
+        if (!reason) return send(400, { error: 'Motivo obrigatório', code: 'BAD_REQUEST' });
+        extra.subscription_status = 'overdue';
+        extra.administrative_notes = reason;
+        extra.delay_identified_at = typeof body.identified_at === 'string' ? body.identified_at : nowIso;
+        extra.delay_reference = typeof body.reference === 'string' ? body.reference : null;
+        auditAction = 'SUBSCRIPTION_STATUS_CHANGED';
+      } else if (kind === 'grace') {
+        let start = typeof body.grace_started_at === 'string' ? body.grace_started_at : nowIso.slice(0, 10);
+        let end = typeof body.grace_ends_at === 'string' ? body.grace_ends_at : '';
+        const days = Number(body.grace_days);
+        if (!end && Number.isFinite(days) && days > 0) {
+          const d = new Date(start);
+          d.setUTCDate(d.getUTCDate() + days);
+          end = d.toISOString().slice(0, 10);
+        }
+        if (!end) return send(400, { error: 'Informe o fim da tolerância ou a quantidade de dias', code: 'BAD_REQUEST' });
+        extra.subscription_status = 'grace';
+        extra.grace_started_at = start;
+        extra.grace_ends_at = end;
+        auditAction = 'GRACE_PERIOD_STARTED';
+      } else if (kind === 'regularize') {
+        const current = String(p.subscription_status || org.subscription_status || 'active');
+        if (current !== 'overdue' && current !== 'grace') {
+          return send(400, {
+            error: 'Somente organizações em atraso ou em tolerância podem ser regularizadas',
+            code: 'BAD_REQUEST'
+          });
+        }
+        if (!reason) return send(400, { error: 'Observação obrigatória', code: 'BAD_REQUEST' });
+        extra.subscription_status = 'active';
+        extra.regularized_at = typeof body.regularized_at === 'string' ? body.regularized_at : nowIso;
+        extra.regularized_by = user.id;
+        extra.administrative_notes = reason;
+        extra.grace_started_at = null;
+        extra.grace_ends_at = null;
+        auditAction = 'SUBSCRIPTION_REGULARIZED';
+      } else if (kind === 'contract-suspend' || kind === 'contract-terminate') {
+        if (!reason) return send(400, { error: 'Motivo obrigatório', code: 'BAD_REQUEST' });
+        extra.subscription_status = kind === 'contract-suspend' ? 'suspended' : 'terminated';
+        extra.administrative_notes = reason;
+        auditAction = kind === 'contract-suspend' ? 'CONTRACT_SUSPENDED' : 'CONTRACT_TERMINATED';
+      } else {
+        extra.auto_block_enabled = body.enabled !== false;
+        auditAction = 'CONTRACT_UPDATED';
+      }
+      const updated = await patchOrganization(cfg, token, org.id, {
+        ...extra,
+        profile: { ...p, ...extra }
+      });
+      await auditSafe(cfg, token, user.id, auditAction, 'organizations', org.id, {
+        reason: reason || null,
+        to: extra.subscription_status || extra.auto_block_enabled
+      });
+      return send(200, { ok: true, organization: updated || org });
+    }
+
     const orgMatch = path.match(/\/organizations\/([0-9a-f-]{36})$/i);
     if (orgMatch && method === 'GET') {
       const org = await fetchOrganization(cfg, token, orgMatch[1]);
@@ -286,7 +410,10 @@ export default async function handler(req: unknown, res?: unknown) {
         organization: org,
         sites,
         audit,
-        subscription: 'Não configurado',
+        subscription:
+          org.subscription_status ||
+          (org.profile && typeof org.profile === 'object' ? org.profile.subscription_status : null) ||
+          'active',
         users: 'Não configurado'
       });
     }
@@ -382,6 +509,9 @@ type OrgRow = {
   scheduled_block_at?: string | null;
   contract_starts_at?: string | null;
   contract_ends_at?: string | null;
+  subscription_status?: string | null;
+  grace_ends_at?: string | null;
+  auto_block_enabled?: boolean | null;
 };
 
 type SiteRow = {
@@ -408,7 +538,10 @@ function asProfile(raw: unknown): Record<string, unknown> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v === 'string' || typeof v === 'number' || v === null) out[k] = v;
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null) {
+      if (/pix|boleto|gateway|stripe|asaas|payment|amount|invoice|bank_|card_|mrr/i.test(k)) continue;
+      out[k] = v;
+    }
   }
   return Object.keys(out).length ? out : undefined;
 }

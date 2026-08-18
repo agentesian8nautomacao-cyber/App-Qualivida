@@ -43,18 +43,48 @@ export default function MasterDashboard({ accessToken, onOpenOrg, onUnauthorized
   if (!data) return <p className="text-slate-400">Carregando visão geral…</p>;
 
   const rows = data.organizations || [];
+  const alerts = data.alerts || [];
 
   return (
     <div>
       <h2 className="text-2xl font-black mb-1">SentinelaAUT Master</h2>
       <p className="text-sm text-slate-400 mb-6">Central de Administração da Plataforma — sem módulo financeiro.</p>
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
         <Card label="Organizações" value={data.metrics.organizations_total} />
         <Card label="Sites ativos" value={data.metrics.sites_operational} />
         <Card label="Sites bloqueados" value={data.metrics.sites_blocked ?? data.metrics.organizations_suspended} />
         <Card label="Operações ativas" value={data.metrics.operations_active ?? data.metrics.sites_operational} />
         <Card label="Bloqueios programados" value={data.metrics.scheduled_blocks ?? 0} />
       </div>
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
+        <Card label="Assinaturas ativas" value={data.metrics.subscriptions_active ?? 0} />
+        <Card label="Em atraso" value={data.metrics.subscriptions_overdue ?? 0} />
+        <Card label="Em tolerância" value={data.metrics.subscriptions_grace ?? 0} />
+        <Card label="Suspensas" value={data.metrics.subscriptions_suspended ?? 0} />
+        <Card label="Contratos próximos do vencimento" value={data.metrics.contracts_near_expiry ?? 0} />
+      </div>
+
+      <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-3">Alertas administrativos</h3>
+      <div className="rounded-2xl border border-white/10 mb-8 divide-y divide-white/5">
+        {alerts.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-slate-500">Nenhum alerta administrativo no momento.</p>
+        ) : (
+          alerts.map((alert) => (
+            <div key={`${alert.code}-${alert.organization_id}`} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <p className="text-sm">
+                <span className={alert.level === 'red' ? 'text-red-300' : alert.level === 'orange' ? 'text-amber-200' : 'text-yellow-200'}>
+                  {alert.level === 'red' ? '●' : '●'} {alert.title}
+                </span>
+                <span className="text-slate-400"> — {alert.organization_name}</span>
+              </p>
+              <button type="button" className="text-cyan-300 font-bold text-xs" onClick={() => onOpenOrg(alert.organization_id)}>
+                Visualizar organização
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
       <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-3">Organizações</h3>
       <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="w-full text-sm min-w-[640px]">
@@ -62,8 +92,8 @@ export default function MasterDashboard({ accessToken, onOpenOrg, onUnauthorized
             <tr>
               <th className="px-4 py-3">Organização</th>
               <th className="px-4 py-3">Sites</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Bloqueio</th>
+              <th className="px-4 py-3">Assinatura</th>
+              <th className="px-4 py-3">Operação</th>
               <th className="px-4 py-3">Ações</th>
             </tr>
           </thead>
@@ -80,24 +110,16 @@ export default function MasterDashboard({ accessToken, onOpenOrg, onUnauthorized
                   <td className="px-4 py-3 font-semibold">{org.name}</td>
                   <td className="px-4 py-3">{org.sites_count ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <MasterStatusBadge status={org.status} scheduled={org.scheduled_block_at} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">
-                    {org.blocked_at ? new Date(org.blocked_at).toLocaleString('pt-BR') : org.scheduled_block_at ? `Prog. ${org.scheduled_block_at}` : '—'}
+                    <MasterStatusBadge kind="subscription" status={org.subscription_status || 'active'} />
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      className="text-cyan-300 font-bold text-xs hover:underline mr-3"
-                      onClick={() => onOpenOrg(org.id)}
-                    >
+                    <MasterStatusBadge status={org.status} scheduled={org.scheduled_block_at} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <button type="button" className="text-cyan-300 font-bold text-xs hover:underline mr-3" onClick={() => onOpenOrg(org.id)}>
                       Visualizar
                     </button>
-                    <button
-                      type="button"
-                      className="text-cyan-300 font-bold text-xs hover:underline mr-3"
-                      onClick={() => onOpenOrg(org.id)}
-                    >
+                    <button type="button" className="text-cyan-300 font-bold text-xs hover:underline mr-3" onClick={() => onOpenOrg(org.id)}>
                       Editar
                     </button>
                     <button type="button" className="text-cyan-300 font-bold text-xs hover:underline" onClick={() => onOpenOrg(org.id)}>

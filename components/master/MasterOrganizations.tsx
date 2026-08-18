@@ -48,6 +48,8 @@ export default function MasterOrganizations({
   const [profile, setProfile] = useState(emptyProfile);
   const [contractStart, setContractStart] = useState('');
   const [contractEnd, setContractEnd] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
 
   const reload = () => {
     listMasterOrganizations(accessToken).then((res) => {
@@ -88,6 +90,27 @@ export default function MasterOrganizations({
     onOpen(res.data.organization.id);
   };
 
+  const visible = rows.filter((org) => {
+    const p = org.profile || {};
+    const sub = String(org.subscription_status || p.subscription_status || 'active');
+    const hay = `${org.name} ${p.cnpj || ''} ${p.internal_code || ''}`.toLowerCase();
+    if (query.trim() && !hay.includes(query.trim().toLowerCase())) return false;
+    if (filter === 'active') return org.status === 'active' && sub === 'active';
+    if (filter === 'overdue') return sub === 'overdue';
+    if (filter === 'grace') return sub === 'grace';
+    if (filter === 'suspended') return sub === 'suspended';
+    if (filter === 'blocked') return org.status === 'suspended';
+    if (filter === 'scheduled') return Boolean(org.scheduled_block_at) && org.status === 'active';
+    if (filter === 'near') {
+      const end = org.contract_ends_at || (typeof p.contract_ends_at === 'string' ? p.contract_ends_at : '');
+      if (!end) return false;
+      const t = Date.parse(end) - Date.now();
+      return t >= 0 && t <= 30 * 86400000;
+    }
+    if (filter === 'terminated') return sub === 'terminated' || sub === 'cancelled';
+    return true;
+  });
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -105,6 +128,30 @@ export default function MasterOrganizations({
       </div>
 
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
+
+      <div className="flex flex-col lg:flex-row gap-3 mb-4">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar organização, CNPJ ou código interno"
+          className="flex-1 rounded-xl bg-slate-950/60 border border-white/10 px-3 py-2 text-sm"
+        />
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="rounded-xl bg-slate-950/60 border border-white/10 px-3 py-2 text-sm min-w-[220px]"
+        >
+          <option value="all">Todas</option>
+          <option value="active">Ativas</option>
+          <option value="overdue">Em atraso</option>
+          <option value="grace">Em tolerância</option>
+          <option value="suspended">Suspensas</option>
+          <option value="blocked">Bloqueadas</option>
+          <option value="scheduled">Programadas</option>
+          <option value="near">Contratos próximos do vencimento</option>
+          <option value="terminated">Contratos encerrados</option>
+        </select>
+      </div>
 
       {openForm && (
         <form onSubmit={create} className="mb-6 rounded-2xl border border-white/10 bg-[#0b1930] p-5 grid sm:grid-cols-2 gap-3">
@@ -190,27 +237,32 @@ export default function MasterOrganizations({
             <tr>
               <th className="px-4 py-3">Organização</th>
               <th className="px-4 py-3">Sites</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Bloqueio</th>
+              <th className="px-4 py-3">Assinatura</th>
+              <th className="px-4 py-3">Operação</th>
               <th className="px-4 py-3">Ações</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {visible.length === 0 ? (
               <tr>
                 <td className="px-4 py-8 text-slate-500" colSpan={5}>
                   Nenhuma organização visível. Cadastre a primeira ou aplique a migration de INSERT quando aprovada.
                 </td>
               </tr>
             ) : (
-              rows.map((org) => (
+              visible.map((org) => (
                 <tr key={org.id} className="border-t border-white/5 hover:bg-white/5">
                   <td className="px-4 py-3 font-semibold">{org.name}</td>
                   <td className="px-4 py-3">{org.sites_count ?? 0}</td>
                   <td className="px-4 py-3">
+                    <MasterStatusBadge
+                      kind="subscription"
+                      status={org.subscription_status || String(org.profile?.subscription_status || 'active')}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
                     <MasterStatusBadge status={org.status} scheduled={org.scheduled_block_at} />
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">{org.block_reason || '—'}</td>
                   <td className="px-4 py-3 space-x-3">
                     <button type="button" className="text-cyan-300 font-bold text-xs" onClick={() => onOpen(org.id)}>
                       Visualizar
