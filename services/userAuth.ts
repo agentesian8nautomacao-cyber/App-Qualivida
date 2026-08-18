@@ -106,15 +106,47 @@ const isStrongPassword = (password: string): boolean => {
   return true;
 };
 
+const OPERATIONAL_ROLES = new Set([
+  'PORTEIRO',
+  'PORTARIA',
+  'SINDICO',
+  'SÍNDICO',
+  'ADMIN',
+  'ADMINISTRADOR',
+  'ADMINISTRADORA',
+  'CABO_TURMA'
+]);
+
+function normalizeOperationalRole(role: string | null | undefined): string {
+  const raw = String(role || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (raw === 'PORTARIA' || raw === 'PORTEIRO') return 'PORTEIRO';
+  if (raw === 'SINDICO' || raw === 'ADMIN' || raw === 'ADMINISTRADOR') return 'SINDICO';
+  if (raw === 'ADMINISTRADORA') return 'ADMINISTRADORA';
+  if (raw === 'CABO_TURMA') return 'CABO_TURMA';
+  return raw;
+}
+
+export async function isPlatformAdminSession(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('is_platform_admin');
+    if (error) return false;
+    return data === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Valida credenciais de usuário (PORTEIRO/SINDICO) no Supabase
- * @param username Nome de usuário
+ * @param username Nome de usuário ou e-mail
  * @param password Senha em texto plano
+ * @param selectedRole Perfil escolhido na tela; Platform Admin pode assumir qualquer perfil operacional
  * @returns Objeto com resultado do login e informações de bloqueio
  */
 export const loginUser = async (
-  username: string, 
-  password: string
+  username: string,
+  password: string,
+  selectedRole?: string
 ): Promise<{ 
   user: User | null; 
   error: string | null; 
@@ -374,6 +406,14 @@ export const loginUser = async (
     // Isso gerava POST /rest/v1/users com 409 (Conflict) como efeito colateral em fluxos não relacionados
     // (ex.: ao abrir modal/acionar importação de boletos). O provisionamento do perfil deve ser explícito
     // (ex.: via fluxo administrativo) e não uma escrita automática no client.
+
+    const platformAdmin = await isPlatformAdminSession();
+    if (platformAdmin) {
+      const requested = normalizeOperationalRole(selectedRole);
+      if (requested && OPERATIONAL_ROLES.has(requested)) {
+        profile = { ...profile, role: requested };
+      }
+    }
 
     // Salvar sessão e retornar
     try { saveUserSession(profile); } catch {}

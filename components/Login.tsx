@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Lock, Eye, EyeOff, Sun, Moon, Building2, Briefcase, ChevronRight, LogIn, X } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Sun, Moon, Building2, Briefcase, ChevronRight, LogIn, X, Shield } from 'lucide-react';
 import { UserRole } from '../types';
 import { loginUser, saveUserSession } from '../services/userAuth';
 import ForgotPassword from './ForgotPassword';
@@ -172,18 +172,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
       setError('Por favor, preencha usuário e senha');
       return;
     }
-
-    // Proibir envio de e-mail no campo de usuário (fornecer feedback imediato)
-    if (username.includes('@')) {
-      setError('Use seu usuário (não o e-mail) para efetuar login.');
-      return;
-    }
     
     setLoading(true);
     
     try {
-      // Validar credenciais no Supabase (agora retorna objeto com mais informações)
-      const result = await loginUser(username.trim(), password);
+      const result = await loginUser(username.trim(), password, selectedRole);
       
       if (!result.user) {
         // Verificar se está bloqueado
@@ -308,7 +301,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
             </header>
 
             {/* Perfis operacionais existentes; o papel efetivo continua vindo da autenticação. */}
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-7" aria-label="Perfil operacional">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-7" aria-label="Perfil de acesso">
               <button 
                 type="button"
                 onClick={() => handleRoleChange('PORTEIRO')}
@@ -362,6 +355,22 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                   Administradora
                 </span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.assign('/master/login');
+                }}
+                className={`p-3 sm:p-4 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${
+                  theme === 'light'
+                    ? 'bg-gray-100/80 border-gray-200/50 text-gray-500 hover:bg-gray-200/80'
+                    : 'bg-zinc-900/50 border-white/5 text-zinc-500 hover:bg-zinc-800'
+                }`}
+              >
+                <Shield size={24} className="group-hover:scale-110 transition-transform" />
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wide text-center leading-tight">
+                  Master
+                </span>
+              </button>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
@@ -386,7 +395,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, theme = 'dark', toggleTheme }) =
                     ref={usernameInputRef}
                     id="operational-username"
                     type="text" 
-                    placeholder="Usuário"
+                    placeholder="Usuário ou e-mail"
                     value={username}
                     onChange={(e) => {
                       setUsername(e.target.value);
