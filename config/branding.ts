@@ -3,5 +3,5 @@ export const BRANDING = {
   tagline: 'Central de Operações Inteligentes',
   description: 'Proteção, automação e inteligência para operações condominiais.',
   logo: '/Logo login.jpg',
-  icon: '/1024.png',
+  icon: '/favicon-32.png',
 } as const;

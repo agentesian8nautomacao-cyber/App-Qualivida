@@ -5,7 +5,7 @@
 
 import { Resend } from 'resend';
 
-const FROM_VERIFIED = 'Qualivida <no-reply@phmsdev.com.br>';
+const FROM_VERIFIED = 'SentinelaAUT <no-reply@phmsdev.com.br>';
 
 export function getResendFrom(): string {
   const from =

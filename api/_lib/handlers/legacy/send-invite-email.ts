@@ -16,7 +16,7 @@ const corsHeaders: Record<string, string> = {
 
 function getFrom(): string {
   const from =
-    (process.env.RESEND_FROM || process.env.APP_SENDER_EMAIL || 'Qualivida <no-reply@phmsdev.com.br>').trim();
+    (process.env.RESEND_FROM || process.env.APP_SENDER_EMAIL || 'SentinelaAUT <no-reply@phmsdev.com.br>').trim();
   return from;
 }
 
@@ -102,7 +102,7 @@ export default {
   <p style="font-size: 14px; color: #52525b;">Clique no link abaixo para criar sua senha e ativar sua conta. O link expira em 7 dias.</p>
   <p style="margin: 24px 0;"><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background: #18181b; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Acessar e criar minha conta</a></p>
   <p style="font-size: 12px; color: #71717a;">Se o botão não funcionar, copie e cole no navegador:<br><span style="word-break: break-all;">${inviteLink}</span></p>
-  <p style="font-size: 12px; color: #a1a1aa; margin-top: 32px;">Qualivida Gestão — Este e-mail foi enviado automaticamente.</p>
+  <p style="font-size: 12px; color: #a1a1aa; margin-top: 32px;">SentinelaAUT — Este e-mail foi enviado automaticamente.</p>
 </body>
 </html>`;
 

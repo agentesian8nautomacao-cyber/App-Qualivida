@@ -46,7 +46,7 @@ const CondominiumNameSection: React.FC = () => {
             style={{ color: 'var(--text-primary)' }}
           />
           <p className="text-xs text-[var(--text-secondary)] mt-2">
-            Este nome substituirá "Qualivida" em todo o sistema, incluindo mensagens, títulos e interface.
+            Este nome aparece em mensagens, títulos, exportações e na interface operacional.
           </p>
         </div>
 

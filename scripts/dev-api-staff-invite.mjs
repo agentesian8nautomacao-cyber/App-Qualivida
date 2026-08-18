@@ -327,7 +327,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     const roleLabel = role === 'SINDICO' ? 'ADM' : 'Portaria';
-    const from = (process.env.RESEND_FROM || 'Qualivida Gestão <onboarding@resend.dev>').trim();
+    const from = (process.env.RESEND_FROM || 'SentinelaAUT <onboarding@resend.dev>').trim();
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family: system-ui, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #18181b;"><p style="font-size: 16px;">Você foi convidado(a) a acessar o sistema como <strong>${roleLabel}</strong>.</p><p style="font-size: 14px; color: #52525b;">Clique no link abaixo para criar sua senha. O link expira em 7 dias.</p><p style="margin: 24px 0;"><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background: #18181b; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Acessar e criar minha conta</a></p><p style="font-size: 12px; color: #71717a;">Se o botão não funcionar, copie e cole no navegador:<br><span style="word-break: break-all;">${inviteLink}</span></p></body></html>`;
     try {
       const fetchRes = await fetch('https://api.resend.com/emails', {

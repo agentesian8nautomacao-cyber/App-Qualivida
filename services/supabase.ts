@@ -32,7 +32,7 @@ export const supabase = createClient(
     },
     global: {
       headers: {
-        'x-client-info': 'gestao-qualivida-residence'
+        'x-client-info': 'sentinela-aut'
       }
     }
   }
