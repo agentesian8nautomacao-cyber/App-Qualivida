@@ -3,7 +3,6 @@
  * /api/master/* e /api/v1/* têm Functions explícitas: pastas _lib
  * impedem este catch-all de receber esses prefixos no Vercel.
  */
-export const runtime = 'nodejs';
 
 import { asVercelNodeHandler } from './_lib/vercelHandler';
 

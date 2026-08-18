@@ -43,8 +43,22 @@ describe('handleLiveMasterRequest', () => {
     expect(body.code).toBe('UNAUTHENTICATED');
   });
 
-  it('rota /api/master/session exporta função Node (req, res)', async () => {
+  it('rota /api/master/session exporta função Node com .fetch', async () => {
     const mod = await import('../session');
     expect(typeof mod.default).toBe('function');
+    expect(typeof (mod.default as { fetch?: unknown }).fetch).toBe('function');
+  });
+
+  it('live/handler Master não importam @supabase/supabase-js', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const live = readFileSync(join(here, 'live.ts'), 'utf8');
+    const handler = readFileSync(join(here, 'handler.ts'), 'utf8');
+    const rest = readFileSync(join(here, 'restStore.ts'), 'utf8');
+    expect(live).not.toMatch(/@supabase\/supabase-js/);
+    expect(handler).not.toMatch(/@supabase\/supabase-js/);
+    expect(rest).not.toMatch(/@supabase\/supabase-js/);
   });
 });

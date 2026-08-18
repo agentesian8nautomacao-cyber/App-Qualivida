@@ -3,14 +3,12 @@
  * Auth: Bearer JWT → getUser. Never trusts body.user_id.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   authorizeMasterAction,
   PLATFORM_ACTIONS,
   redactAuditMetadata,
   type AuthUser,
-  type PlatformAction,
-  type PlatformAdminRow
+  type PlatformAction
 } from './authorize';
 import type { MasterStore, OrganizationRow } from './store';
 
@@ -255,87 +253,4 @@ function actionFor(method: string, path: string, request: Request): PlatformActi
   }
   void request;
   return null;
-}
-
-export async function createLiveMasterStore(
-  client: SupabaseClient
-): Promise<MasterStore> {
-  return {
-    async getAdminByUserId(userId) {
-      const { data } = await client
-        .from('platform_admins')
-        .select('id, user_id, role, status')
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (!data) return null;
-      return data as PlatformAdminRow;
-    },
-    async listOrganizations() {
-      const { data, error } = await client
-        .from('organizations')
-        .select('id, name, slug, status, created_at, updated_at')
-        .order('created_at', { ascending: false });
-      if (error || !data) return [];
-      return data as OrganizationRow[];
-    },
-    async getOrganization(id) {
-      const { data } = await client
-        .from('organizations')
-        .select('id, name, slug, status, created_at, updated_at')
-        .eq('id', id)
-        .maybeSingle();
-      return (data as OrganizationRow) || null;
-    },
-    async updateOrganization(id, patch) {
-      const { data, error } = await client
-        .from('organizations')
-        .update(patch)
-        .eq('id', id)
-        .select('id, name, slug, status, created_at, updated_at')
-        .maybeSingle();
-      if (error || !data) return null;
-      return data as OrganizationRow;
-    },
-    async listSitesByOrg(organizationId) {
-      const { data, error } = await client
-        .from('condominiums')
-        .select('id, organization_id, name, slug, vertical, status')
-        .eq('organization_id', organizationId);
-      if (error || !data) return [];
-      return data as import('./store').SiteRow[];
-    },
-    async countOrganizationsByStatus() {
-      const list = await this.listOrganizations();
-      return {
-        total: list.length,
-        active: list.filter((o) => o.status === 'active').length,
-        suspended: list.filter((o) => o.status === 'suspended').length
-      };
-    },
-    async countSites() {
-      const { data, error } = await client.from('condominiums').select('id');
-      if (error || !data) return 0;
-      return data.length;
-    },
-    async insertAudit(event) {
-      await client.from('platform_audit_events').insert({
-        actor_user_id: event.actor_user_id,
-        action: event.action,
-        resource_type: event.resource_type ?? null,
-        resource_id: event.resource_id ?? null,
-        metadata: event.metadata || {}
-      });
-    }
-  };
-}
-
-export function createUserScopedClient(
-  supabaseUrl: string,
-  anonKey: string,
-  accessToken: string
-): SupabaseClient {
-  return createClient(supabaseUrl, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers: { Authorization: `Bearer ${accessToken}` } }
-  });
 }

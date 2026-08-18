@@ -1,8 +1,10 @@
 /**
  * Live Master request — user JWT + anon key (RLS). Never service_role for identity.
+ * I/O via Auth HTTP + PostgREST (sem SDK no bundle da Function).
  */
 
-import { createMasterApiHandler, createLiveMasterStore, createUserScopedClient } from './handler';
+import { createMasterApiHandler } from './handler';
+import { createRestMasterStore, getAuthUserFromJwt } from './restStore';
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -56,8 +58,7 @@ export async function handleLiveMasterRequest(request: Request): Promise<Respons
           details: {
             has_SUPABASE_URL: Boolean(process.env.SUPABASE_URL),
             has_VITE_SUPABASE_URL: Boolean(process.env.VITE_SUPABASE_URL),
-            has_SUPABASE_ANON_KEY: Boolean(process.env.SUPABASE_ANON_KEY),
-            has_VITE_SUPABASE_ANON_KEY: Boolean(process.env.VITE_SUPABASE_ANON_KEY)
+            has_ANON_KEY: Boolean(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY)
           }
         },
         500
@@ -70,18 +71,14 @@ export async function handleLiveMasterRequest(request: Request): Promise<Respons
       return json({ error: 'Não autenticado', code: 'UNAUTHENTICATED' }, 401);
     }
 
-    const userClient = createUserScopedClient(supabaseUrl, anonKey, token);
-    const { data, error } = await userClient.auth.getUser(token);
-    if (error || !data.user?.id) {
+    const user = await getAuthUserFromJwt(supabaseUrl, anonKey, token);
+    if (!user?.id) {
       return json({ error: 'Sessão expirada ou inválida', code: 'UNAUTHENTICATED' }, 401);
     }
 
-    const store = await createLiveMasterStore(userClient);
+    const store = createRestMasterStore(supabaseUrl, anonKey, token);
     const handler = createMasterApiHandler({
-      getUserFromAccessToken: async () => ({
-        id: data.user!.id,
-        email: data.user!.email
-      }),
+      getUserFromAccessToken: async () => user,
       store
     });
     return handler.fetch(request);

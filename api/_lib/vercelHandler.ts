@@ -125,7 +125,7 @@ export function createLazyFetchHandler(load: () => Promise<FetchHandler>) {
  * Default export das Functions `/api`: função (req, res) que sempre chama res.end().
  */
 export function asVercelNodeHandler(fetchFn: FetchHandler) {
-  return async function handler(req: unknown, res?: unknown): Promise<Response | void> {
+  const handler = async function vercelApi(req: unknown, res?: unknown): Promise<Response | void> {
     try {
       const request = isWebRequest(req) ? req : await fromNodeRequest((req || {}) as Parameters<typeof fromNodeRequest>[0]);
       const response = await fetchFn(request);
@@ -151,4 +151,16 @@ export function asVercelNodeHandler(fetchFn: FetchHandler) {
       });
     }
   };
+  (handler as { fetch: FetchHandler }).fetch = async (request: Request) => {
+    try {
+      return await fetchFn(request);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erro interno na API';
+      return new Response(jsonErrorPayload(message), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+  };
+  return handler;
 }

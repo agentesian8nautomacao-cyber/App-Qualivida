@@ -3,12 +3,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { asVercelNodeHandler, createLazyFetchHandler, fromNodeRequest } from './vercelHandler';
+import { asVercelNodeHandler, fromNodeRequest } from './vercelHandler';
 
 describe('asVercelNodeHandler', () => {
-  it('createLazyFetchHandler exporta função Node', () => {
-    const handler = createLazyFetchHandler(async () => async () => new Response('ok'));
+  it('função Node também expõe .fetch para o runtime Web da Vercel', async () => {
+    const handler = asVercelNodeHandler(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     expect(typeof handler).toBe('function');
+    expect(typeof (handler as { fetch?: unknown }).fetch).toBe('function');
+    const web = await (handler as { fetch: (r: Request) => Promise<Response> }).fetch(
+      new Request('https://x/api/master/session')
+    );
+    expect(web.status).toBe(200);
   });
 
   it('escreve JSON no res.end quando o runtime passa (req, res) Node', async () => {
