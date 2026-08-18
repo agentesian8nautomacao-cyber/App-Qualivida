@@ -1,5 +1,6 @@
 export const runtime = 'nodejs';
 
+import { asVercelNodeHandler } from './_lib/vercelHandler';
 import { routeLegacyApiRequest } from './_lib/legacyRouter';
 import { handleLiveMasterRequest } from './master/_lib/live';
 import { routeV1Request } from './v1/_lib/router';
@@ -24,6 +25,4 @@ async function dispatch(request: Request): Promise<Response> {
   return routeLegacyApiRequest(request);
 }
 
-export default {
-  fetch: dispatch
-};
+export default asVercelNodeHandler(dispatch);
